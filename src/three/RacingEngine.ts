@@ -260,15 +260,20 @@ const SpeedEffectShader = {
         }
 
         if (uAoStrength > 0.01) {
-          vec3 farA = texture2D(tDiffuse, uv + uTexelSize * vec2(3.5, 3.5)).rgb;
-          vec3 farB = texture2D(tDiffuse, uv + uTexelSize * vec2(-3.5, 3.5)).rgb;
-          vec3 farC = texture2D(tDiffuse, uv + uTexelSize * vec2(3.5, -3.5)).rgb;
-          vec3 farD = texture2D(tDiffuse, uv + uTexelSize * vec2(-3.5, -3.5)).rgb;
+          vec3 s1 = texture2D(tDiffuse, uv + uTexelSize * vec2(2.0, 0.0)).rgb;
+          vec3 s2 = texture2D(tDiffuse, uv + uTexelSize * vec2(-2.0, 0.0)).rgb;
+          vec3 s3 = texture2D(tDiffuse, uv + uTexelSize * vec2(0.0, 2.0)).rgb;
+          vec3 s4 = texture2D(tDiffuse, uv + uTexelSize * vec2(0.0, -2.0)).rgb;
+          vec3 s5 = texture2D(tDiffuse, uv + uTexelSize * vec2(4.0, 4.0)).rgb;
+          vec3 s6 = texture2D(tDiffuse, uv + uTexelSize * vec2(-4.0, 4.0)).rgb;
+          vec3 s7 = texture2D(tDiffuse, uv + uTexelSize * vec2(4.0, -4.0)).rgb;
+          vec3 s8 = texture2D(tDiffuse, uv + uTexelSize * vec2(-4.0, -4.0)).rgb;
+          
           float centerLuma = getLuma(col);
-          float surrLuma = (getLuma(ringAvg) + getLuma((farA + farB + farC + farD) * 0.25)) * 0.5;
-          float cavity = clamp((surrLuma - centerLuma) * 2.8, 0.0, 0.45);
-          float shadowWeight = 1.0 - smoothstep(0.15, 0.78, centerLuma);
-          col *= (1.0 - cavity * shadowWeight * uAoStrength);
+          float surrLuma = (getLuma(s1) + getLuma(s2) + getLuma(s3) + getLuma(s4) + getLuma(s5) + getLuma(s6) + getLuma(s7) + getLuma(s8)) * 0.125;
+          float cavity = clamp((surrLuma - centerLuma) * 3.4, 0.0, 0.55);
+          float shadowWeight = 1.0 - smoothstep(0.12, 0.82, centerLuma);
+          col *= (1.0 - cavity * shadowWeight * uAoStrength * 1.35);
         }
 
         // PS5 EGO Engine Anamorphic Red Rain-Light & Emissive Beacon Horizontal Glare
@@ -428,6 +433,7 @@ export class RacingEngine {
   private liveWeather: WeatherMode = 'rain';
   private nextWeather: WeatherMode | null = null;
   private trackWetness = 0.78;
+  private timeOfDayProgress = 0.25;
   private weatherSchedule: { atProgress: number; mode: WeatherMode }[] = [];
   private weatherPhaseIndex = 0;
   private weatherForecastAlerted = false;
@@ -500,6 +506,7 @@ export class RacingEngine {
   private fireworkCursor = 0;
   private fireworkCooldown = 0;
   private readonly fireworkPoolSize = 1080;
+  private pitCrewGroup: THREE.Group;
 
   private heldKeys = new Set<string>();
   private touchState = {
@@ -961,6 +968,9 @@ export class RacingEngine {
 
     this.pitBoard = buildPitBoard(this.renderer.capabilities.getMaxAnisotropy());
     this.scene.add(this.pitBoard.root);
+
+    this.pitCrewGroup = this.buildPitCrewSquad();
+    this.scene.add(this.pitCrewGroup);
 
     this.rebuildWorldAndGrid();
     this.applyGraphicsSettings();
@@ -1488,6 +1498,10 @@ export class RacingEngine {
     this.bannerMessage = `PIT STOP — FITTING ${target.toUpperCase()} TYRES...`;
     this.bannerTimer = 2.2;
     player.drsOpen = false;
+
+    this.pitCrewGroup.position.copy(player.position);
+    this.pitCrewGroup.rotation.y = player.yaw;
+    this.pitCrewGroup.visible = true;
   }
 
   private completePlayerPitStop(player: RacerEntity) {
@@ -1499,6 +1513,7 @@ export class RacingEngine {
     player.fuelPct = Math.min(100, player.fuelPct + 35);
     player.damagePct = Math.max(0, player.damagePct - 35);
     this.pitCooldownTimer = 6.0;
+    this.pitCrewGroup.visible = false;
 
     const activePrimary = this.customPrimaryHex || this.currentTeam.primaryColor;
     const activeNumber = this.customNumber || this.currentDriver.number || this.currentTeam.number;
@@ -1735,6 +1750,49 @@ export class RacingEngine {
     this.bloomPass.strength = this.smoothBloomStrength;
     this.bloomPass.radius = this.smoothBloomRadius;
     this.bloomPass.threshold = this.smoothBloomThreshold;
+  }
+
+  private buildPitCrewSquad(): THREE.Group {
+    const group = new THREE.Group();
+    const suitMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.65 });
+    const helmetMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.2, metalness: 0.5 });
+    const gunMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.25 });
+    const jackMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.7, roughness: 0.3 });
+
+    const frontJack = new THREE.Group();
+    frontJack.position.set(0, 0, -2.1);
+    const jBeam = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.45, 0.8), jackMat);
+    jBeam.position.y = 0.22;
+    frontJack.add(jBeam);
+    const jMech = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.7, 4, 8), suitMat);
+    jMech.position.set(0, 0.65, -0.4);
+    frontJack.add(jMech);
+    group.add(frontJack);
+
+    const wheelPositions = [
+      { x: -1.0, z: -1.6 },
+      { x: 1.0, z: -1.6 },
+      { x: -1.0, z: 1.5 },
+      { x: 1.0, z: 1.5 },
+    ];
+    wheelPositions.forEach((pos) => {
+      const changer = new THREE.Group();
+      changer.position.set(pos.x, 0, pos.z);
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.75, 4, 8), suitMat);
+      body.position.y = 0.65;
+      changer.add(body);
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), helmetMat);
+      helmet.position.y = 1.25;
+      changer.add(helmet);
+      const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.5, 8), gunMat);
+      gun.rotation.x = Math.PI / 2;
+      gun.position.set(pos.x < 0 ? 0.35 : -0.35, 0.65, -0.2);
+      changer.add(gun);
+      group.add(changer);
+    });
+
+    group.visible = false;
+    return group;
   }
 
   private updateEnvironment(mode: WeatherMode | 'garage') {
@@ -2058,6 +2116,61 @@ export class RacingEngine {
     rainMat.size = this.curRainSize;
     this.rainPoints.visible = this.curRainOpacity > 0.04;
     this.audio.setRainLevel(this.screen === 'playing' ? this.curRainAudio : 0);
+  }
+
+  private updateDynamicTimeOfDay(dt: number, raceLive: boolean) {
+    if (raceLive && this.screen === 'playing') {
+      const player = this.racers.find((r) => r.isPlayer);
+      if (player) {
+        const raceFrac = THREE.MathUtils.clamp(
+          player.totalProgress / Math.max(1, this.settings.totalLaps),
+          0,
+          1
+        );
+        this.timeOfDayProgress = THREE.MathUtils.lerp(0.2, 0.85, raceFrac);
+      } else {
+        this.timeOfDayProgress = (this.timeOfDayProgress + dt * 0.005) % 1.0;
+      }
+    }
+
+    const angle = this.timeOfDayProgress * Math.PI * 2;
+    const isNight = this.timeOfDayProgress > 0.82 || this.timeOfDayProgress < 0.12;
+    const isSunset = this.timeOfDayProgress >= 0.65 && this.timeOfDayProgress <= 0.82;
+    const isDawn = this.timeOfDayProgress >= 0.05 && this.timeOfDayProgress <= 0.22;
+
+    const sunY = Math.sin(angle) * 110;
+    const sunIntensity = THREE.MathUtils.clamp(sunY / 45, isNight ? 0.15 : 0.4, 2.8);
+
+    const sunColor = new THREE.Color();
+    const skyColor = new THREE.Color();
+    const hemiColor = new THREE.Color();
+
+    if (isNight) {
+      sunColor.setHex(0x38bdf8);
+      skyColor.setHex(0x060913);
+      hemiColor.setHex(0x0f172a);
+    } else if (isSunset) {
+      sunColor.setHex(0xf97316);
+      skyColor.setHex(0x581c87);
+      hemiColor.setHex(0xc2410c);
+    } else if (isDawn) {
+      sunColor.setHex(0xfbbf24);
+      skyColor.setHex(0x1d4ed8);
+      hemiColor.setHex(0xb45309);
+    } else {
+      sunColor.setHex(0xfff4e0);
+      skyColor.setHex(0x1e3a8a);
+      hemiColor.setHex(0x3b82f6);
+    }
+
+    this.sunLight.color.copy(sunColor);
+    this.sunLight.intensity = sunIntensity;
+    this.hemiLight.color.copy(hemiColor);
+    this.hemiLight.intensity = Math.max(0.4, sunIntensity * 0.65);
+
+    if (this.scene.background instanceof THREE.Color) {
+      this.scene.background.copy(skyColor);
+    }
   }
 
   private snapshotBaseTrackTextures() {
@@ -3052,6 +3165,7 @@ export class RacingEngine {
       this.raceElapsedMs += dt * 1000;
     }
     this.updateDynamicWeather(dt, raceLive);
+    this.updateDynamicTimeOfDay(dt, raceLive);
 
     if (this.pitCooldownTimer > 0) {
       this.pitCooldownTimer = Math.max(0, this.pitCooldownTimer - dt);
@@ -3166,6 +3280,13 @@ export class RacingEngine {
       car.model.root.position.copy(car.position);
       car.model.updateVisuals((car.speed * dt) / 0.34, 0, false, true, 0, 0, 0);
       this.audio.updateEngine(car.rpm, MAX_RPM, 0.2, 0, true);
+
+      this.pitCrewGroup.position.copy(car.position);
+      this.pitCrewGroup.rotation.y = car.yaw;
+      this.pitCrewGroup.children.forEach((child, idx) => {
+        child.position.y = Math.sin(performance.now() * 0.025 + idx * 1.5) * 0.045;
+      });
+
       if (this.pitStopTimer <= 0) {
         this.completePlayerPitStop(car);
       }

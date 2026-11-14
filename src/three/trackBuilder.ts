@@ -382,9 +382,9 @@ export function buildCircuitTrack(
     metalness: 0.58,
   });
   const barrierAccentMat = new THREE.MeshStandardMaterial({
-    color: weather === 'night' ? 0x0ea5e9 : 0xdc2626,
-    emissive: weather === 'night' ? 0x0284c7 : 0x000000,
-    emissiveIntensity: weather === 'night' ? 0.55 : 0,
+    color: weather === 'night' ? 0xa855f7 : 0xdc2626,
+    emissive: weather === 'night' ? 0xa855f7 : 0x000000,
+    emissiveIntensity: weather === 'night' ? 1.65 : 0,
     roughness: 0.35,
     metalness: 0.3,
   });
