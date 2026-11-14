@@ -1,0 +1,6 @@
+{
+  "name": "Ultimate Formula Racing 2026",
+  "description": "High-octane 3D Formula Racing game featuring realistic physics, AI opponents, garage customization, and Unity 6 LTS C# architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
