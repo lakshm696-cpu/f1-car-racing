@@ -221,14 +221,15 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-white">PS5™ Graphics Mode</div>
-                  <div className="text-xs text-slate-400">Quality (4K/60), Performance (120Hz) or RT Pro (PSSR 4K)</div>
+                  <div className="text-xs text-slate-400">Quality (4K/60), Performance (120Hz), RT Pro or Cinematic Max</div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
                   {(
                     [
-                      ['quality', 'Quality 4K'],
-                      ['performance', '120Hz Perf'],
+                      ['quality', '4K'],
+                      ['performance', '120Hz'],
                       ['rt_pro', 'RT Pro'],
+                      ['cinematic', 'Cinematic'],
                     ] as [Ps5GraphicsMode, string][]
                   ).map(([m, label]) => (
                     <button
@@ -238,8 +239,8 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                         onUpdateSettings({
                           ps5GraphicsMode: m,
                           targetFps: m === 'performance' ? 120 : 60,
-                          graphicsQuality: m === 'performance' ? 'high' : 'ultra',
-                          rayTracingQuality: m === 'performance' ? 'medium' : 'ultra',
+                          graphicsQuality: m === 'performance' ? 'high' : m === 'cinematic' ? 'cinematic' : 'ultra',
+                          rayTracingQuality: m === 'performance' ? 'medium' : m === 'cinematic' ? 'cinematic' : 'ultra',
                         })
                       }
                       className={`px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer ${
@@ -258,7 +259,7 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                   <div className="text-xs text-slate-400">Shadows, resolution scale & post-processing</div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['low', 'medium', 'high', 'ultra'] as GraphicsQuality[]).map((q) => (
+                  {(['low', 'medium', 'high', 'ultra', 'cinematic'] as GraphicsQuality[]).map((q) => (
                     <button
                       key={q}
                       type="button"
@@ -279,7 +280,7 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                   <div className="text-xs text-slate-400">22-car reflections, wet asphalt mirrors & RTAO</div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['off', 'medium', 'high', 'ultra'] as RayTracingQuality[]).map((rt) => (
+                  {(['off', 'medium', 'high', 'ultra', 'cinematic'] as RayTracingQuality[]).map((rt) => (
                     <button
                       key={rt}
                       type="button"

@@ -336,6 +336,9 @@ export class RacingEngine {
   private camera: THREE.PerspectiveCamera;
   private isSoftwareGl: boolean;
   private audio = new RacingAudio();
+  public getAudio(): RacingAudio {
+    return this.audio;
+  }
   private textures: ProceduralTextureSet;
   private envTexture: THREE.Texture | null = null;
   private activeEnvMode: string = '';
@@ -453,7 +456,7 @@ export class RacingEngine {
   // Pooled Skid Marks & Surface Hazard Meshes (Oil Spills & Carbon Debris)
   private skidMesh: THREE.InstancedMesh;
   private skidCursor = 0;
-  private readonly skidPoolSize = 360;
+  private readonly skidPoolSize = 720;
   private oilSpillMesh: THREE.InstancedMesh;
   private debrisMesh: THREE.InstancedMesh;
   private readonly maxHazardZones = 14;
@@ -470,7 +473,7 @@ export class RacingEngine {
   private smokeLife: Float32Array;
   private smokeVel: Float32Array;
   private smokeCursor = 0;
-  private readonly smokePoolSize = 480;
+  private readonly smokePoolSize = 960;
 
   // Pooled Titanium Underfloor Sparks
   private sparkGeo: THREE.BufferGeometry;
@@ -479,13 +482,13 @@ export class RacingEngine {
   private sparkLife: Float32Array;
   private sparkVel: Float32Array;
   private sparkCursor = 0;
-  private readonly sparkPoolSize = 140;
+  private readonly sparkPoolSize = 320;
 
   // Pooled Rain Particles
   private rainGeo: THREE.BufferGeometry;
   private rainPoints: THREE.Points;
   private rainPositions: Float32Array;
-  private readonly rainCount = 900;
+  private readonly rainCount = 2000;
 
   // Pooled Finish-Line Fireworks Particles
   private fireworkGeo: THREE.BufferGeometry;
@@ -496,7 +499,7 @@ export class RacingEngine {
   private fireworkLife: Float32Array;
   private fireworkCursor = 0;
   private fireworkCooldown = 0;
-  private readonly fireworkPoolSize = 540;
+  private readonly fireworkPoolSize = 1080;
 
   private heldKeys = new Set<string>();
   private touchState = {
@@ -585,10 +588,10 @@ export class RacingEngine {
 
     this.updateEnvironment('day');
 
-    // Multisampled Half-Float HDR EffectComposer on Hardware GPUs (8x MSAA + 512px Ray-Traced CubeCamera)
+    // Multisampled Half-Float HDR EffectComposer on Hardware GPUs (16x MSAA + 1024px Ray-Traced CubeCamera)
     if (!this.isSoftwareGl) {
       const rt = new THREE.WebGLRenderTarget(width, height, {
-        samples: 8,
+        samples: 16,
         type: THREE.HalfFloatType,
       });
       const composer = new EffectComposer(this.renderer, rt);
@@ -602,7 +605,7 @@ export class RacingEngine {
       bokehPass.enabled = false;
       composer.addPass(bokehPass);
 
-      const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.56, 0.68, 0.76);
+      const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.64, 0.72, 0.74);
       composer.addPass(bloomPass);
 
       const speedPass = new ShaderPass(SpeedEffectShader);
@@ -620,7 +623,7 @@ export class RacingEngine {
       this.bloomPass = bloomPass;
       this.speedPass = speedPass;
 
-      this.heroCubeTarget = new THREE.WebGLCubeRenderTarget(512, {
+      this.heroCubeTarget = new THREE.WebGLCubeRenderTarget(1024, {
         generateMipmaps: true,
         minFilter: THREE.LinearMipmapLinearFilter,
         type: THREE.HalfFloatType,
@@ -631,11 +634,11 @@ export class RacingEngine {
     this.hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x2a3529, 0.82);
     this.scene.add(this.hemiLight);
 
-    this.sunLight = new THREE.DirectionalLight(0xfff4e0, 2.45);
+    this.sunLight = new THREE.DirectionalLight(0xfff4e0, 2.55);
     this.sunLight.position.set(85, 110, 65);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.width = this.isSoftwareGl ? 1024 : 4096;
-    this.sunLight.shadow.mapSize.height = this.isSoftwareGl ? 1024 : 4096;
+    this.sunLight.shadow.mapSize.width = this.isSoftwareGl ? 1024 : 8192;
+    this.sunLight.shadow.mapSize.height = this.isSoftwareGl ? 1024 : 8192;
     this.sunLight.shadow.camera.near = 10;
     this.sunLight.shadow.camera.far = 260;
     const sd = 38;
@@ -643,9 +646,9 @@ export class RacingEngine {
     this.sunLight.shadow.camera.right = sd;
     this.sunLight.shadow.camera.top = sd;
     this.sunLight.shadow.camera.bottom = -sd;
-    this.sunLight.shadow.radius = 2.0;
-    this.sunLight.shadow.bias = -0.00025;
-    this.sunLight.shadow.normalBias = 0.015;
+    this.sunLight.shadow.radius = 2.5;
+    this.sunLight.shadow.bias = -0.0002;
+    this.sunLight.shadow.normalBias = 0.012;
     this.scene.add(this.sunLight);
     this.scene.add(this.sunLight.target);
 
@@ -1524,14 +1527,14 @@ export class RacingEngine {
     }
     const q = this.settings.graphicsQuality;
     const ps5Mode = this.settings.ps5GraphicsMode ?? 'rt_pro';
-    const rtQual = this.settings.rayTracingQuality ?? (q === 'ultra' ? 'ultra' : q === 'high' ? 'high' : 'off');
+    const rtQual = this.settings.rayTracingQuality ?? (q === 'cinematic' ? 'cinematic' : q === 'ultra' ? 'ultra' : q === 'high' ? 'high' : 'off');
     const pssrOn = this.settings.pssrUpscaling !== false;
     const hdrMode = this.settings.hdrMode ?? 'hdr10';
     const w = Math.max(1, this.container.clientWidth || window.innerWidth);
     const h = Math.max(1, this.container.clientHeight || window.innerHeight);
-    // Support true 4K (3840x2160) supersampled rendering on Ultra / PS5 Quality & RT Pro modes
+    // Support true 4K (3840x2160) supersampled rendering on Ultra / Cinematic & PS5 Quality/RT Pro modes
     const dpr4k = Math.min(3.0, Math.max(window.devicePixelRatio || 1, Math.min(3840 / w, 2160 / h)));
-    const modeScale = ps5Mode === 'performance' ? 0.85 : ps5Mode === 'rt_pro' ? 1.05 : 1.0;
+    const modeScale = ps5Mode === 'performance' ? 0.85 : ps5Mode === 'rt_pro' ? 1.05 : ps5Mode === 'cinematic' ? 1.25 : 1.0;
     const basePr =
       q === 'low'
         ? 0.75
@@ -1539,7 +1542,9 @@ export class RacingEngine {
           ? 1.0
           : q === 'high'
             ? Math.min(window.devicePixelRatio || 1, 1.65) * modeScale
-            : dpr4k * this.adaptiveDprScale * modeScale;
+            : q === 'cinematic'
+              ? dpr4k * 1.35 * this.adaptiveDprScale * modeScale
+              : dpr4k * this.adaptiveDprScale * modeScale;
     const targetPr = THREE.MathUtils.clamp(basePr, 0.75, 3.0);
     this.renderer.setPixelRatio(targetPr);
     if (this.composer) {
@@ -1561,11 +1566,11 @@ export class RacingEngine {
       this.speedPass.enabled = q !== 'low';
       const hdrGradeBoost = hdrMode === 'hdr10' ? 0.03 : hdrMode === 'scrgb' ? 0.015 : 0;
       this.speedPass.uniforms['uGradeContrast'].value =
-        (q === 'ultra' ? 0.18 : q === 'high' ? 0.14 : 0.08) + hdrGradeBoost;
+        (q === 'cinematic' ? 0.22 : q === 'ultra' ? 0.18 : q === 'high' ? 0.14 : 0.08) + hdrGradeBoost;
       this.speedPass.uniforms['uAoStrength'].value =
-        rtQual === 'ultra' ? 0.38 : rtQual === 'high' ? 0.26 : rtQual === 'medium' ? 0.14 : 0.0;
+        rtQual === 'cinematic' ? 0.48 : rtQual === 'ultra' ? 0.38 : rtQual === 'high' ? 0.26 : rtQual === 'medium' ? 0.14 : 0.0;
       this.speedPass.uniforms['uSharpness'].value =
-        pssrOn ? (q === 'ultra' ? 0.34 : q === 'high' ? 0.22 : 0.12) : 0.0;
+        pssrOn ? (q === 'cinematic' ? 0.42 : q === 'ultra' ? 0.34 : q === 'high' ? 0.22 : 0.12) : 0.0;
       (this.speedPass.uniforms['uTexelSize'].value as THREE.Vector2).set(
         1 / Math.max(1, w * targetPr),
         1 / Math.max(1, h * targetPr)
@@ -1584,7 +1589,7 @@ export class RacingEngine {
     if (this.bokehPass && (q === 'low' || q === 'medium')) {
       this.bokehPass.enabled = false;
     }
-    if (q !== 'ultra' || rtQual === 'off') {
+    if ((q !== 'ultra' && q !== 'cinematic') || rtQual === 'off') {
       for (let i = 0; i < this.racers.length; i++) {
         this.racers[i].model.setBodyEnvMap(null);
       }
@@ -1618,7 +1623,7 @@ export class RacingEngine {
     if (w === 'sunset') tint.set(1.0, 0.70, 0.38);
     else tint.set(1.0, 0.96, 0.88);
 
-    const qScale = q === 'ultra' ? 1.0 : q === 'high' ? 0.72 : 0.35;
+    const qScale = q === 'cinematic' ? 1.45 : q === 'ultra' ? 1.0 : q === 'high' ? 0.72 : 0.35;
     this.speedPass.uniforms['uVolumetric'].value = baseStrength * alignment * alignment * qScale;
   }
 
@@ -1626,7 +1631,7 @@ export class RacingEngine {
     if (this.isSoftwareGl || !this.heroCubeCamera || !this.heroCubeTarget) return;
     const player = this.racers.find((r) => r.isPlayer);
     if (!player) return;
-    const rtQual = this.settings.rayTracingQuality ?? 'ultra';
+    const rtQual = this.settings.rayTracingQuality ?? 'cinematic';
     if (this.settings.graphicsQuality === 'low' || rtQual === 'off') {
       for (let i = 0; i < this.racers.length; i++) {
         this.racers[i].model.setBodyEnvMap(null);
@@ -1634,7 +1639,7 @@ export class RacingEngine {
       return;
     }
     this.cubeFrameCounter++;
-    const interval = rtQual === 'ultra' ? 2 : rtQual === 'high' ? 3 : 5;
+    const interval = rtQual === 'cinematic' ? 1 : rtQual === 'ultra' ? 2 : rtQual === 'high' ? 3 : 5;
     if (!force && this.screen !== 'title' && this.cubeFrameCounter % interval !== 0) return;
 
     this.heroCubeCamera.position.set(player.position.x, player.position.y + 0.65, player.position.z);
@@ -1652,7 +1657,7 @@ export class RacingEngine {
   private updateBokehPass(enabled: boolean, focusDist: number, aperture = 0.00014, maxblur = 0.0055, snap = false) {
     if (!this.bokehPass || this.isSoftwareGl) return;
     const q = this.settings.graphicsQuality;
-    const allowed = enabled && (q === 'high' || q === 'ultra');
+    const allowed = enabled && (q === 'high' || q === 'ultra' || q === 'cinematic');
     this.bokehPass.enabled = allowed;
     if (allowed) {
       const clampedTarget = THREE.MathUtils.clamp(focusDist, 1.5, 90);
@@ -1680,9 +1685,9 @@ export class RacingEngine {
     const hdrBoost =
       this.settings.hdrMode === 'hdr10' ? 0.08 : this.settings.hdrMode === 'scrgb' ? 0.04 : 0;
 
-    let targetStrength = q === 'ultra' ? 0.62 : q === 'high' ? 0.5 : 0.36;
-    let targetRadius = q === 'ultra' ? 0.72 : q === 'high' ? 0.64 : 0.52;
-    let targetThreshold = q === 'ultra' ? 0.76 : q === 'high' ? 0.79 : 0.83;
+    let targetStrength = q === 'cinematic' ? 0.76 : q === 'ultra' ? 0.62 : q === 'high' ? 0.5 : 0.36;
+    let targetRadius = q === 'cinematic' ? 0.82 : q === 'ultra' ? 0.72 : q === 'high' ? 0.64 : 0.52;
+    let targetThreshold = q === 'cinematic' ? 0.70 : q === 'ultra' ? 0.76 : q === 'high' ? 0.79 : 0.83;
 
     if (context === 'showroom') {
       targetStrength += 0.06 + hdrBoost * 0.6;
@@ -3243,18 +3248,20 @@ export class RacingEngine {
     const wearGrip = 0.75 + (car.tyreWearPct / 100) * 0.25;
     const hazardEval = this.evaluateSurfaceHazardAt(car.position);
     this.playerActiveHazard = hazardEval.hazardType;
+    const trackEvolutionGrip = this.currentCompound !== 'wet' ? (1.0 + this.trackRubberLevel * 0.085) : 1.0;
     const surfaceGrip =
       (offTrack ? 0.55 : 1.0) *
       hazardEval.gripMultiplier *
       weatherGrip *
       compoundGrip *
       wearGrip *
+      trackEvolutionGrip *
       aeroBonus *
       tyreBonus *
       suspensionBonus *
       dmgFactor;
     this.playerSurfaceGripPct = Math.round(
-      THREE.MathUtils.clamp((offTrack ? 0.55 : 1.0) * hazardEval.gripMultiplier * weatherGrip * wearGrip * 100, 25, 100)
+      THREE.MathUtils.clamp((offTrack ? 0.55 : 1.0) * hazardEval.gripMultiplier * weatherGrip * wearGrip * trackEvolutionGrip * 100, 25, 110)
     );
 
     const speedKmh = Math.abs(car.speed) * 3.6;
@@ -3398,6 +3405,9 @@ export class RacingEngine {
     if ((speedKmh > 235 || (onKerb && speedKmh > 125)) && Math.random() < 0.65) {
       this.spawnUnderfloorSparks(car);
     }
+    if ((car.drsOpen || car.shiftFlash > 0.5 || speedKmh > 270) && Math.random() < 0.72) {
+      this.spawnBoostSparks(car);
+    }
 
     this.audio.updateTelemetry({
       rpm: car.rpm,
@@ -3448,6 +3458,23 @@ export class RacingEngine {
       this.sparkVel[idx * 3 + 1] = 1.4 + Math.random() * 2.6;
       this.sparkVel[idx * 3 + 2] = -fwdZ * (8 + Math.random() * 6) + (Math.random() - 0.5) * 3;
       this.sparkLife[idx] = 0.22 + Math.random() * 0.18;
+    }
+  }
+
+  private spawnBoostSparks(car: RacerEntity) {
+    const fwdX = -Math.sin(car.yaw);
+    const fwdZ = -Math.cos(car.yaw);
+    for (let k = 0; k < 3; k++) {
+      const idx = this.sparkCursor % this.sparkPoolSize;
+      this.sparkCursor++;
+      this.sparkPositions[idx * 3] = car.position.x - fwdX * 2.2 + (Math.random() - 0.5) * 0.8;
+      this.sparkPositions[idx * 3 + 1] = car.position.y + 0.35 + Math.random() * 0.15;
+      this.sparkPositions[idx * 3 + 2] = car.position.z - fwdZ * 2.2 + (Math.random() - 0.5) * 0.8;
+
+      this.sparkVel[idx * 3] = -fwdX * (14 + Math.random() * 10) + (Math.random() - 0.5) * 4;
+      this.sparkVel[idx * 3 + 1] = 2.0 + Math.random() * 3.5;
+      this.sparkVel[idx * 3 + 2] = -fwdZ * (14 + Math.random() * 10) + (Math.random() - 0.5) * 4;
+      this.sparkLife[idx] = 0.32 + Math.random() * 0.22;
     }
   }
 

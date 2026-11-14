@@ -8,6 +8,9 @@ import { DriverSelectionOverlay } from './components/DriverSelectionOverlay';
 import { GarageOverlay } from './components/GarageOverlay';
 import { PauseSettingsModal } from './components/PauseResultsModal';
 import { PodiumOverlay } from './components/PodiumOverlay';
+import { EngineerRadio } from './components/EngineerRadio';
+import { TelemetryOverlay } from './components/TelemetryOverlay';
+import { Activity } from 'lucide-react';
 import { RacingHUD } from './components/RacingHUD';
 import { TitleOverlay } from './components/TitleOverlay';
 import { CIRCUIT_TRACKS, FORMULA_DRIVERS, FORMULA_TEAMS, WHEEL_FINISHES } from './data/racingData';
@@ -129,6 +132,7 @@ export default function App() {
     aeroLevel: 1,
   });
   const [career, setCareer] = useState<CareerProgress>(loadSavedCareer);
+  const [showTelemetryModal, setShowTelemetryModal] = useState(false);
   const [gameMode, setGameMode] = useState<GameMode>('quick_race');
   const [podiumShot, setPodiumShot] = useState<PodiumCameraShot>('auto');
   const [settings, setSettings] = useState<GameSettings>(() => ({
@@ -141,13 +145,13 @@ export default function App() {
     weather: 'rain',
     dynamicWeather: false,
     totalLaps: 3,
-    graphicsQuality: 'ultra',
+    graphicsQuality: 'cinematic',
     targetFps: 60,
     motionBlur: true,
     absAssist: true,
     tcAssist: true,
-    ps5GraphicsMode: 'rt_pro',
-    rayTracingQuality: 'ultra',
+    ps5GraphicsMode: 'cinematic',
+    rayTracingQuality: 'cinematic',
     pssrUpscaling: true,
     hdrMode: 'hdr10',
     steeringAssist: false,
@@ -487,6 +491,36 @@ export default function App() {
         onManualShift={(dir) => engineRef.current?.manualShift(dir)}
         onRequestTyreSwitch={(compound) => engineRef.current?.requestTyreSwitch(compound)}
       />
+
+      {/* Real-Time Pit Wall Engineer Radio & Audio/Text Transmissions */}
+      <EngineerRadio
+        hud={hud}
+        audio={engineRef.current?.getAudio()}
+        driverName={selectedDriver.name}
+        teamName={selectedTeam.name}
+      />
+
+      {/* Real-Time D3 Telemetry & Driving Coach Modal */}
+      <TelemetryOverlay
+        hud={hud}
+        isOpen={showTelemetryModal}
+        onClose={() => setShowTelemetryModal(false)}
+      />
+
+      {/* Floating Telemetry Coach Button during race */}
+      {(screen === 'playing' || screen === 'paused') && (
+        <div className="fixed top-20 right-36 z-40 pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setShowTelemetryModal(true)}
+            className="flex items-center gap-1.5 bg-slate-900/85 backdrop-blur-md border border-white/15 hover:border-sky-400 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-200 hover:text-white transition-all shadow-lg cursor-pointer font-display uppercase tracking-wider"
+            title="Open Telemetry & Driving Coach"
+          >
+            <Activity className="w-4 h-4 text-sky-400" />
+            <span className="hidden sm:inline">Telemetry</span>
+          </button>
+        </div>
+      )}
 
       {/* Pause Modal */}
       {screen === 'paused' && (

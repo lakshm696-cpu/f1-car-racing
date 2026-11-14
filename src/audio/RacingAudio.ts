@@ -1340,6 +1340,38 @@ export class RacingAudio {
     }
   }
 
+  public playRadioBeep() {
+    if (!this.initialized || !this.ctx || !this.compressor || this.muted) return;
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const startTime = now + i * 0.12;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1450, startTime);
+      gain.gain.setValueAtTime(0.14, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.08);
+      osc.connect(gain);
+      gain.connect(this.compressor);
+      osc.start(startTime);
+      osc.stop(startTime + 0.09);
+    }
+    if (this.noiseBuffer) {
+      const squelch = this.ctx.createBufferSource();
+      squelch.buffer = this.noiseBuffer;
+      const bf = this.ctx.createBiquadFilter();
+      bf.type = 'bandpass';
+      bf.frequency.value = 1800;
+      const bg = this.ctx.createGain();
+      bg.gain.setValueAtTime(0.18, now);
+      bg.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      squelch.connect(bf);
+      bf.connect(bg);
+      bg.connect(this.compressor);
+      squelch.start(now, Math.random() * 0.5, 0.35);
+    }
+  }
+
   public dispose() {
     try {
       this.oscCrankSub?.stop();

@@ -316,6 +316,23 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
         totalLaps={hud.totalLaps}
       />
 
+      {/* Dedicated DRS Activation Zone Flashing Green Indicator & Distance Countdown */}
+      {hud.drsAvailable && hud.countdownState === 'racing' && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center animate-hud-banner-pop">
+          <div className="rounded-xl border-2 border-emerald-400 bg-emerald-950/95 px-4 py-1.5 flex items-center gap-2.5 shadow-[0_0_25px_rgba(16,185,129,0.85)] animate-pulse">
+            <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34D399]" />
+            <div className="flex flex-col items-center">
+              <span className="font-display font-black text-xs text-emerald-300 tracking-wider">
+                {hud.drsActive ? 'DRS ACTIVE • WIDE OPEN FLAP' : 'DRS ZONE AVAILABLE'}
+              </span>
+              <span className="font-mono-telemetry text-[10px] text-emerald-200 tabular-nums">
+                {hud.drsActive ? 'ACTIVATED • 300m REMAINING' : 'ACTIVATION ZONE • 150m'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Floating 3D-Style On-Track Driver Tag Ahead (F1 25 Broadcast Style) */}
       {driverTags3d && carAhead && carAhead.gap < 4.5 && hud.countdownState === 'racing' && (
         <div className="fixed left-1/2 top-[31%] -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center animate-hud-enter-tc">
@@ -850,6 +867,8 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
               miniMapStart={hud.miniMapStart}
               blips={hud.miniMapBlips}
               hazards={hud.miniMapHazards}
+              trackFlag={hud.trackFlag}
+              currentSector={hud.currentSector}
             />
           </div>
 

@@ -23,7 +23,7 @@ export type PodiumCameraShot = 'auto' | 'wide' | 'winner' | 'trophy' | 'full' | 
 
 export type DifficultyLevel = 'rookie' | 'pro' | 'legend';
 
-export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra';
+export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra' | 'cinematic';
 
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'wet';
 
@@ -122,8 +122,8 @@ export interface CareerProgress {
   techLevel?: number;
 }
 
-export type Ps5GraphicsMode = 'quality' | 'performance' | 'rt_pro';
-export type RayTracingQuality = 'off' | 'medium' | 'high' | 'ultra';
+export type Ps5GraphicsMode = 'quality' | 'performance' | 'rt_pro' | 'cinematic';
+export type RayTracingQuality = 'off' | 'medium' | 'high' | 'ultra' | 'cinematic';
 export type HdrOutputMode = 'off' | 'scrgb' | 'hdr10';
 export type BrakingAssistLevel = 'off' | 'low' | 'medium' | 'high';
 export type TractionControlMode = 'off' | 'medium' | 'full';
