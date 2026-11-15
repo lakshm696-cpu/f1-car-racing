@@ -1350,27 +1350,84 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
 
               {/* CENTER MODULE: 15-LED RPM Array + Giant Gear Number + HARVESTING / OVERTAKE ERS MODE + [SPACE] OVERTAKE */}
               <div className="flex flex-col items-center justify-between min-w-[118px] sm:min-w-[136px]">
-                {/* 15-LED F1 Shift Light Strip */}
-                <div className="flex items-center gap-0.5 mb-1">
-                  {Array.from({ length: 15 }).map((_, i) => {
-                    const threshold = (i + 1) / 15;
-                    const lit = rpmRatio >= threshold * 0.95;
-                    const color = i < 5 ? '#22C55E' : i < 10 ? '#EF4444' : '#A855F7';
-                    return (
-                      <span
-                        key={i}
-                        className="w-1.5 h-1.5 rounded-full"
-                        style={{
-                          backgroundColor: lit ? color : 'rgba(255,255,255,0.14)',
-                          boxShadow: lit ? `0 0 6px ${color}` : 'none',
-                        }}
-                      />
-                    );
-                  })}
+                {/* 15-LED F1 Shift Light Strip with 3-Bank Recessed Bezel & Optical Bloom */}
+                <div className="flex items-center gap-1 mb-1 p-1 rounded-md bg-black/80 border border-white/15 shadow-inner">
+                  {/* Bank 1: 5 Green LEDs */}
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => {
+                      const threshold = (i + 1) / 15;
+                      const lit = rpmRatio >= threshold * 0.95;
+                      const color = '#22C55E';
+                      return (
+                        <span
+                          key={`g-${i}`}
+                          className="w-2 sm:w-2.5 h-3.5 rounded-[2px] border border-black/60 transition-all duration-75"
+                          style={{
+                            backgroundColor: lit ? color : 'rgba(255,255,255,0.08)',
+                            boxShadow: lit ? `0 0 10px ${color}, inset 0 1px 1px #fff` : 'inset 0 1px 2px rgba(0,0,0,0.8)',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Partition Notch */}
+                  <div className="w-px h-3 bg-white/20" />
+
+                  {/* Bank 2: 5 Red LEDs */}
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => {
+                      const threshold = (i + 6) / 15;
+                      const lit = rpmRatio >= threshold * 0.95;
+                      const color = '#EF4444';
+                      return (
+                        <span
+                          key={`r-${i}`}
+                          className="w-2 sm:w-2.5 h-3.5 rounded-[2px] border border-black/60 transition-all duration-75"
+                          style={{
+                            backgroundColor: lit ? color : 'rgba(255,255,255,0.08)',
+                            boxShadow: lit ? `0 0 10px ${color}, inset 0 1px 1px #fff` : 'inset 0 1px 2px rgba(0,0,0,0.8)',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Partition Notch */}
+                  <div className="w-px h-3 bg-white/20" />
+
+                  {/* Bank 3: 5 Electric Violet LEDs */}
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => {
+                      const threshold = (i + 11) / 15;
+                      const lit = rpmRatio >= threshold * 0.95;
+                      const color = '#A855F7';
+                      return (
+                        <span
+                          key={`v-${i}`}
+                          className="w-2 sm:w-2.5 h-3.5 rounded-[2px] border border-black/60 transition-all duration-75"
+                          style={{
+                            backgroundColor: lit ? color : 'rgba(255,255,255,0.08)',
+                            boxShadow: lit ? `0 0 10px ${color}, inset 0 1px 1px #fff` : 'inset 0 1px 2px rgba(0,0,0,0.8)',
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
 
-                {/* Central Gear Readout */}
-                <div className="font-display font-black text-4xl sm:text-5xl text-white leading-none tabular-nums tracking-tight">
+                {/* Central Gear Readout - Authentic F1 Digital Phosphor Display */}
+                <div
+                  className={`font-display font-black italic text-5xl sm:text-6xl leading-none tabular-nums tracking-tight transition-colors duration-100 ${
+                    gearLabel === 'N'
+                      ? 'text-amber-400 drop-shadow-[0_0_16px_rgba(251,191,36,0.85)]'
+                      : gearLabel === 'R'
+                        ? 'text-rose-500 drop-shadow-[0_0_16px_rgba(244,63,94,0.85)]'
+                        : rpmRatio >= 0.92
+                          ? 'text-fuchsia-300 drop-shadow-[0_0_18px_rgba(217,70,239,0.95)] animate-pulse'
+                          : 'text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.65)]'
+                  }`}
+                >
                   {gearLabel}
                 </div>
 
