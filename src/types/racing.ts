@@ -192,6 +192,9 @@ export interface CareerProgress {
   selectedAcademyId?: string;
   resourcePoints?: number;
   techLevel?: number;
+  polePositions?: number;
+  podiumFinishes?: number;
+  claimedAchievements?: string[];
 }
 
 export type Ps5GraphicsMode = 'quality' | 'performance' | 'rt_pro' | 'cinematic';

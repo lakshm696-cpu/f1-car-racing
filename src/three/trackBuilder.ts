@@ -166,16 +166,16 @@ export function buildCircuitTrack(
   const roadMat = new THREE.MeshPhysicalMaterial({
     map: textures.asphaltMap,
     normalMap: textures.asphaltNormalMap,
-    normalScale: new THREE.Vector2(0.48, 0.48),
+    normalScale: new THREE.Vector2(0.56, 0.56),
     roughnessMap: textures.asphaltRoughnessMap,
     color: isRain ? (weather === 'heavy_rain' ? 0x12161e : 0x181c24) : 0xffffff,
-    roughness: isRain ? (weather === 'heavy_rain' ? 0.14 : 0.19) : isSunset ? 0.44 : 0.82,
-    metalness: isRain ? 0.34 : isSunset ? 0.16 : 0.06,
-    clearcoat: isRain ? 0.96 : isSunset ? 0.28 : 0.06,
-    clearcoatRoughness: isRain ? 0.05 : isSunset ? 0.24 : 0.44,
+    roughness: isRain ? (weather === 'heavy_rain' ? 0.12 : 0.17) : isSunset ? 0.40 : 0.78,
+    metalness: isRain ? 0.38 : isSunset ? 0.18 : 0.08,
+    clearcoat: isRain ? 0.98 : isSunset ? 0.34 : 0.10,
+    clearcoatRoughness: isRain ? 0.04 : isSunset ? 0.20 : 0.38,
     ior: 1.5,
     specularIntensity: 1.0,
-    envMapIntensity: isRain ? 2.35 : isSunset ? 1.58 : 1.05,
+    envMapIntensity: isRain ? 2.65 : isSunset ? 1.82 : 1.24,
   });
 
   roadMat.onBeforeCompile = (shader) => {
@@ -201,6 +201,11 @@ export function buildCircuitTrack(
       '#include <color_fragment>',
       `#include <color_fragment>
       {
+        // Mineral quartz aggregate micro-specular sparkle in tarmac
+        float aggHash = fract(sin(dot(floor(vTrackWorldPos.xz * 48.0), vec2(127.1, 311.7))) * 43758.5453);
+        float aggSparkle = step(0.92, aggHash) * (0.045 + 0.035 * sin(vTrackWorldPos.x * 19.0 + vTrackWorldPos.z * 23.0));
+        diffuseColor.rgb += vec3(aggSparkle) * (1.0 - uWetnessLevel * 0.5);
+
         float secPos = vTrackProgressT * 3.0;
         float secRub = secPos < 1.0
           ? mix(uSectorRubber.x, uSectorRubber.y, smoothstep(0.82, 1.0, secPos))
@@ -241,17 +246,17 @@ export function buildCircuitTrack(
           float dLineR = abs(vRoadUv.x - vIdealLineU);
           float groovePolish = exp(-dLineR * dLineR * 120.0) * effRubberR;
           float offLineRough = smoothstep(0.18, 0.36, dLineR) * effRubberR;
-          roughnessFactor = clamp(roughnessFactor - groovePolish * 0.28 + offLineRough * 0.12, 0.04, 1.0);
+          roughnessFactor = clamp(roughnessFactor - groovePolish * 0.30 + offLineRough * 0.12, 0.035, 1.0);
         }
       }
       if (uWetnessLevel > 0.05) {
         float puddleA = sin(vTrackWorldPos.x * 0.14) * cos(vTrackWorldPos.z * 0.14);
         float puddleB = sin((vTrackWorldPos.x + vTrackWorldPos.z) * 0.085) * 0.55 + cos((vTrackWorldPos.x - vTrackWorldPos.z) * 0.21) * 0.35;
-        float puddleMask = smoothstep(0.14, 0.65, puddleA + puddleB) * uWetnessLevel;
+        float puddleMask = smoothstep(0.10, 0.62, puddleA + puddleB) * uWetnessLevel;
         float rCellA = sin(vTrackWorldPos.x * 2.6 + uRainTime * 5.1) * cos(vTrackWorldPos.z * 2.6 - uRainTime * 4.4);
         float rCellB = cos(vTrackWorldPos.x * 4.3 - uRainTime * 6.0) * sin(vTrackWorldPos.z * 4.3 + uRainTime * 5.5);
-        float rippleRing = smoothstep(0.58, 0.98, abs(rCellA * 0.62 + rCellB * 0.38)) * uWetnessLevel;
-        roughnessFactor = clamp(roughnessFactor - puddleMask * 0.36 - rippleRing * 0.18, 0.018, 1.0);
+        float rippleRing = smoothstep(0.54, 0.96, abs(rCellA * 0.62 + rCellB * 0.38)) * uWetnessLevel;
+        roughnessFactor = clamp(roughnessFactor - puddleMask * 0.42 - rippleRing * 0.22, 0.014, 1.0);
       }`
     );
   };

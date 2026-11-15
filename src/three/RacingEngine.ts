@@ -326,8 +326,11 @@ const SpeedEffectShader = {
         vec3 ringAvg = (nUp + nDown + nLeft + nRight) * 0.25;
 
         if (uSharpness > 0.01) {
-          vec3 detail = col - ringAvg;
-          col += clamp(detail * uSharpness, -0.14, 0.14);
+          vec3 minRing = min(min(nUp, nDown), min(nLeft, nRight));
+          vec3 maxRing = max(max(nUp, nDown), max(nLeft, nRight));
+          vec3 casWeight = clamp(min(col - minRing, maxRing - col) / max(maxRing, vec3(0.08)), 0.0, 1.0);
+          vec3 detail = (col - ringAvg) * (0.65 + 0.55 * casWeight);
+          col += clamp(detail * uSharpness * 1.28, -0.18, 0.18);
         }
 
         if (uAoStrength > 0.01) {
@@ -335,26 +338,31 @@ const SpeedEffectShader = {
           vec3 s2 = texture2D(tDiffuse, uv + uTexelSize * vec2(-2.0, 0.0)).rgb;
           vec3 s3 = texture2D(tDiffuse, uv + uTexelSize * vec2(0.0, 2.0)).rgb;
           vec3 s4 = texture2D(tDiffuse, uv + uTexelSize * vec2(0.0, -2.0)).rgb;
-          vec3 s5 = texture2D(tDiffuse, uv + uTexelSize * vec2(4.0, 4.0)).rgb;
-          vec3 s6 = texture2D(tDiffuse, uv + uTexelSize * vec2(-4.0, 4.0)).rgb;
-          vec3 s7 = texture2D(tDiffuse, uv + uTexelSize * vec2(4.0, -4.0)).rgb;
-          vec3 s8 = texture2D(tDiffuse, uv + uTexelSize * vec2(-4.0, -4.0)).rgb;
+          vec3 s5 = texture2D(tDiffuse, uv + uTexelSize * vec2(4.5, 4.5)).rgb;
+          vec3 s6 = texture2D(tDiffuse, uv + uTexelSize * vec2(-4.5, 4.5)).rgb;
+          vec3 s7 = texture2D(tDiffuse, uv + uTexelSize * vec2(4.5, -4.5)).rgb;
+          vec3 s8 = texture2D(tDiffuse, uv + uTexelSize * vec2(-4.5, -4.5)).rgb;
           
           float centerLuma = getLuma(col);
           float surrLuma = (getLuma(s1) + getLuma(s2) + getLuma(s3) + getLuma(s4) + getLuma(s5) + getLuma(s6) + getLuma(s7) + getLuma(s8)) * 0.125;
-          float cavity = clamp((surrLuma - centerLuma) * 3.4, 0.0, 0.55);
-          float shadowWeight = 1.0 - smoothstep(0.12, 0.82, centerLuma);
-          col *= (1.0 - cavity * shadowWeight * uAoStrength * 1.35);
+          float cavity = clamp((surrLuma - centerLuma) * 3.75, 0.0, 0.62);
+          float shadowWeight = 1.0 - smoothstep(0.12, 0.85, centerLuma);
+          col *= (1.0 - cavity * shadowWeight * uAoStrength * 1.45);
         }
 
-        // PS5 EGO Engine Anamorphic Red Rain-Light & Emissive Beacon Horizontal Glare
+        // PS5 EGO Engine Anamorphic Red Rain-Light & Specular Highlight Horizontal Optical Glare
         vec3 hLeft = texture2D(tDiffuse, uv - vec2(uTexelSize.x * 8.0, 0.0)).rgb;
         vec3 hRight = texture2D(tDiffuse, uv + vec2(uTexelSize.x * 8.0, 0.0)).rgb;
         vec3 hFarL = texture2D(tDiffuse, uv - vec2(uTexelSize.x * 18.0, 0.0)).rgb;
         vec3 hFarR = texture2D(tDiffuse, uv + vec2(uTexelSize.x * 18.0, 0.0)).rgb;
         vec3 streakSample = (hLeft + hRight) * 0.35 + (hFarL + hFarR) * 0.15;
-        float redBeaconMask = smoothstep(0.55, 0.95, streakSample.r - streakSample.g * 0.85);
-        col += vec3(1.0, 0.18, 0.24) * redBeaconMask * (0.14 + uWetness * 0.18);
+        float redBeaconMask = smoothstep(0.52, 0.92, streakSample.r - streakSample.g * 0.85);
+        col += vec3(1.0, 0.18, 0.24) * redBeaconMask * (0.16 + uWetness * 0.20);
+
+        // Broadcast Anamorphic Clearcoat & Floodlight Specular Glint Streak
+        float specLuma = getLuma(streakSample);
+        float specGlint = smoothstep(0.88, 1.22, specLuma);
+        col += mix(streakSample, vec3(0.78, 0.90, 1.0), 0.38) * specGlint * (0.12 + uWetness * 0.10);
       }
 
       // Volumetric atmospheric crepuscular sun shafts + anamorphic broadcast lens streak
@@ -367,32 +375,36 @@ const SpeedEffectShader = {
           rayUv -= deltaRay;
           vec3 sCol = texture2D(tDiffuse, clamp(rayUv, 0.001, 0.999)).rgb;
           float sLuma = getLuma(sCol);
-          float brightMask = smoothstep(0.62, 1.08, sLuma);
+          float brightMask = smoothstep(0.58, 1.05, sLuma);
           godRays += sCol * brightMask * illumDecay;
-          illumDecay *= 0.88;
+          illumDecay *= 0.89;
         }
         float sunDist = length(uv - uSunPos);
-        float radialFalloff = exp(-sunDist * 1.35);
-        col += (godRays * 0.048) * uSunTint * uVolumetric * radialFalloff;
+        float radialFalloff = exp(-sunDist * 1.28);
+        col += (godRays * 0.055) * uSunTint * uVolumetric * radialFalloff;
 
-        float streakY = exp(-abs(uv.y - uSunPos.y) * 34.0);
-        float streakX = exp(-abs(uv.x - uSunPos.x) * 3.4);
-        col += uSunTint * (streakY * streakX * 0.16 * uVolumetric);
+        float streakY = exp(-abs(uv.y - uSunPos.y) * 32.0);
+        float streakX = exp(-abs(uv.x - uSunPos.x) * 3.1);
+        col += uSunTint * (streakY * streakX * 0.19 * uVolumetric);
       }
 
       col += vec3(dropSpec * 0.92, dropSpec * 0.96, dropSpec);
 
-      // Filmic HDR color grading: crisp S-curve contrast, highlight halation & subtle cinema grain
+      // Filmic HDR color grading: crisp S-curve contrast, adaptive vibrance, highlight halation & subtle cinema grain
       if (uGradeContrast > 0.001) {
         vec3 sCurve = col * col * (3.0 - 2.0 * clamp(col, 0.0, 1.0));
         col = mix(col, sCurve, uGradeContrast);
         float luma = getLuma(col);
-        float halation = smoothstep(0.84, 1.15, luma);
-        col += vec3(0.06, 0.032, 0.012) * halation * uGradeContrast * 2.5;
-        vec3 coolShadows = col * vec3(0.96, 0.98, 1.03);
-        vec3 warmHighlights = col * vec3(1.03, 1.00, 0.96);
-        col = mix(coolShadows, warmHighlights, smoothstep(0.18, 0.82, luma));
-        float filmGrain = (hash21(vUv * 960.0 + fract(uTime) * 37.0) - 0.5) * 0.009;
+        float maxC = max(col.r, max(col.g, col.b));
+        float minC = min(col.r, min(col.g, col.b));
+        float sat = maxC - minC;
+        col = mix(vec3(luma), col, 1.0 + (1.0 - sat) * uGradeContrast * 0.52);
+        float halation = smoothstep(0.82, 1.12, luma);
+        col += vec3(0.065, 0.036, 0.014) * halation * uGradeContrast * 2.65;
+        vec3 coolShadows = col * vec3(0.95, 0.98, 1.04);
+        vec3 warmHighlights = col * vec3(1.035, 1.005, 0.96);
+        col = mix(coolShadows, warmHighlights, smoothstep(0.16, 0.84, luma));
+        float filmGrain = (hash21(vUv * 960.0 + fract(uTime) * 37.0) - 0.5) * 0.0075;
         col += vec3(filmGrain);
       }
 
@@ -2069,7 +2081,8 @@ export class RacingEngine {
       .lerp(_weatherCol.setHex(todProf.sunHex), effTod === 'sunset' || effTod === 'golden_hour' ? 0.65 : 0.35);
     tint.set(_hdrSunCol.r, _hdrSunCol.g, _hdrSunCol.b);
 
-    const qScale = q === 'cinematic' ? 1.45 : q === 'ultra' ? 1.0 : q === 'high' ? 0.72 : 0.35;
+    const qScale =
+      q === 'extreme' ? 1.55 : q === 'cinematic' ? 1.45 : q === 'ultra' ? 1.08 : q === 'high' ? 0.78 : 0.35;
     this.speedPass.uniforms['uVolumetric'].value = baseStrength * alignment * alignment * qScale;
   }
 
@@ -2085,7 +2098,14 @@ export class RacingEngine {
       return;
     }
     this.cubeFrameCounter++;
-    const interval = rtQual === 'cinematic' ? 1 : rtQual === 'ultra' ? 2 : rtQual === 'high' ? 3 : 5;
+    const interval =
+      rtQual === 'cinematic' || this.settings.graphicsQuality === 'extreme'
+        ? 1
+        : rtQual === 'ultra'
+          ? 2
+          : rtQual === 'high'
+            ? 3
+            : 5;
     if (!force && this.screen !== 'title' && this.cubeFrameCounter % interval !== 0) return;
 
     this.heroCubeCamera.position.set(player.position.x, player.position.y + 0.65, player.position.z);
@@ -2103,7 +2123,7 @@ export class RacingEngine {
   private updateBokehPass(enabled: boolean, focusDist: number, aperture = 0.00014, maxblur = 0.0055, snap = false) {
     if (!this.bokehPass || this.isSoftwareGl) return;
     const q = this.settings.graphicsQuality;
-    const allowed = enabled && (q === 'high' || q === 'ultra' || q === 'cinematic');
+    const allowed = enabled && (q === 'high' || q === 'ultra' || q === 'cinematic' || q === 'extreme');
     this.bokehPass.enabled = allowed;
     if (allowed) {
       const clampedTarget = THREE.MathUtils.clamp(focusDist, 1.5, 90);
@@ -2132,9 +2152,12 @@ export class RacingEngine {
     const hdrBoost =
       this.settings.hdrMode === 'hdr10' ? 0.08 : this.settings.hdrMode === 'scrgb' ? 0.04 : 0;
 
-    let targetStrength = q === 'cinematic' ? 0.76 : q === 'ultra' ? 0.62 : q === 'high' ? 0.5 : 0.36;
-    let targetRadius = q === 'cinematic' ? 0.82 : q === 'ultra' ? 0.72 : q === 'high' ? 0.64 : 0.52;
-    let targetThreshold = q === 'cinematic' ? 0.70 : q === 'ultra' ? 0.76 : q === 'high' ? 0.79 : 0.83;
+    let targetStrength =
+      q === 'extreme' ? 0.82 : q === 'cinematic' ? 0.76 : q === 'ultra' ? 0.64 : q === 'high' ? 0.52 : 0.36;
+    let targetRadius =
+      q === 'extreme' ? 0.85 : q === 'cinematic' ? 0.82 : q === 'ultra' ? 0.74 : q === 'high' ? 0.64 : 0.52;
+    let targetThreshold =
+      q === 'extreme' ? 0.68 : q === 'cinematic' ? 0.70 : q === 'ultra' ? 0.75 : q === 'high' ? 0.79 : 0.83;
 
     // Realistic eye-adaptation simulation between tunnels / shaded areas and bright sunlight
     let targetEyeAdaptation = 1.0;
@@ -2491,9 +2514,9 @@ export class RacingEngine {
       _vecA.normalize();
       _hdrOppositeDir.set(-_vecA.x, Math.max(0.22, _vecA.y * 0.5 + 0.15), -_vecA.z).normalize();
 
-      // Procedural Float32 RGBA HDR Equirectangular Light Probe (512x256 GPU / 256x128 SoftwareGL)
-      const w = this.isSoftwareGl ? 256 : 512;
-      const h = this.isSoftwareGl ? 128 : 256;
+      // Procedural Float32 RGBA HDR Equirectangular Light Probe (1024x512 GPU / 256x128 SoftwareGL)
+      const w = this.isSoftwareGl ? 256 : 1024;
+      const h = this.isSoftwareGl ? 128 : 512;
       const data = new Float32Array(w * h * 4);
 
       const skyLum = refl.hdrSkyLuminance * (isNight ? 0.78 : isRain ? 0.72 : 1.0);
@@ -3607,7 +3630,14 @@ export class RacingEngine {
       const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
 
       // Adaptive 4K Frame-Rate Governor: maintain butter-smooth frame pacing across varying GPUs
-      if (!this.isSoftwareGl && this.settings.graphicsQuality === 'ultra' && rawMs > 4 && rawMs < 120) {
+      if (
+        !this.isSoftwareGl &&
+        (this.settings.graphicsQuality === 'ultra' ||
+          this.settings.graphicsQuality === 'cinematic' ||
+          this.settings.graphicsQuality === 'extreme') &&
+        rawMs > 4 &&
+        rawMs < 120
+      ) {
         this.smoothFrameMs = this.smoothFrameMs * 0.92 + rawMs * 0.08;
         const budgetMs = this.settings.targetFps === 30 ? 34.5 : 21.5;
         if (this.smoothFrameMs > budgetMs && this.adaptiveDprScale > 0.72) {
@@ -3966,7 +3996,14 @@ export class RacingEngine {
           this.speedPass.uniforms['uIntensity'].value = allowBlur ? speedBlur : 0;
           this.speedPass.uniforms['uHeatDistort'].value = clipIdx === 2 || clipIdx === 3 ? 0.55 : 0.25;
           this.speedPass.uniforms['uWetness'].value = Math.max(this.trackWetness, this.curRainOpacity * 0.9);
-          this.speedPass.uniforms['uGradeContrast'].value = this.settings.graphicsQuality === 'ultra' ? 0.18 : 0.14;
+          this.speedPass.uniforms['uGradeContrast'].value =
+            this.settings.graphicsQuality === 'extreme'
+              ? 0.25
+              : this.settings.graphicsQuality === 'cinematic'
+                ? 0.22
+                : this.settings.graphicsQuality === 'ultra'
+                  ? 0.19
+                  : 0.14;
           this.updateVolumetricSunUniforms();
         }
         this.updateBokehPass(true, focalDist, aperture, maxblur, forceCut);
@@ -5722,6 +5759,19 @@ export class RacingEngine {
     this.updateBloomPass(0, 'showroom', false, dt);
     this.sunLight.position.set(14, 24, 18);
     this.sunLight.target.position.set(0, 0, 0);
+
+    // Real-time 3D CubeCamera showroom reflections on the Garage F1 car
+    if (!this.isSoftwareGl && this.heroCubeCamera && this.heroCubeTarget && this.settings.graphicsQuality !== 'low') {
+      this.cubeFrameCounter++;
+      if (this.cubeFrameCounter % 2 === 0) {
+        this.heroCubeCamera.position.set(0, 0.68, 0);
+        const prevVis = this.showroomCar.root.visible;
+        this.showroomCar.root.visible = false;
+        this.heroCubeCamera.update(this.renderer, this.scene);
+        this.showroomCar.root.visible = prevVis;
+        this.showroomCar.setBodyEnvMap(this.heroCubeTarget.texture);
+      }
+    }
   }
 
   private updateDriverShowroom(dt: number, elapsedSec: number) {

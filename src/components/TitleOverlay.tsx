@@ -1,19 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Award,
+  CheckCircle2,
   Clock,
   Cloud,
   CloudFog,
   CloudLightning,
   CloudRain,
   CloudSun,
+  Crown,
   Eye,
   Film,
+  Flame,
+  Gauge,
   Globe,
   Layers,
+  Lock,
   Moon,
   Play,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Sun,
   Sunrise,
   Sunset,
@@ -23,6 +30,7 @@ import {
   VolumeX,
   Wrench,
   X,
+  Zap,
 } from 'lucide-react';
 import {
   CIRCUIT_TRACKS,
@@ -33,6 +41,7 @@ import {
 import { getCircuitEnvironmentConfig } from '../three/circuitEnvironments';
 import {
   CareerProgress,
+  CarUpgrades,
   CircuitTrack,
   DriverProfile,
   FormulaTeam,
@@ -47,6 +56,7 @@ interface TitleOverlayProps {
   selectedTeam: FormulaTeam;
   selectedDriver: DriverProfile;
   career: CareerProgress;
+  upgrades?: CarUpgrades;
   gameMode: GameMode;
   weather: WeatherMode;
   dynamicWeather: boolean;
@@ -69,11 +79,33 @@ interface TitleOverlayProps {
   onOpenGarage: () => void;
   onOpenPitStrategy?: () => void;
   onOpenSettings: () => void;
+  onClaimAchievement?: (achievementId: string, creditBonus: number, techBonus: number) => void;
   onJumpTitleScene: (scene: 1 | 2 | 3 | 4 | 5) => void;
   onStartRace: () => void;
 }
 
-type F1WorldTab = 'showroom' | 'series' | 'events' | 'invitationals';
+type F1WorldTab = 'showroom' | 'series' | 'events' | 'invitationals' | 'achievements';
+type AchievementFilter = 'all' | 'unlocked' | 'locked' | 'race_craft' | 'engineering' | 'championship';
+
+interface CareerMilestone {
+  id: string;
+  title: string;
+  category: 'race_craft' | 'engineering' | 'championship';
+  categoryLabel: string;
+  tier: 'PLATINUM' | 'GOLD' | 'SILVER';
+  description: string;
+  requirementText: string;
+  current: number;
+  target: number;
+  unitLabel: string;
+  unlocked: boolean;
+  claimed: boolean;
+  creditReward: number;
+  techReward: number;
+  actionType: 'race' | 'garage' | 'drivers';
+  actionLabel: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}
 
 const TRAILER_SCENES: {
   id: 1 | 2 | 3 | 4 | 5;
@@ -117,6 +149,13 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   selectedTeam,
   selectedDriver,
   career,
+  upgrades = {
+    engineLevel: 1,
+    tyreLevel: 1,
+    brakeLevel: 1,
+    suspensionLevel: 1,
+    aeroLevel: 1,
+  },
   gameMode,
   weather,
   dynamicWeather,
@@ -139,6 +178,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   onOpenGarage,
   onOpenPitStrategy,
   onOpenSettings,
+  onClaimAchievement,
   onJumpTitleScene,
   onStartRace,
 }) => {
@@ -146,6 +186,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [trailerClock, setTrailerClock] = useState(8.05);
   const [f1WorldTab, setF1WorldTab] = useState<F1WorldTab>('showroom');
+  const [achievementFilter, setAchievementFilter] = useState<AchievementFilter>('all');
   const [selectedPin, setSelectedPin] = useState<F1WorldMapPin>(F1_WORLD_MAP_PINS[0]);
 
   useEffect(() => {
@@ -165,6 +206,208 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   const currentClip = TRAILER_SCENES[currentClipIdx];
   const progressPct = (trailerClock / 32.0) * 100;
   const techLevel = career.techLevel ?? 929 + Math.floor(career.championshipPoints * 0.5);
+
+  const milestones = useMemo<CareerMilestone[]>(() => {
+    const claimedSet = new Set(career.claimedAchievements ?? []);
+    const poleCount = Math.max(
+      career.polePositions ?? 0,
+      career.totalVictories,
+      Math.floor(career.championshipPoints / 25)
+    );
+    const totalUpgradeLevels =
+      upgrades.engineLevel +
+      upgrades.tyreLevel +
+      upgrades.brakeLevel +
+      upgrades.suspensionLevel +
+      upgrades.aeroLevel;
+    const maxRivalCloseFinishes = Object.values(career.rivalryScores ?? {}).reduce(
+      (maxVal, r) => Math.max(maxVal, r.closeFinishes),
+      0
+    );
+    const hasActiveRival = Boolean(career.activeRivalId) || maxRivalCloseFinishes >= 2;
+
+    return [
+      {
+        id: 'first_win',
+        title: 'First Win',
+        category: 'race_craft',
+        categoryLabel: 'Race Craft',
+        tier: 'GOLD',
+        description:
+          'Take the checkered flag in P1 to claim your maiden Formula 1® Grand Prix victory.',
+        requirementText: 'Win 1 Grand Prix',
+        current: Math.min(1, career.totalVictories),
+        target: 1,
+        unitLabel: 'Wins',
+        unlocked: career.totalVictories >= 1,
+        claimed: claimedSet.has('first_win'),
+        creditReward: 2500,
+        techReward: 5,
+        actionType: 'race',
+        actionLabel: 'Drive Now',
+        Icon: Trophy,
+      },
+      {
+        id: 'pole_position_king',
+        title: 'Pole Position King',
+        category: 'race_craft',
+        categoryLabel: 'Qualifying & Pace',
+        tier: 'PLATINUM',
+        description:
+          'Command the front of the grid with 3 Pole / P1 fastest-lap triumphs or 75+ Championship Points.',
+        requirementText: '3 Pole / P1 Fastest-Lap Finishes',
+        current: Math.min(3, poleCount),
+        target: 3,
+        unitLabel: 'Poles / P1s',
+        unlocked: poleCount >= 3,
+        claimed: claimedSet.has('pole_position_king'),
+        creditReward: 5000,
+        techReward: 10,
+        actionType: 'race',
+        actionLabel: 'Set Fastest Pace',
+        Icon: Crown,
+      },
+      {
+        id: 'engine_master',
+        title: 'Engine Master',
+        category: 'engineering',
+        categoryLabel: 'Engineering & R&D',
+        tier: 'PLATINUM',
+        description:
+          'Develop the 2026 Hybrid V6 Turbo & MGU-K Power Unit to Stage 3 Maximum Spec in the Garage.',
+        requirementText: 'Reach Engine R&D Level 3',
+        current: Math.min(3, upgrades.engineLevel),
+        target: 3,
+        unitLabel: 'Stage',
+        unlocked: upgrades.engineLevel >= 3,
+        claimed: claimedSet.has('engine_master'),
+        creditReward: 4000,
+        techReward: 12,
+        actionType: 'garage',
+        actionLabel: 'Upgrade Power Unit',
+        Icon: Zap,
+      },
+      {
+        id: 'centurion_scorer',
+        title: 'Centurion Scorer',
+        category: 'championship',
+        categoryLabel: 'World Championship',
+        tier: 'GOLD',
+        description:
+          'Accumulate 100 FIA Formula 1® World Championship Points across your racing career.',
+        requirementText: 'Score 100 Championship Points',
+        current: Math.min(100, career.championshipPoints),
+        target: 100,
+        unitLabel: 'PTS',
+        unlocked: career.championshipPoints >= 100,
+        claimed: claimedSet.has('centurion_scorer'),
+        creditReward: 6000,
+        techReward: 15,
+        actionType: 'race',
+        actionLabel: 'Score Points',
+        Icon: Award,
+      },
+      {
+        id: 'podium_regular',
+        title: 'Grand Prix Veteran',
+        category: 'race_craft',
+        categoryLabel: 'Race Craft',
+        tier: 'SILVER',
+        description:
+          'Complete 5 full Grand Prix events across the 2026 international calendar.',
+        requirementText: 'Complete 5 Races',
+        current: Math.min(5, career.racesCompleted),
+        target: 5,
+        unitLabel: 'Races',
+        unlocked: career.racesCompleted >= 5,
+        claimed: claimedSet.has('podium_regular'),
+        creditReward: 3500,
+        techReward: 8,
+        actionType: 'race',
+        actionLabel: 'Enter Grand Prix',
+        Icon: Gauge,
+      },
+      {
+        id: 'rivalry_dominator',
+        title: 'Rivalry Dominator',
+        category: 'championship',
+        categoryLabel: 'Paddock Rivalry',
+        tier: 'GOLD',
+        description:
+          'Ignite an official on-track rivalry with 2+ wheel-to-wheel finishes within 3.5 seconds.',
+        requirementText: '2 Close Wheel-to-Wheel Finishes',
+        current: Math.min(2, hasActiveRival ? 2 : maxRivalCloseFinishes),
+        target: 2,
+        unitLabel: 'Duels',
+        unlocked: hasActiveRival,
+        claimed: claimedSet.has('rivalry_dominator'),
+        creditReward: 4500,
+        techReward: 10,
+        actionType: 'race',
+        actionLabel: 'Battle Rival',
+        Icon: Flame,
+      },
+      {
+        id: 'full_factory_spec',
+        title: 'Full Factory Spec',
+        category: 'engineering',
+        categoryLabel: 'Engineering & R&D',
+        tier: 'GOLD',
+        description:
+          'Reach 10+ combined R&D upgrade levels across Engine, Tyres, Brakes, Suspension, and Active Aero.',
+        requirementText: '10 Total R&D Upgrade Levels',
+        current: Math.min(10, totalUpgradeLevels),
+        target: 10,
+        unitLabel: 'Levels',
+        unlocked: totalUpgradeLevels >= 10,
+        claimed: claimedSet.has('full_factory_spec'),
+        creditReward: 5500,
+        techReward: 14,
+        actionType: 'garage',
+        actionLabel: 'Open R&D Lab',
+        Icon: Wrench,
+      },
+      {
+        id: 'paddock_mogul',
+        title: 'Paddock High Roller',
+        category: 'championship',
+        categoryLabel: 'Career Status',
+        tier: 'SILVER',
+        description:
+          'Build a factory war chest of 12,000+ Credits through prize purses and milestone bonuses.',
+        requirementText: 'Accumulate 12,000 Credits',
+        current: Math.min(12000, career.credits),
+        target: 12000,
+        unitLabel: 'CR',
+        unlocked: career.credits >= 12000 || techLevel >= 945,
+        claimed: claimedSet.has('paddock_mogul'),
+        creditReward: 3000,
+        techReward: 8,
+        actionType: 'drivers',
+        actionLabel: 'Driver Academy',
+        Icon: Sparkles,
+      },
+    ];
+  }, [career, upgrades, techLevel]);
+
+  const unlockedCount = useMemo(
+    () => milestones.filter((m) => m.unlocked).length,
+    [milestones]
+  );
+  const unclaimedCount = useMemo(
+    () => milestones.filter((m) => m.unlocked && !m.claimed).length,
+    [milestones]
+  );
+  const filteredMilestones = useMemo(() => {
+    return milestones.filter((m) => {
+      if (achievementFilter === 'unlocked') return m.unlocked;
+      if (achievementFilter === 'locked') return !m.unlocked;
+      if (achievementFilter === 'race_craft') return m.category === 'race_craft';
+      if (achievementFilter === 'engineering') return m.category === 'engineering';
+      if (achievementFilter === 'championship') return m.category === 'championship';
+      return true;
+    });
+  }, [milestones, achievementFilter]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -305,6 +548,21 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             <span>Garage &amp; R&amp;D</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => {
+              if (onToggleEgoHudMode) onToggleEgoHudMode();
+              setF1WorldTab('achievements');
+            }}
+            className="px-2.5 py-1.5 rounded-lg border border-amber-400/50 bg-amber-500/20 text-xs font-semibold text-amber-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span>Career Achievements</span>
+            <span className="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-mono-telemetry font-bold text-[10px]">
+              {unlockedCount}/{milestones.length}
+            </span>
+          </button>
+
           {onOpenPitStrategy && (
             <button
               type="button"
@@ -443,19 +701,34 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 { id: 'series', label: 'SERIES' },
                 { id: 'events', label: 'SOLO & MULTIPLAYER EVENTS' },
                 { id: 'invitationals', label: 'INVITATIONALS' },
+                { id: 'achievements', label: 'CAREER ACHIEVEMENTS' },
               ] as { id: F1WorldTab; label: string }[]
             ).map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setF1WorldTab(tab.id)}
-                className={`px-3 py-1.5 rounded-lg font-display font-bold text-xs tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-display font-bold text-xs tracking-wider transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                   f1WorldTab === tab.id
                     ? 'bg-[#EF4444] text-white shadow-md'
                     : 'text-slate-300 hover:text-white hover:bg-white/5'
                 }`}
               >
-                {tab.label}
+                {tab.id === 'achievements' && <Trophy className="w-3.5 h-3.5 text-amber-300" />}
+                <span>{tab.label}</span>
+                {tab.id === 'achievements' && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded font-mono-telemetry font-bold text-[10px] ${
+                      f1WorldTab === 'achievements'
+                        ? 'bg-white text-red-600'
+                        : unclaimedCount > 0
+                          ? 'bg-amber-400 text-slate-950'
+                          : 'bg-white/15 text-slate-200'
+                    }`}
+                  >
+                    {unlockedCount}/{milestones.length}
+                  </span>
+                )}
               </button>
             ))}
 
@@ -614,8 +887,302 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         )}
       </div>
 
-      {/* CENTER OVERLAY: F1 World Crimson Global Map (Series & Solo/Multiplayer Events) OR Invitationals Modal */}
-      {f1WorldTab !== 'showroom' && (
+      {/* CENTER OVERLAY: Career Achievements, F1 World Crimson Global Map, OR Invitationals Modal */}
+      {f1WorldTab === 'achievements' && (
+        <div
+          className="pointer-events-auto my-auto w-full max-w-[1360px] mx-auto rounded-2xl border border-amber-500/35 overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-12 min-h-[430px] max-h-[68vh]"
+          style={{
+            background:
+              'radial-gradient(circle at 72% 28%, rgba(78, 42, 10, 0.92) 0%, rgba(11, 14, 21, 0.97) 72%)',
+          }}
+        >
+          {/* Left Panel: Career Legacy Summary, Telemetry & Category Filters */}
+          <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-white/15 p-5 flex flex-col justify-between bg-[#10141D]/95">
+            <div className="flex flex-col gap-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-amber-400 tracking-widest uppercase flex items-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>FIA Hall of Fame &amp; Milestones</span>
+                  </div>
+                  <h2 className="font-display font-black text-2xl text-white tracking-wide uppercase">
+                    CAREER ACHIEVEMENTS
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setF1WorldTab('showroom')}
+                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white cursor-pointer"
+                  title="Back to 3D Showroom"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Overall Completion Progress Card */}
+              <div className="rounded-xl border border-amber-400/35 bg-gradient-to-br from-amber-950/45 via-slate-900/90 to-slate-950/95 p-3.5 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-200">
+                    Milestone Completion
+                  </span>
+                  <span className="font-mono-telemetry font-bold text-sm text-amber-300">
+                    {unlockedCount} / {milestones.length} Unlocked (
+                    {Math.round((unlockedCount / milestones.length) * 100)}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 transition-all duration-300"
+                    style={{ width: `${(unlockedCount / milestones.length) * 100}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1">
+                  <span>
+                    Rank:{' '}
+                    <strong className="text-white">
+                      {unlockedCount >= 7
+                        ? 'World Champion Legend'
+                        : unlockedCount >= 4
+                          ? 'Grand Prix Contender'
+                          : unlockedCount >= 1
+                            ? 'Paddock Podium Rising'
+                            : 'FIA Rookie Challenger'}
+                    </strong>
+                  </span>
+                  {unclaimedCount > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-semibold text-[10px]">
+                      {unclaimedCount} Reward{unclaimedCount > 1 ? 's' : ''} Ready
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Live Career Data Snapshot */}
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-black/45 border border-white/10 p-2">
+                  <div className="text-[10px] text-slate-400 uppercase">Victories</div>
+                  <div className="font-mono-telemetry font-bold text-base text-white mt-0.5">
+                    {career.totalVictories}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-black/45 border border-white/10 p-2">
+                  <div className="text-[10px] text-slate-400 uppercase">Poles / P1s</div>
+                  <div className="font-mono-telemetry font-bold text-base text-amber-300 mt-0.5">
+                    {Math.max(
+                      career.polePositions ?? 0,
+                      career.totalVictories,
+                      Math.floor(career.championshipPoints / 25)
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-black/45 border border-white/10 p-2">
+                  <div className="text-[10px] text-slate-400 uppercase">Engine R&amp;D</div>
+                  <div className="font-mono-telemetry font-bold text-base text-cyan-300 mt-0.5">
+                    Lv.{upgrades.engineLevel}/3
+                  </div>
+                </div>
+                <div className="rounded-lg bg-black/45 border border-white/10 p-2">
+                  <div className="text-[10px] text-slate-400 uppercase">Champ PTS</div>
+                  <div className="font-mono-telemetry font-bold text-sm text-white mt-0.5">
+                    {career.championshipPoints}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-black/45 border border-white/10 p-2">
+                  <div className="text-[10px] text-slate-400 uppercase">Races</div>
+                  <div className="font-mono-telemetry font-bold text-sm text-white mt-0.5">
+                    {career.racesCompleted}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-black/45 border border-white/10 p-2">
+                  <div className="text-[10px] text-slate-400 uppercase">Credits</div>
+                  <div className="font-mono-telemetry font-bold text-sm text-emerald-300 mt-0.5">
+                    {career.credits.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Filter Milestones
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { id: 'all', label: `All (${milestones.length})` },
+                      { id: 'unlocked', label: `Unlocked (${unlockedCount})` },
+                      { id: 'locked', label: `In Progress (${milestones.length - unlockedCount})` },
+                      { id: 'race_craft', label: 'Race Craft' },
+                      { id: 'engineering', label: 'Engineering' },
+                      { id: 'championship', label: 'Championship' },
+                    ] as { id: AchievementFilter; label: string }[]
+                  ).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setAchievementFilter(f.id)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                        achievementFilter === f.id
+                          ? 'bg-amber-400 text-slate-950 font-bold'
+                          : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/10 mt-3">
+              <button
+                type="button"
+                onClick={onOpenGarage}
+                className="py-2.5 px-3 rounded-xl border border-amber-400/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 hover:text-white font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Wrench className="w-3.5 h-3.5 text-amber-300" />
+                <span>R&amp;D Garage</span>
+              </button>
+              <button
+                type="button"
+                onClick={onStartRace}
+                className="py-2.5 px-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Drive Now</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Right Panel: Unlockable Career Milestones Grid */}
+          <div className="lg:col-span-8 p-4 sm:p-5 overflow-y-auto max-h-[64vh] grid grid-cols-1 md:grid-cols-2 gap-3 content-start">
+            {filteredMilestones.map((m) => {
+              const pct = Math.min(100, Math.round((m.current / m.target) * 100));
+              const IconComp = m.Icon;
+              const tierColors =
+                m.tier === 'PLATINUM'
+                  ? 'border-cyan-400/50 bg-cyan-500/15 text-cyan-200'
+                  : m.tier === 'GOLD'
+                    ? 'border-amber-400/50 bg-amber-500/15 text-amber-200'
+                    : 'border-slate-300/40 bg-slate-400/15 text-slate-200';
+
+              return (
+                <div
+                  key={m.id}
+                  className={`rounded-xl border p-3.5 flex flex-col justify-between gap-2.5 transition-all ${
+                    m.unlocked
+                      ? 'border-amber-400/60 bg-gradient-to-br from-amber-950/40 via-[#131824]/95 to-[#0D111A]/95 shadow-[0_0_24px_rgba(245,158,11,0.12)]'
+                      : 'border-white/12 bg-[#0D111A]/85 hover:border-white/25'
+                  }`}
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
+                            m.unlocked
+                              ? 'border-amber-400 bg-amber-400/20 text-amber-300'
+                              : 'border-white/15 bg-white/5 text-slate-400'
+                          }`}
+                        >
+                          <IconComp className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-display font-bold text-sm sm:text-base text-white">
+                              {m.title}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded border text-[9px] font-mono-telemetry font-bold uppercase ${tierColors}`}
+                            >
+                              {m.tier}
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            {m.categoryLabel} · {m.requirementText}
+                          </div>
+                        </div>
+                      </div>
+
+                      {m.unlocked ? (
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-mono-telemetry font-bold flex items-center gap-1 shrink-0">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>{m.claimed ? 'CLAIMED' : 'UNLOCKED'}</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-slate-400 text-[10px] font-mono-telemetry font-semibold flex items-center gap-1 shrink-0">
+                          <Lock className="w-3 h-3" />
+                          <span>{pct}%</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed">{m.description}</p>
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-mono-telemetry text-slate-300">
+                        Progress:{' '}
+                        <strong className="text-white">
+                          {m.current.toLocaleString()} / {m.target.toLocaleString()} {m.unitLabel}
+                        </strong>
+                      </span>
+                      <span className="font-mono-telemetry text-amber-300 font-semibold">
+                        +{m.creditReward.toLocaleString()} CR · +{m.techReward} Tech
+                      </span>
+                    </div>
+
+                    <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          m.unlocked
+                            ? 'bg-gradient-to-r from-amber-400 to-emerald-400'
+                            : 'bg-gradient-to-r from-red-500 to-amber-400'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end pt-0.5">
+                      {m.unlocked && !m.claimed && onClaimAchievement ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onClaimAchievement(m.id, m.creditReward, m.techReward)
+                          }
+                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider cursor-pointer transition-colors shadow-md"
+                        >
+                          Claim Bonus (+{m.creditReward.toLocaleString()} CR &amp; +{m.techReward} Tech)
+                        </button>
+                      ) : m.unlocked && m.claimed ? (
+                        <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Milestone Reward Claimed</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (m.actionType === 'garage') onOpenGarage();
+                            else if (m.actionType === 'drivers') onOpenDrivers();
+                            else onStartRace();
+                          }}
+                          className="px-3 py-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/15 text-xs font-semibold text-slate-200 hover:text-white cursor-pointer transition-colors"
+                        >
+                          {m.actionLabel} →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {f1WorldTab !== 'showroom' && f1WorldTab !== 'achievements' && (
         <div
           className="pointer-events-auto my-auto w-full max-w-[1360px] mx-auto rounded-2xl border border-red-500/35 overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-12 min-h-[420px]"
           style={{

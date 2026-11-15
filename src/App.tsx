@@ -39,6 +39,7 @@ import {
 } from './types/racing';
 
 const CAREER_STORAGE_KEY = 'ufr26_career_v1';
+const UPGRADES_STORAGE_KEY = 'ufr26_upgrades_v1';
 
 const DEFAULT_CAREER: CareerProgress = {
   credits: 6000,
@@ -47,6 +48,17 @@ const DEFAULT_CAREER: CareerProgress = {
   racesCompleted: 0,
   rivalryScores: {},
   activeRivalId: null,
+  polePositions: 0,
+  podiumFinishes: 0,
+  claimedAchievements: [],
+};
+
+const DEFAULT_UPGRADES: CarUpgrades = {
+  engineLevel: 1,
+  tyreLevel: 1,
+  brakeLevel: 1,
+  suspensionLevel: 1,
+  aeroLevel: 1,
 };
 
 function loadSavedCareer(): CareerProgress {
@@ -63,9 +75,33 @@ function loadSavedCareer(): CareerProgress {
       racesCompleted: typeof parsed.racesCompleted === 'number' ? parsed.racesCompleted : 0,
       rivalryScores: parsed.rivalryScores ?? {},
       activeRivalId: typeof parsed.activeRivalId === 'string' ? parsed.activeRivalId : null,
+      selectedAcademyId: parsed.selectedAcademyId,
+      resourcePoints: typeof parsed.resourcePoints === 'number' ? parsed.resourcePoints : undefined,
+      techLevel: typeof parsed.techLevel === 'number' ? parsed.techLevel : undefined,
+      polePositions: typeof parsed.polePositions === 'number' ? parsed.polePositions : 0,
+      podiumFinishes: typeof parsed.podiumFinishes === 'number' ? parsed.podiumFinishes : 0,
+      claimedAchievements: Array.isArray(parsed.claimedAchievements) ? parsed.claimedAchievements : [],
     };
   } catch {
     return DEFAULT_CAREER;
+  }
+}
+
+function loadSavedUpgrades(): CarUpgrades {
+  if (typeof window === 'undefined') return DEFAULT_UPGRADES;
+  try {
+    const raw = window.localStorage.getItem(UPGRADES_STORAGE_KEY);
+    if (!raw) return DEFAULT_UPGRADES;
+    const parsed = JSON.parse(raw) as Partial<CarUpgrades>;
+    return {
+      engineLevel: typeof parsed.engineLevel === 'number' ? parsed.engineLevel : 1,
+      tyreLevel: typeof parsed.tyreLevel === 'number' ? parsed.tyreLevel : 1,
+      brakeLevel: typeof parsed.brakeLevel === 'number' ? parsed.brakeLevel : 1,
+      suspensionLevel: typeof parsed.suspensionLevel === 'number' ? parsed.suspensionLevel : 1,
+      aeroLevel: typeof parsed.aeroLevel === 'number' ? parsed.aeroLevel : 1,
+    };
+  } catch {
+    return DEFAULT_UPGRADES;
   }
 }
 
@@ -180,13 +216,7 @@ export default function App() {
   const [customNumber, setCustomNumber] = useState<string>('');
   const [selectedWheel, setSelectedWheel] = useState<WheelFinish>(WHEEL_FINISHES[0]);
   const [selectedCompound, setSelectedCompound] = useState<TyreCompound>('medium');
-  const [upgrades, setUpgrades] = useState<CarUpgrades>({
-    engineLevel: 1,
-    tyreLevel: 1,
-    brakeLevel: 1,
-    suspensionLevel: 1,
-    aeroLevel: 1,
-  });
+  const [upgrades, setUpgrades] = useState<CarUpgrades>(loadSavedUpgrades);
   const [career, setCareer] = useState<CareerProgress>(loadSavedCareer);
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
   const [gameMode, setGameMode] = useState<GameMode>('quick_race');
@@ -325,6 +355,14 @@ export default function App() {
               }
             }
 
+            const fastestOverallMs = standings.reduce((best, r) => {
+              if (r.bestLapMs && r.bestLapMs < best) return r.bestLapMs;
+              return best;
+            }, Number.POSITIVE_INFINITY);
+            const earnedPoleOrFastest =
+              playerRes.position === 1 ||
+              (playerRes.bestLapMs !== null && playerRes.bestLapMs <= fastestOverallMs);
+
             const nextCareer: CareerProgress = {
               credits: prev.credits + prize,
               championshipPoints: prev.championshipPoints + playerRes.pointsAwarded,
@@ -335,6 +373,9 @@ export default function App() {
               selectedAcademyId: prev.selectedAcademyId,
               resourcePoints: (prev.resourcePoints ?? 296) + 172,
               techLevel: (prev.techLevel ?? 929) + (playerRes.position <= 3 ? 5 : 2),
+              polePositions: (prev.polePositions ?? 0) + (earnedPoleOrFastest ? 1 : 0),
+              podiumFinishes: (prev.podiumFinishes ?? 0) + (playerRes.position <= 3 ? 1 : 0),
+              claimedAchievements: prev.claimedAchievements ?? [],
             };
             try {
               window.localStorage.setItem(CAREER_STORAGE_KEY, JSON.stringify(nextCareer));
@@ -365,6 +406,14 @@ export default function App() {
       // ignore
     }
   }, [career]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(UPGRADES_STORAGE_KEY, JSON.stringify(upgrades));
+    } catch {
+      // ignore
+    }
+  }, [upgrades]);
 
   useEffect(() => {
     engineRef.current?.configureSession({
@@ -553,6 +602,22 @@ export default function App() {
     [career.credits]
   );
 
+  const handleClaimAchievement = useCallback(
+    (achievementId: string, creditBonus: number, techBonus: number) => {
+      setCareer((prev) => {
+        const claimed = prev.claimedAchievements ?? [];
+        if (claimed.includes(achievementId)) return prev;
+        return {
+          ...prev,
+          credits: prev.credits + creditBonus,
+          techLevel: (prev.techLevel ?? 929 + Math.floor(prev.championshipPoints * 0.5)) + techBonus,
+          claimedAchievements: [...claimed, achievementId],
+        };
+      });
+    },
+    []
+  );
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#090B0F]">
       {/* Isolated WebGL Viewport Container */}
@@ -565,6 +630,7 @@ export default function App() {
           selectedTeam={selectedTeam}
           selectedDriver={selectedDriver}
           career={career}
+          upgrades={upgrades}
           gameMode={gameMode}
           weather={settings.weather}
           dynamicWeather={settings.dynamicWeather}
@@ -597,6 +663,7 @@ export default function App() {
           onOpenGarage={openGarage}
           onOpenPitStrategy={() => setShowPitStrategy(true)}
           onOpenSettings={() => setShowTitleSettings(true)}
+          onClaimAchievement={handleClaimAchievement}
           onJumpTitleScene={(sceneNum) => engineRef.current?.jumpToTitleScene(sceneNum)}
           onStartRace={startRace}
         />

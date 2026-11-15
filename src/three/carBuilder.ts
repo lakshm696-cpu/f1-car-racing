@@ -120,7 +120,7 @@ export function buildFormulaCar(
     iridescenceIOR: 1.38,
     iridescenceThicknessMinimum: 120,
     iridescenceThicknessMaximum: 260,
-    envMapIntensity: 2.35,
+    envMapIntensity: 2.75,
   });
 
   const secondaryMat = new THREE.MeshPhysicalMaterial({
@@ -131,44 +131,87 @@ export function buildFormulaCar(
     roughnessMap: bodyRoughnessMap ?? null,
     aoMap: carAoMap ?? null,
     aoMapIntensity: 0.78,
-    metalness: 0.64,
-    roughness: 0.2,
-    clearcoat: 0.96,
-    clearcoatRoughness: 0.038,
+    metalness: 0.68,
+    roughness: 0.17,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.03,
     clearcoatNormalMap: paintFlakeNormalMap,
-    clearcoatNormalScale: new THREE.Vector2(0.03, 0.03),
-    ior: 1.5,
-    specularIntensity: 0.95,
-    envMapIntensity: 2.05,
+    clearcoatNormalScale: new THREE.Vector2(0.035, 0.035),
+    ior: 1.52,
+    specularIntensity: 1.0,
+    envMapIntensity: 2.45,
   });
+
+  // Procedural Metallic Paint Micro-Flake Sparkle & Grazing-Angle Fresnel Clearcoat Brilliance
+  const attachMetallicFlakeShader = (mat: THREE.MeshPhysicalMaterial, flakeStrength: number) => {
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader =
+        `varying vec3 vPaintLocalPos;\n` + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vPaintLocalPos = position;`
+      );
+      shader.fragmentShader =
+        `varying vec3 vPaintLocalPos;
+        float paintFlakeHash(vec3 p) {
+          p = fract(p * vec3(443.897, 441.423, 437.195));
+          p += dot(p, p.yzx + 19.19);
+          return fract((p.x + p.y) * p.z);
+        }\n` + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `{
+          vec3 viewDir = normalize(vViewPosition);
+          float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+          float fresnelRim = pow(1.0 - ndv, 3.6);
+          vec3 flakeCell = floor(vPaintLocalPos * 165.0);
+          float flakeSeed = paintFlakeHash(flakeCell);
+          vec3 flakeNorm = normalize(normal + vec3(
+            paintFlakeHash(flakeCell + 1.7) - 0.5,
+            paintFlakeHash(flakeCell + 3.1) - 0.5,
+            paintFlakeHash(flakeCell + 5.3) - 0.5
+          ) * 0.42);
+          float glint = pow(max(0.0, dot(flakeNorm, viewDir)), 28.0) * step(0.68, flakeSeed);
+          gl_FragColor.rgb += (diffuseColor.rgb * 0.65 + vec3(0.38, 0.40, 0.45)) * glint * ${flakeStrength.toFixed(2)};
+          gl_FragColor.rgb += (diffuseColor.rgb * 0.45 + vec3(0.14, 0.16, 0.20)) * fresnelRim * 0.22;
+        }
+        #include <dithering_fragment>`
+      );
+    };
+  };
+  attachMetallicFlakeShader(primaryMat, 0.34);
+  attachMetallicFlakeShader(secondaryMat, 0.26);
 
   const accentMat = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(accentHex),
     aoMap: carAoMap ?? null,
     aoMapIntensity: 0.65,
-    metalness: 0.58,
-    roughness: 0.22,
-    clearcoat: 0.86,
-    clearcoatRoughness: 0.055,
-    ior: 1.48,
-    envMapIntensity: 1.85,
+    metalness: 0.62,
+    roughness: 0.19,
+    clearcoat: 0.92,
+    clearcoatRoughness: 0.045,
+    ior: 1.5,
+    envMapIntensity: 2.15,
   });
 
   const carbonMat = new THREE.MeshPhysicalMaterial({
     color: 0x1e232e,
     map: carbonMap,
     normalMap: carbonNormalMap,
-    normalScale: new THREE.Vector2(0.82, 0.82),
+    normalScale: new THREE.Vector2(0.88, 0.88),
     roughnessMap: bodyRoughnessMap ?? null,
     aoMap: carAoMap ?? null,
     aoMapIntensity: 0.85,
-    metalness: 0.42,
-    roughness: 0.26,
-    clearcoat: 0.76,
-    clearcoatRoughness: 0.11,
+    metalness: 0.46,
+    roughness: 0.24,
+    anisotropy: 0.78,
+    anisotropyRotation: Math.PI / 4,
+    clearcoat: 0.82,
+    clearcoatRoughness: 0.09,
     ior: 1.52,
-    specularIntensity: 0.92,
-    envMapIntensity: 1.95,
+    specularIntensity: 0.96,
+    envMapIntensity: 2.35,
   });
 
   const tyrePatchUniforms = {
@@ -926,9 +969,9 @@ export function buildFormulaCar(
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const exhaustFlame = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.42, 10), exhaustFlameMat);
+  const exhaustFlame = new THREE.Mesh(new THREE.ConeGeometry(0.068, 0.46, 12), exhaustFlameMat);
   exhaustFlame.rotation.x = Math.PI / 2;
-  exhaustFlame.position.set(0, 0.44, 2.32);
+  exhaustFlame.position.set(0, 0.44, 2.34);
   chassisGroup.add(exhaustFlame);
 
   const innerFlameMat = new THREE.MeshBasicMaterial({
@@ -938,10 +981,27 @@ export function buildFormulaCar(
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const innerFlame = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.26, 8), innerFlameMat);
+  const innerFlame = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.28, 10), innerFlameMat);
   innerFlame.rotation.x = Math.PI / 2;
-  innerFlame.position.set(0, 0.44, 2.24);
+  innerFlame.position.set(0, 0.44, 2.25);
   chassisGroup.add(innerFlame);
+
+  // Supersonic Mach shock-diamond plasma rings inside exhaust plume during gear shifts
+  const shockDiamondMat = new THREE.MeshBasicMaterial({
+    color: 0x7dd3fc,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const shockDiamondGroup = new THREE.Group();
+  shockDiamondGroup.position.set(0, 0.44, 2.22);
+  for (let d = 0; d < 3; d++) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.028 - d * 0.005, 0.0045, 8, 16), shockDiamondMat);
+    ring.position.z = d * 0.095;
+    shockDiamondGroup.add(ring);
+  }
+  chassisGroup.add(shockDiamondGroup);
 
   // Translucent hot exhaust gas heat shimmer plume
   const heatPlumeMat = new THREE.MeshBasicMaterial({
@@ -1172,6 +1232,25 @@ export function buildFormulaCar(
     drsStrut.position.set(side * 0.14, 0.06, 0.08);
     drsStrut.rotation.x = 0.55;
     rearWingGroup.add(drsStrut);
+  }
+
+  // High-Downforce Wingtip Pressure-Drop Vapor Condensation Vortices
+  const wingtipVortexMat = new THREE.MeshBasicMaterial({
+    color: 0xe0f2fe,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const wingtipVortices: THREE.Mesh[] = [];
+  for (const side of [-1, 1]) {
+    const vortexGeo = new THREE.ConeGeometry(0.034, 1.85, 10, 1, true);
+    const vortexMesh = new THREE.Mesh(vortexGeo, wingtipVortexMat);
+    vortexMesh.rotation.x = Math.PI / 2;
+    vortexMesh.position.set(side * 0.59, 0.19, 1.18);
+    rearWingGroup.add(vortexMesh);
+    wingtipVortices.push(vortexMesh);
   }
   chassisGroup.add(rearWingGroup);
 
@@ -1733,11 +1812,26 @@ export function buildFormulaCar(
     brakeDiscMat.emissiveIntensity = brakeHeat * 3.2;
     exhaustFlameMat.opacity = Math.min(0.95, shiftFlash);
     innerFlameMat.opacity = Math.min(0.98, shiftFlash * 1.15);
+    shockDiamondMat.opacity = Math.min(0.92, shiftFlash * 1.25);
+    const flameJitter = 0.92 + Math.sin(plumePhase * 2.7) * 0.14;
+    exhaustFlame.scale.set(flameJitter, 0.85 + shiftFlash * 0.55, flameJitter);
+    shockDiamondGroup.scale.set(1, 1, 0.85 + shiftFlash * 0.45);
 
     plumePhase += 0.38;
     const plumePulse = 0.86 + Math.sin(plumePhase) * 0.14;
     heatPlume.scale.set(plumePulse, 0.75 + exhaustLoad * 0.6, plumePulse);
     heatPlumeMat.opacity = 0.015 + exhaustLoad * 0.065;
+
+    // High-speed wingtip condensation vortex trails when DRS is closed under aero load
+    const aeroSpeedFactor = THREE.MathUtils.clamp((Math.abs(wheelSpinDelta) - 0.22) * 2.4, 0, 1);
+    const vortexStrength = drsOpen ? aeroSpeedFactor * 0.12 : aeroSpeedFactor * (0.22 + tyreLoad * 0.34);
+    wingtipVortexMat.opacity = Math.min(0.42, vortexStrength);
+    for (let v = 0; v < wingtipVortices.length; v++) {
+      const vm = wingtipVortices[v];
+      vm.rotation.y = (v === 0 ? 1 : -1) * plumePhase * 0.85;
+      const vScale = 0.82 + Math.sin(plumePhase * 1.3 + v) * 0.18;
+      vm.scale.set(vScale, 0.75 + aeroSpeedFactor * 0.65, vScale);
+    }
 
     if (rivalIndicator.visible) {
       rivalPhase += 0.06;

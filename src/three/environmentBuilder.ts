@@ -211,11 +211,12 @@ export function buildCircuitEnvironment(
         skyCol += sunsetGlow * horizonBand * (0.30 + 0.68 * uSunsetFactor) * (1.0 - uNightFactor * 0.9);
 
         // Henyey-Greenstein Mie forward scattering aureole & crisp HDR solar disc
-        float miePhase = hgPhase(rawSunCos, 0.72) * 0.52 + pow(sunCos, 6.0) * 0.34;
-        float sunCore = smoothstep(0.9991, 0.99985, sunCos);
+        float miePhase = hgPhase(rawSunCos, 0.75) * 0.58 + pow(sunCos, 6.0) * 0.38;
+        float sunCore = smoothstep(0.9990, 0.99988, sunCos);
+        float sunCorona = pow(sunCos, 42.0) * 0.45;
         float sunVis = (1.0 - uRainFactor * 0.85) * (1.0 - uNightFactor * 0.95) * (1.0 - uCloudCover * 0.42);
-        skyCol += mix(vec3(1.0, 0.94, 0.82), vec3(1.0, 0.62, 0.25), uSunsetFactor) * miePhase * (0.55 + 0.55 * uSunsetFactor) * sunVis;
-        skyCol += vec3(1.75, 1.60, 1.38) * sunCore * sunVis;
+        skyCol += mix(vec3(1.0, 0.95, 0.84), vec3(1.0, 0.62, 0.25), uSunsetFactor) * (miePhase + sunCorona) * (0.58 + 0.58 * uSunsetFactor) * sunVis;
+        skyCol += vec3(1.95, 1.78, 1.52) * sunCore * sunVis;
 
         // Storm darkening + sheet lightning illumination
         vec3 stormCol = mix(vec3(0.14, 0.18, 0.24), vec3(0.07, 0.10, 0.15), uRainFactor);
@@ -252,7 +253,7 @@ export function buildCircuitEnvironment(
   // ============================================================================
   // 2. DUAL-LAYER VOLUMETRIC FBM CLOUD DECK DOME (Cumulus + High Cirrus)
   // ============================================================================
-  const cloudOctaves = isLow ? 2 : isMedium ? 3 : 5;
+  const cloudOctaves = isLow ? 2 : isMedium ? 4 : 6;
   const cloudUniforms = {
     uTime: { value: 0 },
     uSunDir: skyUniforms.uSunDir,
@@ -265,7 +266,7 @@ export function buildCircuitEnvironment(
     uWindSpeed: { value: envCfg.sky.windSpeed },
     uCenter: skyUniforms.uCenter,
   };
-  const cloudDomeGeo = new THREE.SphereGeometry(780, 48, 24, 0, Math.PI * 2, 0, Math.PI * 0.49);
+  const cloudDomeGeo = new THREE.SphereGeometry(780, 64, 32, 0, Math.PI * 2, 0, Math.PI * 0.49);
   const cloudDomeMat = new THREE.ShaderMaterial({
     uniforms: cloudUniforms,
     transparent: true,
@@ -337,7 +338,7 @@ export function buildCircuitEnvironment(
         // Sample slightly toward sun for realistic directional cloud self-shadowing
         vec2 sunStep = normalize(sunDir.xz + vec2(0.001, 0.001)) * 0.16;
         float sunSample = mix(fbm((uv + sunStep) * 0.55 + windA), n2, 0.35);
-        float selfShadow = clamp((sunSample - density) * 2.6 + 0.5, 0.0, 1.0);
+        float selfShadow = clamp((sunSample - density) * 2.85 + 0.5, 0.0, 1.0);
 
         float threshold = mix(0.64, 0.27, clamp(uCloudCover, 0.0, 1.0));
         float cumulusAlpha = smoothstep(threshold, threshold + 0.23, density) * smoothstep(0.015, 0.16, elev);
@@ -350,15 +351,15 @@ export function buildCircuitEnvironment(
         float combinedAlpha = clamp(max(cumulusAlpha, cirrusAlpha * (1.0 - cumulusAlpha * 0.5)), 0.0, 1.0);
         if (combinedAlpha < 0.01) discard;
 
-        // Directional Henyey-Greenstein silver lining toward sun
+        // Directional Henyey-Greenstein silver lining & multi-scattering cloud rim toward sun
         float sunCos = max(dot(dir, sunDir), 0.0);
-        float edgeHighlight = pow(1.0 - cumulusAlpha, 1.7) * pow(sunCos, 4.5);
-        float topShade = clamp(smoothstep(0.24, 0.86, density) * 0.65 + selfShadow * 0.45, 0.0, 1.0);
+        float edgeHighlight = pow(1.0 - cumulusAlpha * 0.85, 1.55) * (pow(sunCos, 4.0) * 0.85 + pow(sunCos, 16.0) * 0.55);
+        float topShade = clamp(smoothstep(0.24, 0.86, density) * 0.65 + selfShadow * 0.48, 0.0, 1.0);
 
-        vec3 dayBright = mix(vec3(0.98, 0.99, 1.0), uCloudTint, 0.35);
-        vec3 dayShadow = mix(vec3(0.52, 0.60, 0.72), uCloudTint * 0.62, 0.4);
-        vec3 sunsetBright = vec3(1.0, 0.74, 0.46);
-        vec3 sunsetShadow = vec3(0.36, 0.20, 0.34);
+        vec3 dayBright = mix(vec3(0.99, 0.995, 1.0), uCloudTint, 0.32);
+        vec3 dayShadow = mix(vec3(0.50, 0.58, 0.72), uCloudTint * 0.60, 0.4);
+        vec3 sunsetBright = vec3(1.0, 0.76, 0.48);
+        vec3 sunsetShadow = vec3(0.35, 0.19, 0.34);
         vec3 stormCol = vec3(0.14, 0.18, 0.26);
         vec3 nightCol = vec3(0.07, 0.11, 0.19);
 
@@ -372,7 +373,7 @@ export function buildCircuitEnvironment(
 
         col = mix(col, stormCol, uRainFactor * 0.78);
         col = mix(col, nightCol, uNightFactor * 0.88);
-        col += mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.55, 0.22), uSunsetFactor) * edgeHighlight * (1.0 - uNightFactor * 0.85) * 0.92;
+        col += mix(vec3(1.0, 0.96, 0.88), vec3(1.0, 0.56, 0.24), uSunsetFactor) * edgeHighlight * (1.0 - uNightFactor * 0.85) * 1.08;
         col += vec3(0.75, 0.86, 1.0) * uLightning * (0.48 + 0.52 * (1.0 - topShade));
 
         float maxAlpha = mix(0.78, 0.94, uRainFactor);
