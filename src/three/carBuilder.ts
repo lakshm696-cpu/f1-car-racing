@@ -33,7 +33,12 @@ export interface FormulaCarModel {
     shiftFlash?: number,
     headlightsOn?: boolean,
     exhaustLoad?: number,
-    tyreLoad?: number
+    tyreLoad?: number,
+    damagePct?: number,
+    brakeTempC?: number,
+    grainingSeverityPct?: number,
+    microSlipRatio?: number,
+    tyreSurfaceTempC?: number
   ) => void;
 }
 
@@ -43,6 +48,8 @@ const COMPOUND_COLORS: Record<TyreCompound, string> = {
   hard: '#F8FAFC',
   wet: '#38BDF8',
 };
+
+const _heatCol = new THREE.Color();
 
 function createSculptedTyreGeometry(outerR: number, innerR: number, width: number): THREE.BufferGeometry {
   const hw = width * 0.5;
@@ -111,7 +118,8 @@ export function buildFormulaCar(
     sheenRoughness: 0.28,
     iridescence: 0.16,
     iridescenceIOR: 1.38,
-    iridescenceThicknessRange: [120, 260],
+    iridescenceThicknessMinimum: 120,
+    iridescenceThicknessMaximum: 260,
     envMapIntensity: 2.35,
   });
 
@@ -163,6 +171,13 @@ export function buildFormulaCar(
     envMapIntensity: 1.95,
   });
 
+  const tyrePatchUniforms = {
+    uGrainingSeverity: { value: 0.0 },
+    uBlisterIntensity: { value: 0.0 },
+    uMicroSlip: { value: 0.06 },
+    uSpinPhase: { value: 0.0 },
+  };
+
   const rubberMat = new THREE.MeshPhysicalMaterial({
     color: 0x12151b,
     normalMap: tyreTreadNormalMap,
@@ -174,6 +189,209 @@ export function buildFormulaCar(
     sheen: 0.22,
     sheenRoughness: 0.68,
     envMapIntensity: compound === 'wet' ? 1.45 : 1.12,
+  });
+
+  rubberMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uGrainingSeverity = tyrePatchUniforms.uGrainingSeverity;
+    shader.uniforms.uBlisterIntensity = tyrePatchUniforms.uBlisterIntensity;
+    shader.uniforms.uMicroSlip = tyrePatchUniforms.uMicroSlip;
+    shader.uniforms.uSpinPhase = tyrePatchUniforms.uSpinPhase;
+
+    shader.vertexShader =
+      `varying vec3 vTyreLocalPos;\n` + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vTyreLocalPos = position;`
+    );
+
+    shader.fragmentShader =
+      `uniform float uGrainingSeverity;
+      uniform float uBlisterIntensity;
+      uniform float uMicroSlip;
+      uniform float uSpinPhase;
+      varying vec3 vTyreLocalPos;
+
+      float tyreHash21(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      float tyreNoise2D(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = tyreHash21(i);
+        float b = tyreHash21(i + vec2(1.0, 0.0));
+        float c = tyreHash21(i + vec2(0.0, 1.0));
+        float d = tyreHash21(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      vec2 tyreBlisterVoronoi(vec2 x) {
+        vec2 n = floor(x);
+        vec2 f = fract(x);
+        float dMin = 8.0;
+        for (int j = -1; j <= 1; j++) {
+          for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = vec2(tyreHash21(n + g), tyreHash21(n + g + vec2(17.0, 31.0)));
+            vec2 r = g - f + (0.25 + 0.5 * o);
+            float d = dot(r, r);
+            if (d < dMin) dMin = d;
+          }
+        }
+        return vec2(sqrt(dMin), tyreHash21(n));
+      }\n` + shader.fragmentShader;
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+      float rOuter = length(vTyreLocalPos.xz) / 0.34;
+      float treadCrownMask = smoothstep(0.92, 0.975, rOuter) * (1.0 - smoothstep(0.13, 0.19, abs(vTyreLocalPos.y)));
+      if (treadCrownMask > 0.01 && (uGrainingSeverity > 0.01 || uBlisterIntensity > 0.01)) {
+        float theta = atan(vTyreLocalPos.z, vTyreLocalPos.x);
+        float axial = vTyreLocalPos.y * 6.5;
+        vec2 patchUv = vec2(theta * 5.5, axial * 4.2);
+
+        // Procedural Graining: Diagonal sheared rubber ribbons & micro-tearing ridges
+        float shearAngle = theta * 42.0 + axial * 28.0 + sin(theta * 12.0 + axial * 9.0) * 1.6;
+        float grainWave = 0.5 + 0.5 * sin(shearAngle);
+        float fineGrain = tyreNoise2D(patchUv * 6.5 + vec2(grainWave * 1.4, -grainWave));
+        float tornRibbonMask = smoothstep(0.38, 0.78, grainWave * 0.65 + fineGrain * 0.55) * uGrainingSeverity * treadCrownMask;
+        float troughMask = smoothstep(0.65, 0.22, grainWave * 0.6 + fineGrain * 0.4) * uGrainingSeverity * treadCrownMask;
+
+        vec3 grainedRibbonCol = vec3(0.27, 0.28, 0.32);
+        vec3 abradedTroughCol = vec3(0.035, 0.038, 0.045);
+        diffuseColor.rgb = mix(diffuseColor.rgb, abradedTroughCol, troughMask * 0.68);
+        diffuseColor.rgb = mix(diffuseColor.rgb, grainedRibbonCol, tornRibbonMask * 0.74);
+
+        // Procedural Blistering: Cellular erupted rubber craters from sub-surface overheating
+        float effBlister = clamp(uBlisterIntensity + max(0.0, uGrainingSeverity - 0.35) * 0.75, 0.0, 1.0);
+        if (effBlister > 0.02) {
+          vec2 vor = tyreBlisterVoronoi(vec2(theta * 9.0, axial * 5.2));
+          float blisterThreshold = mix(0.12, 0.46, effBlister);
+          if (vor.y < effBlister * 0.85) {
+            float pitCore = 1.0 - smoothstep(0.0, blisterThreshold * 0.58, vor.x);
+            float pitRim = smoothstep(blisterThreshold * 0.45, blisterThreshold * 0.75, vor.x) *
+                           (1.0 - smoothstep(blisterThreshold * 0.75, blisterThreshold, vor.x));
+            vec3 moltenCoreCol = vec3(0.018, 0.018, 0.022);
+            vec3 scorchedRimCol = vec3(0.34, 0.25, 0.19);
+            diffuseColor.rgb = mix(diffuseColor.rgb, scorchedRimCol, pitRim * effBlister * treadCrownMask * 0.85);
+            diffuseColor.rgb = mix(diffuseColor.rgb, moltenCoreCol, pitCore * effBlister * treadCrownMask * 0.92);
+          }
+        }
+      }`
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <roughnessmap_fragment>',
+      `#include <roughnessmap_fragment>
+      float rOuterR = length(vTyreLocalPos.xz) / 0.34;
+      float treadMaskR = smoothstep(0.92, 0.975, rOuterR) * (1.0 - smoothstep(0.13, 0.19, abs(vTyreLocalPos.y)));
+      if (treadMaskR > 0.01 && (uGrainingSeverity > 0.01 || uBlisterIntensity > 0.01)) {
+        float thetaR = atan(vTyreLocalPos.z, vTyreLocalPos.x);
+        float axialR = vTyreLocalPos.y * 6.5;
+        float grainR = tyreNoise2D(vec2(thetaR * 36.0 + axialR * 22.0, axialR * 18.0));
+        roughnessFactor = clamp(roughnessFactor + (grainR - 0.3) * uGrainingSeverity * 0.34 * treadMaskR, 0.18, 0.98);
+      }`
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      float rOuterE = length(vTyreLocalPos.xz) / 0.34;
+      float treadMaskE = smoothstep(0.93, 0.98, rOuterE) * (1.0 - smoothstep(0.12, 0.18, abs(vTyreLocalPos.y)));
+      float thermalScrub = clamp((uGrainingSeverity * 0.55 + uBlisterIntensity * 0.65) * uMicroSlip, 0.0, 1.0);
+      if (treadMaskE > 0.01 && thermalScrub > 0.08) {
+        float thetaE = atan(vTyreLocalPos.z, vTyreLocalPos.x);
+        float bandStreak = 0.6 + 0.4 * sin(thetaE * 28.0 + vTyreLocalPos.y * 95.0);
+        vec3 blisterHeatCol = mix(vec3(0.42, 0.08, 0.02), vec3(0.95, 0.32, 0.05), clamp(uBlisterIntensity + uGrainingSeverity * 0.4, 0.0, 1.0));
+        totalEmissiveRadiance += blisterHeatCol * thermalScrub * bandStreak * treadMaskE * 0.55;
+      }`
+    );
+  };
+
+  // Procedural Dynamic Tyre Contact Patch Footprint Shader (Adhesion vs Micro-Slip + Graining & Blistering)
+  const contactPatchShaderMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uGrainingSeverity: tyrePatchUniforms.uGrainingSeverity,
+      uBlisterIntensity: tyrePatchUniforms.uBlisterIntensity,
+      uMicroSlip: tyrePatchUniforms.uMicroSlip,
+      uSpinPhase: tyrePatchUniforms.uSpinPhase,
+    },
+    vertexShader: `
+      varying vec2 vPatchUv;
+      void main() {
+        vPatchUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uGrainingSeverity;
+      uniform float uBlisterIntensity;
+      uniform float uMicroSlip;
+      uniform float uSpinPhase;
+      varying vec2 vPatchUv;
+
+      float cpHash(vec2 p) {
+        p = fract(p * vec2(127.1, 311.7));
+        p += dot(p, p + 34.5);
+        return fract(p.x * p.y);
+      }
+
+      float cpNoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(cpHash(i), cpHash(i + vec2(1.0, 0.0)), f.x),
+          mix(cpHash(i + vec2(0.0, 1.0)), cpHash(i + vec2(1.0, 1.0)), f.x),
+          f.y
+        );
+      }
+
+      void main() {
+        vec2 centered = (vPatchUv - 0.5) * 2.0;
+        // Rounded contact patch footprint envelope
+        float roundedBox = length(max(abs(centered) - vec2(0.46, 0.52), 0.0));
+        float footprintMask = 1.0 - smoothstep(0.0, 0.34, roundedBox);
+        if (footprintMask <= 0.01) discard;
+
+        // Leading-edge static adhesion vs trailing-edge micro-slip zone (vPatchUv.y: 0=leading, 1=trailing)
+        float transitionY = clamp(1.0 - uMicroSlip * 0.88, 0.12, 0.92);
+        float trailingSlipZone = smoothstep(transitionY - 0.14, transitionY + 0.14, vPatchUv.y);
+
+        // Procedural Graining Ripples scrolling with tyre rotation
+        vec2 scrolledUv = vec2(vPatchUv.x * 18.0, vPatchUv.y * 22.0 - uSpinPhase * 2.5);
+        float diagonalWave = 0.5 + 0.5 * sin(scrolledUv.x * 2.6 + scrolledUv.y * 3.4 + cpNoise(scrolledUv) * 2.8);
+        float grainPattern = smoothstep(0.32, 0.82, diagonalWave) * uGrainingSeverity;
+
+        // Procedural Blistering Craters
+        float cellNoise = cpNoise(scrolledUv * 0.85 + vec2(4.2, 9.1));
+        float blisterSpots = smoothstep(0.76 - uBlisterIntensity * 0.28, 0.92, cellNoise) *
+                             clamp(uBlisterIntensity + uGrainingSeverity * 0.5, 0.0, 1.0);
+
+        vec3 stickCol = vec3(0.06, 0.68, 0.48);
+        vec3 slipCol = vec3(0.96, 0.58, 0.08);
+        vec3 grainCol = vec3(0.95, 0.36, 0.06);
+        vec3 blisterCol = vec3(0.98, 0.14, 0.08);
+
+        vec3 patchCol = mix(stickCol, slipCol, trailingSlipZone);
+        patchCol = mix(patchCol, grainCol, grainPattern * 0.85);
+        patchCol = mix(patchCol, blisterCol, blisterSpots * 0.95);
+
+        float activityAlpha = clamp(0.18 + uMicroSlip * 0.42 + uGrainingSeverity * 0.48 + uBlisterIntensity * 0.35, 0.18, 0.88);
+        float edgeGlow = footprintMask * (0.55 + 0.45 * grainPattern + 0.5 * blisterSpots);
+        gl_FragColor = vec4(patchCol * (1.1 + uGrainingSeverity * 0.8 + blisterSpots * 0.9), edgeGlow * activityAlpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -3,
+    polygonOffsetUnits: -3,
   });
 
   const treadGrooveMat = new THREE.MeshStandardMaterial({
@@ -208,6 +426,12 @@ export function buildFormulaCar(
     polygonOffsetUnits: -1,
   });
 
+  const brakeThermalUniforms = {
+    uBrakeHeat: { value: 0.0 },
+    uBrakeTempC: { value: 280.0 },
+    uDiscSpinPhase: { value: 0.0 },
+  };
+
   const brakeDiscMat = new THREE.MeshStandardMaterial({
     color: 0x454a54,
     map: brakeDiscMap,
@@ -217,10 +441,82 @@ export function buildFormulaCar(
     roughness: 0.26,
   });
 
-  const brakeHeatRingMat = new THREE.MeshBasicMaterial({
-    color: 0xff5a1f,
+  brakeDiscMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uBrakeHeat = brakeThermalUniforms.uBrakeHeat;
+    shader.uniforms.uBrakeTempC = brakeThermalUniforms.uBrakeTempC;
+    shader.uniforms.uDiscSpinPhase = brakeThermalUniforms.uDiscSpinPhase;
+    shader.vertexShader = 'varying vec3 vDiscLocalPos;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vDiscLocalPos = position;`
+    );
+    shader.fragmentShader =
+      `uniform float uBrakeHeat;
+      uniform float uBrakeTempC;
+      uniform float uDiscSpinPhase;
+      varying vec3 vDiscLocalPos;\n` + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+      if (uBrakeHeat > 0.01) {
+        float rNorm = clamp(length(vDiscLocalPos.xz) / 0.1666, 0.0, 1.0);
+        float theta = atan(vDiscLocalPos.z, vDiscLocalPos.x) + uDiscSpinPhase;
+        float sweptBand = smoothstep(0.34, 0.50, rNorm) * (1.0 - smoothstep(0.90, 0.99, rNorm));
+        float scoreGrooves = 0.80 + 0.20 * sin(rNorm * 118.0 + cos(theta * 6.0) * 1.4);
+        float vaneHotspots = 0.84 + 0.16 * sin(theta * 24.0 + rNorm * 16.0);
+        float tempFactor = clamp((uBrakeTempC - 300.0) / 800.0, 0.0, 1.0);
+        float localHeat = clamp(mix(uBrakeHeat, tempFactor, 0.5) * (0.62 + 0.58 * sweptBand) * scoreGrooves * vaneHotspots, 0.0, 1.0);
+        vec3 dullRed = vec3(0.46, 0.022, 0.004);
+        vec3 cherryRed = vec3(0.88, 0.085, 0.012);
+        vec3 brightOrange = vec3(1.0, 0.36, 0.035);
+        vec3 incandescentAmber = vec3(1.0, 0.68, 0.16);
+        vec3 thermalColor = mix(dullRed, cherryRed, smoothstep(0.04, 0.42, localHeat));
+        thermalColor = mix(thermalColor, brightOrange, smoothstep(0.42, 0.78, localHeat));
+        thermalColor = mix(thermalColor, incandescentAmber, smoothstep(0.78, 1.0, localHeat));
+        float glowMask = smoothstep(0.03, 0.18, uBrakeHeat) * sweptBand;
+        totalEmissiveRadiance += thermalColor * (uBrakeHeat * uBrakeHeat * 7.6 + uBrakeHeat * 1.8) * glowMask;
+      }`
+    );
+  };
+
+  const brakeHeatRingMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uBrakeHeat: brakeThermalUniforms.uBrakeHeat,
+      uBrakeTempC: brakeThermalUniforms.uBrakeTempC,
+      uDiscSpinPhase: brakeThermalUniforms.uDiscSpinPhase,
+    },
+    vertexShader: `
+      varying vec3 vRingPos;
+      void main() {
+        vRingPos = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uBrakeHeat;
+      uniform float uBrakeTempC;
+      uniform float uDiscSpinPhase;
+      varying vec3 vRingPos;
+      void main() {
+        if (uBrakeHeat <= 0.015) discard;
+        float angle = atan(vRingPos.y, vRingPos.x);
+        float caliperWave = 0.78 + 0.22 * cos(angle - 0.6 + sin(uDiscSpinPhase * 0.5) * 0.2);
+        float ventPulse = 0.88 + 0.12 * sin(angle * 18.0 + uDiscSpinPhase * 2.0);
+        float tempNorm = clamp((uBrakeTempC - 300.0) / 800.0, 0.0, 1.0);
+        float intensity = clamp(mix(uBrakeHeat, tempNorm, 0.45) * caliperWave * ventPulse, 0.0, 1.0);
+        vec3 dullRed = vec3(0.52, 0.03, 0.008);
+        vec3 deepRed = vec3(0.92, 0.11, 0.02);
+        vec3 brightOrange = vec3(1.0, 0.46, 0.06);
+        vec3 hotCore = vec3(1.0, 0.72, 0.22);
+        vec3 col = mix(dullRed, deepRed, smoothstep(0.05, 0.45, intensity));
+        col = mix(col, brightOrange, smoothstep(0.45, 0.82, intensity));
+        col = mix(col, hotCore, smoothstep(0.82, 1.0, intensity));
+        float alpha = clamp(uBrakeHeat * 0.94 * caliperWave, 0.0, 0.95);
+        gl_FragColor = vec4(col * (1.2 + uBrakeHeat * 2.4), alpha);
+      }
+    `,
     transparent: true,
-    opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -287,7 +583,8 @@ export function buildFormulaCar(
     roughness: 0.16,
     iridescence: 0.85,
     iridescenceIOR: 1.35,
-    iridescenceThicknessRange: [180, 420],
+    iridescenceThicknessMinimum: 180,
+    iridescenceThicknessMaximum: 420,
   });
 
   let decalTex = createNumberDecalTexture(carNumber, accentHex);
@@ -1096,10 +1393,21 @@ export function buildFormulaCar(
     return wg;
   };
 
+  const contactPatchMeshes: THREE.Mesh[] = [];
   const addWheelAssembly = (parent: THREE.Object3D, width: number, tyreGeo: THREE.BufferGeometry, sideSign: number, isFront: boolean) => {
     const wheel = createWheel(width, tyreGeo);
     parent.add(wheel);
     wheels.push(wheel);
+
+    // Non-rotating ground-level dynamic tyre contact patch shader footprint pinned under the tyre crown
+    const patchMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(width * 0.96, wheelRadius * 0.88),
+      contactPatchShaderMat
+    );
+    patchMesh.rotation.x = -Math.PI / 2;
+    patchMesh.position.set(0, -wheelRadius + 0.008, 0);
+    parent.add(patchMesh);
+    contactPatchMeshes.push(patchMesh);
 
     // Stationary brake caliper + multi-piece carbon brake cooling scoop + titanium fasteners
     const caliper = new THREE.Mesh(new THREE.BoxGeometry(width * 0.45, 0.13, 0.09), caliperMat);
@@ -1281,9 +1589,15 @@ export function buildFormulaCar(
   };
 
   let brakeHeat = 0;
+  let discSpinPhase = 0;
   let rivalPhase = 0;
   let plumePhase = 0;
   let smoothSquash = 0;
+  let smoothHeadPitch = 0;
+  let smoothHeadRoll = 0;
+  let smoothHeadYaw = 0;
+  let smoothHeadFwd = 0;
+  let smoothHeadLat = 0;
   const updateVisuals = (
     wheelSpinDelta: number,
     steerAngle: number,
@@ -1294,15 +1608,64 @@ export function buildFormulaCar(
     shiftFlash = 0,
     headlightsOn = true,
     exhaustLoad = 0.55,
-    tyreLoad = 0.2
+    tyreLoad = 0.2,
+    damagePct = 0,
+    brakeTempC?: number,
+    grainingSeverityPct = 0,
+    microSlipRatio = 0.06,
+    tyreSurfaceTempC = 92
   ) => {
+    const dmgNorm = Math.min(1, Math.max(0, damagePct / 100));
+    if (dmgNorm > 0.05) {
+      frontWingGroup.rotation.x = dmgNorm * 0.28;
+      frontWingGroup.rotation.z = dmgNorm * 0.16 * Math.sin(performance.now() * 0.012);
+      frontWingGroup.position.y = 0.16 - dmgNorm * 0.14;
+      primaryMat.roughness = THREE.MathUtils.lerp(0.18, 0.88, dmgNorm);
+      primaryMat.metalness = THREE.MathUtils.lerp(0.92, 0.45, dmgNorm);
+    } else {
+      frontWingGroup.rotation.set(0, 0, 0);
+      frontWingGroup.position.y = 0.16;
+      primaryMat.roughness = 0.18;
+      primaryMat.metalness = 0.92;
+    }
     frontLeftPivot.rotation.y = steerAngle;
     frontRightPivot.rotation.y = steerAngle;
     steeringWheelGroup.rotation.z = -steerAngle * 2.1;
-    driverHeadGroup.rotation.y = steerAngle * 0.48;
-    driverHeadGroup.rotation.z = -steerAngle * 0.14;
+
+    // Viscoelastic 3D driver helmet reaction to braking pitch, cornering roll, and gear-shift kick
+    const targetHeadPitch = (braking ? 0.11 : 0) + pitchAngle * 1.45 - shiftFlash * 0.06;
+    const targetHeadRoll = -steerAngle * 0.18 + rollAngle * 1.85;
+    const targetHeadYaw = steerAngle * 0.48 + rollAngle * 0.45;
+    const targetHeadFwd = (braking ? -0.028 : 0.006) - pitchAngle * 0.35 + shiftFlash * 0.015;
+    const targetHeadLat = rollAngle * 0.42;
+
+    smoothHeadPitch += (targetHeadPitch - smoothHeadPitch) * 0.18;
+    smoothHeadRoll += (targetHeadRoll - smoothHeadRoll) * 0.18;
+    smoothHeadYaw += (targetHeadYaw - smoothHeadYaw) * 0.22;
+    smoothHeadFwd += (targetHeadFwd - smoothHeadFwd) * 0.18;
+    smoothHeadLat += (targetHeadLat - smoothHeadLat) * 0.18;
+
+    driverHeadGroup.rotation.set(smoothHeadPitch, smoothHeadYaw, smoothHeadRoll);
+    driverHeadGroup.position.set(smoothHeadLat, 0.67 - Math.abs(smoothHeadPitch) * 0.04, -0.05 + smoothHeadFwd);
+
     for (const w of wheels) {
       w.rotation.x -= wheelSpinDelta;
+    }
+    discSpinPhase += wheelSpinDelta;
+
+    // Update Procedural Tyre Contact Patch Graining & Blistering Shader Uniforms
+    const grainNorm = THREE.MathUtils.clamp(grainingSeverityPct / 100, 0, 1);
+    const overheatBlister = THREE.MathUtils.clamp((tyreSurfaceTempC - 106) / 28, 0, 1);
+    const blisterNorm = THREE.MathUtils.clamp(Math.max(overheatBlister, (grainNorm - 0.32) * 0.85), 0, 1);
+    const slipNorm = THREE.MathUtils.clamp(microSlipRatio, 0, 1);
+    tyrePatchUniforms.uGrainingSeverity.value = grainNorm;
+    tyrePatchUniforms.uBlisterIntensity.value = blisterNorm;
+    tyrePatchUniforms.uMicroSlip.value = slipNorm;
+    tyrePatchUniforms.uSpinPhase.value = discSpinPhase;
+
+    const patchScaleZ = 0.85 + tyreLoad * 0.35 + grainNorm * 0.12;
+    for (const pm of contactPatchMeshes) {
+      pm.scale.set(1.0 + tyreLoad * 0.12, patchScaleZ, 1);
     }
 
     // Temporally smoothed aerodynamic downforce suspension heave (keeps wheels 100% circular & undistorted)
@@ -1336,9 +1699,38 @@ export function buildFormulaCar(
       shiftLedMats[l].emissiveIntensity = revFrac >= (l + 1) / 5.4 ? 2.4 : 0.25;
     }
 
-    brakeHeat += ((braking ? 1 : 0) - brakeHeat) * 0.18;
-    brakeDiscMat.emissiveIntensity = brakeHeat * 4.4;
-    brakeHeatRingMat.opacity = Math.min(0.84, brakeHeat * 0.82);
+    const speedKineticFactor = Math.min(1.25, 0.35 + Math.abs(wheelSpinDelta) * 1.15);
+    const targetUsageHeat = braking ? Math.min(1.0, 0.72 * speedKineticFactor + 0.28) : 0.0;
+    const tempDerivedHeat =
+      brakeTempC !== undefined ? THREE.MathUtils.clamp((brakeTempC - 310) / 760, 0, 1) : targetUsageHeat;
+    const combinedTargetHeat =
+      brakeTempC !== undefined ? Math.max(tempDerivedHeat, targetUsageHeat * 0.85) : targetUsageHeat;
+    brakeHeat += (combinedTargetHeat - brakeHeat) * (braking ? 0.24 : 0.065);
+
+    const effectiveTempC =
+      brakeTempC !== undefined ? brakeTempC : 280 + brakeHeat * 820;
+    brakeThermalUniforms.uBrakeHeat.value = brakeHeat;
+    brakeThermalUniforms.uBrakeTempC.value = effectiveTempC;
+    brakeThermalUniforms.uDiscSpinPhase.value = discSpinPhase;
+
+    // Fallback base emissive progression from dull red to bright orange
+    if (brakeHeat < 0.45) {
+      const tLow = brakeHeat / 0.45;
+      _heatCol.setRGB(
+        THREE.MathUtils.lerp(0.45, 0.92, tLow),
+        THREE.MathUtils.lerp(0.02, 0.09, tLow),
+        THREE.MathUtils.lerp(0.005, 0.015, tLow)
+      );
+    } else {
+      const tHigh = (brakeHeat - 0.45) / 0.55;
+      _heatCol.setRGB(
+        1.0,
+        THREE.MathUtils.lerp(0.09, 0.56, tHigh),
+        THREE.MathUtils.lerp(0.015, 0.11, tHigh)
+      );
+    }
+    brakeDiscMat.emissive.copy(_heatCol);
+    brakeDiscMat.emissiveIntensity = brakeHeat * 3.2;
     exhaustFlameMat.opacity = Math.min(0.95, shiftFlash);
     innerFlameMat.opacity = Math.min(0.98, shiftFlash * 1.15);
 

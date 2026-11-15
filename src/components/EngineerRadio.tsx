@@ -15,7 +15,7 @@ interface RadioMessage {
   sender: string;
   text: string;
   timestamp: string;
-  category: 'strategy' | 'gap' | 'tyres' | 'weather' | 'general';
+  category: 'strategy' | 'gap' | 'tyres' | 'weather' | 'fuel' | 'ers' | 'general';
 }
 
 export function EngineerRadio({
@@ -83,31 +83,73 @@ export function EngineerRadio({
       triggerRadioCall(`Final lap, ${driverName}! Bring it home, everything you've got!`, 'strategy');
     }
 
-    // Position updates
+    // Position updates & Gaps to rivals
     if (hud.position === 1) {
-      if (Math.random() < 0.25) {
+      if (Math.random() < 0.22) {
         triggerRadioCall(`You're leading the race, P1. Great pace, maintain tyre temperatures.`, 'gap');
       }
-    } else if (hud.position > 1 && hud.gapAheadSeconds !== null && hud.gapAheadSeconds < 1.5) {
-      triggerRadioCall(`DRS enabled this lap. Gap ahead is ${hud.gapAheadSeconds.toFixed(1)} seconds. Close in!`, 'gap');
+    } else if (hud.position > 1 && hud.gapAheadSeconds !== null) {
+      if (hud.gapAheadSeconds < 1.2 && hud.drsAvailable) {
+        triggerRadioCall(`DRS enabled! Gap ahead is ${hud.gapAheadSeconds.toFixed(1)}s. Prepare your attack into the braking zone.`, 'gap');
+      } else if (hud.gapAheadSeconds > 5.0 && Math.random() < 0.15) {
+        triggerRadioCall(`Gap to car ahead is ${hud.gapAheadSeconds.toFixed(1)}s. Keep pushing, rhythm is strong.`, 'gap');
+      }
     }
 
-    // Tyre condition warnings
-    if (hud.tyreWearPct < 40 && hud.tyreWearPct > 35) {
-      triggerRadioCall(`Tyre wear at 60%. Surface degradation increasing, watch traction on exit.`, 'tyres');
-    } else if (hud.tyreWearPct <= 20) {
-      triggerRadioCall(`Tyres are dropping off significantly, wear critical. Box this lap for fresh compound!`, 'tyres');
+    // Hardcore Pit Strategy & Tactical Radio Callouts
+    if (hud.pitStrategy?.tacticalRadioCall) {
+      triggerRadioCall(hud.pitStrategy.tacticalRadioCall, 'strategy');
     }
 
-    // Weather / Track flags
-    if (hud.liveWeather === 'rain' && hud.trackWetnessPct > 60) {
-      triggerRadioCall(`Rain intensity increasing. Wet track conditions, adapt brake bias forward.`, 'weather');
+    // Fuel saving advisories
+    if (hud.fuelPct <= 22 && hud.fuelPct > 18) {
+      triggerRadioCall(`Fuel level getting low (${hud.fuelPct}%). Lift and coast into heavy braking zones to save fuel.`, 'fuel');
+    } else if (hud.fuelPct <= 10) {
+      triggerRadioCall(`Critical fuel state! Engine mode lean, save fuel immediately or risk running dry.`, 'fuel');
+    }
+
+    // ERS battery charge advisories
+    if (hud.ersCharge <= 15) {
+      triggerRadioCall(`Battery charge low (${Math.round(hud.ersCharge)}%). Harvesting energy, conserve deployment.`, 'ers');
+    } else if (hud.ersCharge >= 95 && hud.drsAvailable) {
+      triggerRadioCall(`Battery full! ERS overtake deploy max available.`, 'ers');
+    }
+
+    // Tyre condition warnings, microscopic contact patch micro-slip & graining probability
+    if (hud.pitStrategy?.tyreDegradationStage === 'cliff' || hud.tyreWearPct <= 18) {
+      triggerRadioCall(`Tyres are past the cliff, lap times dropping significantly. Box this lap, box now!`, 'tyres');
+    } else if (hud.tyreContactPatch && hud.tyreContactPatch.grainingProbabilityPct >= 62) {
+      triggerRadioCall(
+        `High graining probability (${hud.tyreContactPatch.grainingProbabilityPct}%) in Sector ${hud.currentSector} at ${hud.trackTemperature}°C track temp. Smooth your steering inputs to reduce contact patch micro-slip.`,
+        'tyres'
+      );
+    } else if (hud.tyreWearPct <= 38 && hud.tyreWearPct > 34) {
+      triggerRadioCall(`Tyre wear at 62%. Surface degradation increasing, watch traction on apex exit.`, 'tyres');
+    }
+
+    // Weather & Track flags
+    if (hud.liveWeather === 'rain' && hud.trackWetnessPct > 55) {
+      triggerRadioCall(`Rain intensity increasing. Track wetness at ${Math.round(hud.trackWetnessPct)}%. Adapt brake bias forward.`, 'weather');
     }
 
     if (hud.trackFlag.flag === 'yellow') {
       triggerRadioCall(`Yellow flag in Sector ${hud.currentSector}. Slow down, hazard ahead.`, 'general');
     }
-  }, [hud.lap, hud.position, hud.tyreWearPct, hud.liveWeather, hud.trackFlag.flag]);
+  }, [
+    hud.lap,
+    hud.position,
+    hud.tyreWearPct,
+    hud.fuelPct,
+    hud.ersCharge,
+    hud.liveWeather,
+    hud.trackWetnessPct,
+    hud.trackTemperature,
+    hud.currentSector,
+    hud.tyreContactPatch?.grainingProbabilityPct,
+    hud.trackFlag.flag,
+    hud.pitStrategy?.tacticalRadioCall,
+    hud.gapAheadSeconds,
+  ]);
 
   return (
     <>

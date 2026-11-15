@@ -31,6 +31,14 @@ export interface ProceduralTextureSet {
   sparkSpriteMap: THREE.CanvasTexture;
   rainSpriteMap: THREE.CanvasTexture;
   oilSpillMap: THREE.CanvasTexture;
+  desertSandMap: THREE.CanvasTexture;
+  skyscraperGlassMap: THREE.CanvasTexture;
+  skyscraperEmissiveMap: THREE.CanvasTexture;
+  rivieraFacadeMap: THREE.CanvasTexture;
+  jumbotronMap: THREE.CanvasTexture;
+  flagBannerMap: THREE.CanvasTexture;
+  drsBoardMap: THREE.CanvasTexture;
+  drsDetBoardMap: THREE.CanvasTexture;
   dispose: () => void;
 }
 
@@ -457,31 +465,72 @@ export function createProceduralTextures(
   tyreTreadNormalMap.repeat.set(1, 8);
   tyreTreadNormalMap.anisotropy = maxAnisotropy;
 
-  // 5d. High-Res Cross-Drilled Carbon-Ceramic Brake Disc Texture (512x512)
+  // 5d. Ultra High-Res Slotted & Cross-Drilled Carbon-Ceramic Brake Rotor Texture (512x512)
   const discCanvas = document.createElement('canvas');
   discCanvas.width = 512;
   discCanvas.height = 512;
   const dCtx = discCanvas.getContext('2d')!;
-  dCtx.fillStyle = '#2d313a';
+  dCtx.fillStyle = '#262a32';
   dCtx.fillRect(0, 0, 512, 512);
-  for (let r = 128; r <= 236; r += 16) {
-    dCtx.strokeStyle = 'rgba(15,18,24,0.48)';
-    dCtx.lineWidth = 2.5;
+
+  // Micro-grooved concentric pad-friction wear tracks
+  for (let r = 118; r <= 244; r += 6) {
+    dCtx.strokeStyle = (r % 12 === 0) ? 'rgba(8,10,14,0.65)' : 'rgba(255,255,255,0.06)';
+    dCtx.lineWidth = 1.8;
     dCtx.beginPath();
     dCtx.arc(256, 256, r, 0, Math.PI * 2);
     dCtx.stroke();
   }
-  dCtx.fillStyle = '#0c0e13';
-  for (let a = 0; a < 24; a++) {
-    const baseAngle = (a / 24) * Math.PI * 2;
-    for (let ring = 0; ring < 3; ring++) {
-      const rad = 148 + ring * 32;
-      const ang = baseAngle + ring * 0.14;
+
+  // Curved radial aerodynamic gas-ventilation channels (Brembo F1 Spec)
+  dCtx.strokeStyle = 'rgba(10, 12, 16, 0.92)';
+  dCtx.lineWidth = 3.2;
+  for (let s = 0; s < 32; s++) {
+    const sAng = (s / 32) * Math.PI * 2;
+    dCtx.beginPath();
+    const rStart = 132;
+    const rEnd = 240;
+    dCtx.moveTo(256 + Math.cos(sAng) * rStart, 256 + Math.sin(sAng) * rStart);
+    dCtx.quadraticCurveTo(
+      256 + Math.cos(sAng + 0.18) * 186,
+      256 + Math.sin(sAng + 0.18) * 186,
+      256 + Math.cos(sAng + 0.32) * rEnd,
+      256 + Math.sin(sAng + 0.32) * rEnd
+    );
+    dCtx.stroke();
+  }
+
+  // 1,200 micro-ventilation drilled cooling holes across rotor face
+  dCtx.fillStyle = '#080a0e';
+  for (let a = 0; a < 28; a++) {
+    const baseAngle = (a / 28) * Math.PI * 2;
+    for (let ring = 0; ring < 4; ring++) {
+      const rad = 138 + ring * 27;
+      const ang = baseAngle + ring * 0.16;
       dCtx.beginPath();
-      dCtx.arc(256 + Math.cos(ang) * rad, 256 + Math.sin(ang) * rad, 6.2, 0, Math.PI * 2);
+      dCtx.arc(256 + Math.cos(ang) * rad, 256 + Math.sin(ang) * rad, 4.8, 0, Math.PI * 2);
       dCtx.fill();
+
+      // Chamfered carbon hole ring highlight
+      dCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+      dCtx.lineWidth = 1.2;
+      dCtx.stroke();
     }
   }
+
+  // Inner floating aluminum/titanium hat bobbins
+  for (let b = 0; b < 10; b++) {
+    const bAng = (b / 10) * Math.PI * 2;
+    dCtx.fillStyle = '#475569';
+    dCtx.beginPath();
+    dCtx.arc(256 + Math.cos(bAng) * 116, 256 + Math.sin(bAng) * 116, 7.5, 0, Math.PI * 2);
+    dCtx.fill();
+    dCtx.fillStyle = '#0f172a';
+    dCtx.beginPath();
+    dCtx.arc(256 + Math.cos(bAng) * 116, 256 + Math.sin(bAng) * 116, 3.2, 0, Math.PI * 2);
+    dCtx.fill();
+  }
+
   const brakeDiscMap = new THREE.CanvasTexture(discCanvas);
   brakeDiscMap.colorSpace = THREE.SRGBColorSpace;
   brakeDiscMap.anisotropy = maxAnisotropy;
@@ -1023,6 +1072,257 @@ export function createProceduralTextures(
   const oilSpillMap = new THREE.CanvasTexture(oilCanvas);
   oilSpillMap.colorSpace = THREE.SRGBColorSpace;
 
+  // 20. Wind-Rippled Desert Sand Map (512x512 SRGB — Abu Dhabi / Las Vegas)
+  const sandCanvas = document.createElement('canvas');
+  sandCanvas.width = 512;
+  sandCanvas.height = 512;
+  const sdCtx = sandCanvas.getContext('2d')!;
+  sdCtx.fillStyle = '#c8a77b';
+  sdCtx.fillRect(0, 0, 512, 512);
+  for (let y = 0; y < 512; y += 6) {
+    const wave = Math.sin(y * 0.08) * 14;
+    sdCtx.fillStyle = y % 12 === 0 ? 'rgba(245, 222, 184, 0.24)' : 'rgba(138, 102, 62, 0.20)';
+    sdCtx.fillRect(0, (y + wave + 512) % 512, 512, 3);
+  }
+  for (let i = 0; i < 14000; i++) {
+    const shade = 165 + Math.floor(Math.random() * 58);
+    sdCtx.fillStyle = `rgb(${shade + 22},${shade + 2},${shade - 28})`;
+    sdCtx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+  }
+  const desertSandMap = new THREE.CanvasTexture(sandCanvas);
+  desertSandMap.colorSpace = THREE.SRGBColorSpace;
+  desertSandMap.wrapS = THREE.RepeatWrapping;
+  desertSandMap.wrapT = THREE.RepeatWrapping;
+  desertSandMap.repeat.set(90, 90);
+  desertSandMap.anisotropy = maxAnisotropy;
+
+  // 21. Modern Curtain-Wall Glass Skyscraper Albedo & Emissive Window Grid (512x512 SRGB)
+  const skyBldCanvas = document.createElement('canvas');
+  skyBldCanvas.width = 512;
+  skyBldCanvas.height = 512;
+  const sbCtx = skyBldCanvas.getContext('2d')!;
+  sbCtx.fillStyle = '#0f172a';
+  sbCtx.fillRect(0, 0, 512, 512);
+
+  const skyEmCanvas = document.createElement('canvas');
+  skyEmCanvas.width = 512;
+  skyEmCanvas.height = 512;
+  const seCtx = skyEmCanvas.getContext('2d')!;
+  seCtx.fillStyle = '#000000';
+  seCtx.fillRect(0, 0, 512, 512);
+
+  const cols = 16;
+  const rows = 32;
+  const cw = 512 / cols;
+  const rh = 512 / rows;
+  for (let r = 0; r < rows; r++) {
+    const floorBandLit = Math.random() > 0.22;
+    for (let c = 0; c < cols; c++) {
+      const lit = floorBandLit && Math.random() > 0.42;
+      const warm = Math.random() > 0.45;
+      sbCtx.fillStyle = lit
+        ? warm
+          ? '#fde68a'
+          : '#bae6fd'
+        : Math.random() > 0.5
+          ? '#1e293b'
+          : '#334155';
+      sbCtx.fillRect(c * cw + 3, r * rh + 3, cw - 6, rh - 5);
+
+      if (lit) {
+        seCtx.fillStyle = warm ? '#fbbf24' : '#38bdf8';
+        seCtx.fillRect(c * cw + 3, r * rh + 3, cw - 6, rh - 5);
+      }
+    }
+    // Structural spandrel horizontal mullions
+    sbCtx.fillStyle = '#090d16';
+    sbCtx.fillRect(0, r * rh, 512, 2);
+  }
+  const skyscraperGlassMap = new THREE.CanvasTexture(skyBldCanvas);
+  skyscraperGlassMap.colorSpace = THREE.SRGBColorSpace;
+  skyscraperGlassMap.wrapS = THREE.RepeatWrapping;
+  skyscraperGlassMap.wrapT = THREE.RepeatWrapping;
+  skyscraperGlassMap.anisotropy = maxAnisotropy;
+
+  const skyscraperEmissiveMap = new THREE.CanvasTexture(skyEmCanvas);
+  skyscraperEmissiveMap.colorSpace = THREE.SRGBColorSpace;
+  skyscraperEmissiveMap.wrapS = THREE.RepeatWrapping;
+  skyscraperEmissiveMap.wrapT = THREE.RepeatWrapping;
+  skyscraperEmissiveMap.anisotropy = maxAnisotropy;
+
+  // 22. Mediterranean Riviera Apartment Facade Texture (Monaco — 512x512 SRGB)
+  const rivCanvas = document.createElement('canvas');
+  rivCanvas.width = 512;
+  rivCanvas.height = 512;
+  const rvCtx = rivCanvas.getContext('2d')!;
+  rvCtx.fillStyle = '#e7d5bc';
+  rvCtx.fillRect(0, 0, 512, 512);
+  for (let r = 0; r < 12; r++) {
+    const ry = 14 + r * 42;
+    // Balcony ledge
+    rvCtx.fillStyle = '#cbb396';
+    rvCtx.fillRect(0, ry + 26, 512, 6);
+    rvCtx.fillStyle = '#475569';
+    rvCtx.fillRect(0, ry + 20, 512, 3);
+    for (let c = 0; c < 8; c++) {
+      const rx = 18 + c * 62;
+      const lit = Math.random() > 0.55;
+      rvCtx.fillStyle = lit ? '#fef08a' : '#1e293b';
+      rvCtx.fillRect(rx, ry, 28, 22);
+      // Shutters
+      rvCtx.fillStyle = '#4f6d5a';
+      rvCtx.fillRect(rx - 7, ry, 6, 22);
+      rvCtx.fillRect(rx + 29, ry, 6, 22);
+    }
+  }
+  const rivieraFacadeMap = new THREE.CanvasTexture(rivCanvas);
+  rivieraFacadeMap.colorSpace = THREE.SRGBColorSpace;
+  rivieraFacadeMap.wrapS = THREE.RepeatWrapping;
+  rivieraFacadeMap.wrapT = THREE.RepeatWrapping;
+  rivieraFacadeMap.anisotropy = maxAnisotropy;
+
+  // 23. Trackside Jumbotron Broadcast Screen Texture (1024x512 SRGB)
+  const jumboCanvas = document.createElement('canvas');
+  jumboCanvas.width = 1024;
+  jumboCanvas.height = 512;
+  const jCtx = jumboCanvas.getContext('2d')!;
+  const jBg = jCtx.createLinearGradient(0, 0, 1024, 512);
+  jBg.addColorStop(0, '#070b14');
+  jBg.addColorStop(0.55, '#111827');
+  jBg.addColorStop(1, '#1e1b4b');
+  jCtx.fillStyle = jBg;
+  jCtx.fillRect(0, 0, 1024, 512);
+
+  // Top broadcast red header bar
+  jCtx.fillStyle = '#dc2626';
+  jCtx.fillRect(0, 0, 1024, 68);
+  jCtx.fillStyle = '#ffffff';
+  jCtx.font = 'italic 900 36px "Chakra Petch", sans-serif';
+  jCtx.fillText('FORMULA WORLD GP // 2026 LIVE BROADCAST', 28, 46);
+
+  // Speed trap & live sector split visual
+  jCtx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+  jCtx.fillRect(28, 96, 560, 384);
+  jCtx.strokeStyle = '#38bdf8';
+  jCtx.lineWidth = 3;
+  jCtx.strokeRect(28, 96, 560, 384);
+
+  // Stylized track radar + glowing racing line
+  jCtx.strokeStyle = '#475569';
+  jCtx.lineWidth = 14;
+  jCtx.beginPath();
+  jCtx.ellipse(308, 288, 195, 115, -0.18, 0, Math.PI * 2);
+  jCtx.stroke();
+  jCtx.strokeStyle = '#22c55e';
+  jCtx.lineWidth = 6;
+  jCtx.beginPath();
+  jCtx.ellipse(308, 288, 195, 115, -0.18, 0, Math.PI * 1.1);
+  jCtx.stroke();
+  jCtx.strokeStyle = '#a855f7';
+  jCtx.beginPath();
+  jCtx.ellipse(308, 288, 195, 115, -0.18, Math.PI * 1.1, Math.PI * 1.75);
+  jCtx.stroke();
+
+  jCtx.fillStyle = '#f8fafc';
+  jCtx.font = '700 28px "Chakra Petch", sans-serif';
+  jCtx.fillText('SPEED TRAP  348 KM/H', 54, 146);
+  jCtx.fillStyle = '#38bdf8';
+  jCtx.font = '700 22px "Chakra Petch", sans-serif';
+  jCtx.fillText('TRACK TEMP 34°C  ·  DRS ACTIVE', 54, 452);
+
+  // Right-side leaderboard column
+  const jRows = [
+    ['1', 'VER', '1:18.412', '#38bdf8'],
+    ['2', 'LEC', '+0.284', '#ef4444'],
+    ['3', 'NOR', '+0.619', '#f97316'],
+    ['4', 'HAM', '+0.945', '#dc2626'],
+    ['5', 'RUS', '+1.402', '#2dd4bf'],
+  ];
+  jRows.forEach(([pos, code, gap, col], idx) => {
+    const ry = 96 + idx * 78;
+    jCtx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    jCtx.fillRect(612, ry, 384, 66);
+    jCtx.fillStyle = col;
+    jCtx.fillRect(612, ry, 10, 66);
+    jCtx.fillStyle = '#f8fafc';
+    jCtx.font = '800 30px "Chakra Petch", sans-serif';
+    jCtx.fillText(`${pos}  ${code}`, 636, ry + 43);
+    jCtx.fillStyle = idx === 0 ? '#a855f7' : '#cbd5e1';
+    jCtx.font = '700 26px "Chakra Petch", sans-serif';
+    jCtx.fillText(gap, 830, ry + 43);
+  });
+
+  const jumbotronMap = new THREE.CanvasTexture(jumboCanvas);
+  jumbotronMap.colorSpace = THREE.SRGBColorSpace;
+  jumbotronMap.anisotropy = maxAnisotropy;
+
+  // 24. Circuit Flagpole Pennant Banner Texture (256x128 SRGB)
+  const flagCanvas = document.createElement('canvas');
+  flagCanvas.width = 256;
+  flagCanvas.height = 128;
+  const flagBannerCtx = flagCanvas.getContext('2d')!;
+  flagBannerCtx.fillStyle = '#0f172a';
+  flagBannerCtx.fillRect(0, 0, 256, 128);
+  flagBannerCtx.fillStyle = '#ef4444';
+  flagBannerCtx.fillRect(0, 0, 256, 34);
+  flagBannerCtx.fillStyle = '#f8fafc';
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 8; c++) {
+      if ((r + c) % 2 === 0) {
+        flagBannerCtx.fillRect(c * 32, 34 + r * 24, 32, 24);
+      }
+    }
+  }
+  const flagBannerMap = new THREE.CanvasTexture(flagCanvas);
+  flagBannerMap.colorSpace = THREE.SRGBColorSpace;
+  flagBannerMap.anisotropy = maxAnisotropy;
+
+  // 25. FIA DRS Activation Zone Board Texture (256x128 SRGB)
+  const drsCanvas = document.createElement('canvas');
+  drsCanvas.width = 256;
+  drsCanvas.height = 128;
+  const drsBoardCtx = drsCanvas.getContext('2d')!;
+  drsBoardCtx.fillStyle = '#061510';
+  drsBoardCtx.fillRect(0, 0, 256, 128);
+  drsBoardCtx.strokeStyle = '#10B981';
+  drsBoardCtx.lineWidth = 8;
+  drsBoardCtx.strokeRect(6, 6, 244, 116);
+  drsBoardCtx.fillStyle = '#10B981';
+  drsBoardCtx.fillRect(14, 14, 228, 22);
+  drsBoardCtx.fillStyle = '#04120B';
+  drsBoardCtx.font = '900 15px "Chakra Petch", sans-serif';
+  drsBoardCtx.textAlign = 'center';
+  drsBoardCtx.fillText('ACTIVATION ZONE', 128, 30);
+  drsBoardCtx.fillStyle = '#34D399';
+  drsBoardCtx.font = 'italic 900 62px "Chakra Petch", sans-serif';
+  drsBoardCtx.fillText('DRS', 128, 100);
+  const drsBoardMap = new THREE.CanvasTexture(drsCanvas);
+  drsBoardMap.colorSpace = THREE.SRGBColorSpace;
+  drsBoardMap.anisotropy = maxAnisotropy;
+
+  // 26. FIA DRS Detection Point Board Texture (256x128 SRGB)
+  const detCanvas = document.createElement('canvas');
+  detCanvas.width = 256;
+  detCanvas.height = 128;
+  const detCtx = detCanvas.getContext('2d')!;
+  detCtx.fillStyle = '#0F172A';
+  detCtx.fillRect(0, 0, 256, 128);
+  detCtx.strokeStyle = '#38BDF8';
+  detCtx.lineWidth = 8;
+  detCtx.strokeRect(6, 6, 244, 116);
+  detCtx.fillStyle = '#38BDF8';
+  detCtx.fillRect(14, 14, 228, 22);
+  detCtx.fillStyle = '#090D16';
+  detCtx.font = '900 15px "Chakra Petch", sans-serif';
+  detCtx.textAlign = 'center';
+  detCtx.fillText('DRS DETECTION', 128, 30);
+  detCtx.fillStyle = '#F8FAFC';
+  detCtx.font = 'italic 900 50px "Chakra Petch", sans-serif';
+  detCtx.fillText('DET', 128, 96);
+  const drsDetBoardMap = new THREE.CanvasTexture(detCanvas);
+  drsDetBoardMap.colorSpace = THREE.SRGBColorSpace;
+  drsDetBoardMap.anisotropy = maxAnisotropy;
+
   return {
     asphaltMap,
     asphaltNormalMap,
@@ -1053,6 +1353,14 @@ export function createProceduralTextures(
     sparkSpriteMap,
     rainSpriteMap,
     oilSpillMap,
+    desertSandMap,
+    skyscraperGlassMap,
+    skyscraperEmissiveMap,
+    rivieraFacadeMap,
+    jumbotronMap,
+    flagBannerMap,
+    drsBoardMap,
+    drsDetBoardMap,
     dispose: () => {
       asphaltMap.dispose();
       asphaltNormalMap.dispose();
@@ -1083,6 +1391,14 @@ export function createProceduralTextures(
       sparkSpriteMap.dispose();
       rainSpriteMap.dispose();
       oilSpillMap.dispose();
+      desertSandMap.dispose();
+      skyscraperGlassMap.dispose();
+      skyscraperEmissiveMap.dispose();
+      rivieraFacadeMap.dispose();
+      jumbotronMap.dispose();
+      flagBannerMap.dispose();
+      drsBoardMap.dispose();
+      drsDetBoardMap.dispose();
     },
   };
 }

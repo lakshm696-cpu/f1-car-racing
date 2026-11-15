@@ -8,6 +8,7 @@ import {
   Cpu,
   Feather,
   Info,
+  Layers,
   Lightbulb,
   Play,
   Wind,
@@ -22,6 +23,7 @@ import {
   UPGRADE_COSTS,
   WHEEL_FINISHES,
 } from '../data/racingData';
+import { GRAPHICS_CODE_ENTRIES } from '../data/graphicsCodePalette';
 import {
   CarUpgrades,
   FormulaTeam,
@@ -47,6 +49,7 @@ interface GarageOverlayProps {
   onCameraPreset: (preset: GarageCameraPreset) => void;
   onZoom: (delta: number) => void;
   onToggleLights: () => boolean;
+  onOpenPitStrategy?: () => void;
   onBack: () => void;
   onStartRace: () => void;
 }
@@ -79,6 +82,7 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
   onCameraPreset,
   onZoom,
   onToggleLights,
+  onOpenPitStrategy,
   onBack,
   onStartRace,
 }) => {
@@ -197,6 +201,17 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
               <Info className="w-4 h-4" />
             </button>
           </div>
+
+          {onOpenPitStrategy && (
+            <button
+              type="button"
+              onClick={onOpenPitStrategy}
+              className="px-3.5 py-2.5 rounded-xl border border-amber-400/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 hover:text-white font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-lg"
+            >
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span>Pit Strategy</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -379,6 +394,33 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
                               style={{ backgroundColor: bg }}
                             />
                             <span>{swatch.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-semibold tracking-wider text-cyan-300 mr-1">
+                        GRAPHICS CODE (12-HEX)
+                      </span>
+                      {GRAPHICS_CODE_ENTRIES.map((entry) => {
+                        const active = customPrimaryHex.toLowerCase() === entry.hex.toLowerCase();
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => onSelectPaint(entry.hex)}
+                            title={`${entry.name} (${entry.hex}, alpha=${entry.alpha})`}
+                            className={`px-1.5 py-0.5 rounded border text-[10px] font-mono flex items-center gap-1 cursor-pointer ${
+                              active
+                                ? 'border-cyan-400 bg-cyan-500/15 text-white'
+                                : 'border-white/12 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            <span
+                              className="w-2.5 h-2.5 rounded-sm border border-white/30"
+                              style={{ backgroundColor: entry.hex, opacity: entry.alpha }}
+                            />
+                            <span>{entry.hex}</span>
                           </button>
                         );
                       })}

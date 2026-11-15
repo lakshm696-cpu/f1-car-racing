@@ -3,8 +3,10 @@ import {
   Activity,
   Camera,
   Cloud,
+  CloudFog,
   CloudLightning,
   CloudRain,
+  CloudSun,
   Eye,
   Flag,
   Gamepad2,
@@ -12,8 +14,10 @@ import {
   Pause,
   Sun,
   Sunset,
+  Thermometer,
   Volume2,
   VolumeX,
+  X,
 } from 'lucide-react';
 import {
   CameraMode,
@@ -27,6 +31,11 @@ import {
 import { MiniMap } from './MiniMap';
 import { PitBoard } from './PitBoard';
 import { TrackLog } from './TrackLog';
+import {
+  TyreTemperatureOverlay,
+  getTyreCompoundTempWindow,
+  getTyreTempColorMeta,
+} from './TyreTemperatureOverlay';
 import { VehicleDamageVisualizer } from './VehicleDamageVisualizer';
 
 interface RacingHUDProps {
@@ -64,21 +73,25 @@ export function formatLapTime(ms: number | null): string {
 const CAMERA_LABELS: Record<CameraMode, string> = {
   chase: 'CHASE',
   tcam: 'T-CAM',
-  cockpit: 'HALO',
-  low_track: 'LOW',
+  cockpit: 'COCKPIT',
+  low_track: 'LOW TRACK',
   wing_tyre: 'WING',
-  tv_wide: 'TV CAM',
-  bumper: 'NOSE',
-  side: 'SIDE',
-  rear: 'REAR',
+  tv_wide: 'BROADCAST',
+  heli: 'HELI TV',
+  trackside: 'TRACKSIDE',
+  bumper: 'BUMPER',
+  side: 'SIDE POD',
+  rear: 'CHASE REAR',
 };
 
 const WEATHER_LABELS: Record<WeatherMode, string> = {
   day: 'CLEAR',
+  partly_cloudy: 'PT CLOUDY',
   sunset: 'SUNSET',
   cloudy: 'OVERCAST',
   rain: 'RAIN',
   heavy_rain: 'STORM',
+  fog: 'FOGGY',
   night: 'NIGHT',
 };
 
@@ -92,6 +105,8 @@ const COMPOUND_OPTIONS: { id: TyreCompound; short: string; color: string }[] = [
 const WeatherIcon: React.FC<{ mode: WeatherMode; className?: string }> = ({ mode, className }) => {
   if (mode === 'heavy_rain') return <CloudLightning className={className} />;
   if (mode === 'rain') return <CloudRain className={className} />;
+  if (mode === 'fog') return <CloudFog className={className} />;
+  if (mode === 'partly_cloudy') return <CloudSun className={className} />;
   if (mode === 'cloudy') return <Cloud className={className} />;
   if (mode === 'sunset') return <Sunset className={className} />;
   if (mode === 'night') return <Moon className={className} />;
@@ -148,7 +163,23 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
   const [animEpoch, setAnimEpoch] = useState(0);
   const [showMirrorLocal, setShowMirrorLocal] = useState(true);
   const [showTrackLog, setShowTrackLog] = useState(true);
+  const [pitWindowTransition, setPitWindowTransition] = useState<'idle' | 'opening' | 'closing'>('idle');
   const prevScreenRef = useRef<GameScreen>(gameScreen);
+  const pitWindowOpen = Boolean(hud.pitStrategy?.isWindowOpen);
+  const prevPitWindowRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    if (prevPitWindowRef.current === null) {
+      prevPitWindowRef.current = pitWindowOpen;
+      return;
+    }
+    if (prevPitWindowRef.current !== pitWindowOpen) {
+      prevPitWindowRef.current = pitWindowOpen;
+      setPitWindowTransition(pitWindowOpen ? 'opening' : 'closing');
+      const timer = window.setTimeout(() => setPitWindowTransition('idle'), 850);
+      return () => window.clearTimeout(timer);
+    }
+  }, [pitWindowOpen]);
 
   useEffect(() => {
     if (active) {
@@ -173,6 +204,8 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
       prevScreenRef.current = gameScreen;
     }
   }, [gameScreen]);
+
+  const [showTyreThermalOverlay, setShowTyreThermalOverlay] = useState(false);
 
   const rpmRatio = Math.min(1, Math.max(0, hud.rpm / hud.maxRpm));
   const gearLabel = hud.gear === -1 ? 'R' : hud.gear === 0 ? 'N' : String(hud.gear);
@@ -300,12 +333,25 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
   const lapsRemaining = Math.max(1, hud.totalLaps - hud.lap + 1);
   const targetLap = Math.min(hud.totalLaps, hud.lap + 2);
 
+  const gLat = hud.gForceLat ?? 0;
+  const gLong = hud.gForceLong ?? 0;
+  const gTotal = hud.gForceTotal ?? 0;
+
+  const gForceTilt = gLat * -0.65;
+  const gForceTranslateX = gLat * 1.1;
+  const gForceTranslateY = gLong * -1.4;
+  const gForceScale = 1.0 + Math.min(0.018, Math.abs(gLong) * 0.0035 + (gTotal > 3.5 ? 0.005 : 0));
+
   return (
     <div
       key={animEpoch}
-      className={`fixed inset-0 z-10 pointer-events-none flex flex-col justify-between p-2.5 sm:p-4 transition-all duration-300 ease-out ${
-        isPausedState ? 'opacity-45 scale-[0.985] blur-[1.5px]' : 'opacity-100 scale-100 blur-0'
+      className={`fixed inset-0 z-10 pointer-events-none flex flex-col justify-between p-2.5 sm:p-4 transition-transform duration-75 ease-out ${
+        isPausedState ? 'opacity-45 scale-[0.985] blur-[1.5px]' : 'opacity-100 blur-0'
       }`}
+      style={{
+        transform: `perspective(1200px) rotate(${gForceTilt}deg) translate(${gForceTranslateX}px, ${gForceTranslateY}px) scale(${gForceScale})`,
+        boxShadow: gTotal > 3.2 ? 'inset 0 0 60px rgba(239, 68, 68, 0.22)' : 'none',
+      }}
     >
       <PitBoard
         visible={hud.pitBoardActive}
@@ -316,20 +362,121 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
         totalLaps={hud.totalLaps}
       />
 
-      {/* Dedicated DRS Activation Zone Flashing Green Indicator & Distance Countdown */}
-      {hud.drsAvailable && hud.countdownState === 'racing' && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center animate-hud-banner-pop">
-          <div className="rounded-xl border-2 border-emerald-400 bg-emerald-950/95 px-4 py-1.5 flex items-center gap-2.5 shadow-[0_0_25px_rgba(16,185,129,0.85)] animate-pulse">
-            <div className="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34D399]" />
-            <div className="flex flex-col items-center">
-              <span className="font-display font-black text-xs text-emerald-300 tracking-wider">
-                {hud.drsActive ? 'DRS ACTIVE • WIDE OPEN FLAP' : 'DRS ZONE AVAILABLE'}
+      {/* Circuit DRS Zone Entry / Exit Notification & Live Activation Telemetry */}
+      {hud.countdownState === 'racing' && (hud.drsState?.notification || hud.drsState?.inZone || hud.drsState?.approachingMeters !== null) && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-1.5">
+          {/* Entry / Exit Transition Notification Banner */}
+          {hud.drsState?.notification && (
+            <div
+              key={`drs-notif-${hud.drsState.notificationSeq}`}
+              role="status"
+              aria-live="polite"
+              className={`rounded-xl border px-3.5 py-1 flex items-center gap-2 shadow-xl ${
+                hud.drsState.notification === 'entered'
+                  ? 'drs-zone-enter-anim border-emerald-400/90 bg-emerald-950/95 text-emerald-200 shadow-[0_0_24px_rgba(16,185,129,0.55)]'
+                  : 'drs-zone-exit-anim border-amber-400/75 bg-slate-950/92 text-amber-200 shadow-[0_0_16px_rgba(245,158,11,0.35)]'
+              }`}
+            >
+              <span
+                className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                  hud.drsState.notification === 'entered'
+                    ? 'bg-emerald-400 shadow-[0_0_10px_#34D399]'
+                    : 'bg-amber-400 shadow-[0_0_8px_#FBBF24]'
+                }`}
+              />
+              <span className="font-display font-black text-[11px] tracking-wider uppercase">
+                {hud.drsState.notification === 'entered'
+                  ? `DRS ZONE ${hud.drsState.notificationZoneNumber ?? ''} ENTERED`
+                  : `DRS ZONE ${hud.drsState.notificationZoneNumber ?? ''} EXITED · FLAP CLOSED`}
               </span>
-              <span className="font-mono-telemetry text-[10px] text-emerald-200 tabular-nums">
-                {hud.drsActive ? 'ACTIVATED • 300m REMAINING' : 'ACTIVATION ZONE • 150m'}
-              </span>
+              {hud.drsState.notificationZoneName && (
+                <span className="font-mono-telemetry text-[10px] text-white/80 uppercase hidden sm:inline">
+                  · {hud.drsState.notificationZoneName}
+                </span>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* Active DRS Zone Live Status & Real-World Distance Countdown */}
+          {hud.drsState?.inZone ? (
+            <div
+              className={`rounded-xl border-2 px-4 py-1.5 flex flex-col items-center gap-1 min-w-[238px] transition-colors ${
+                hud.drsState.disabledByWeather
+                  ? 'border-sky-400/75 bg-slate-950/92 shadow-[0_0_18px_rgba(56,189,248,0.35)]'
+                  : !hud.drsState.gapQualified
+                    ? 'border-slate-500/70 bg-slate-950/90'
+                    : hud.drsActive
+                      ? 'border-emerald-400 bg-emerald-950/95 shadow-[0_0_26px_rgba(16,185,129,0.85)]'
+                      : 'border-emerald-400/80 bg-emerald-950/90 shadow-[0_0_18px_rgba(16,185,129,0.45)]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 w-full justify-center">
+                <div
+                  className={`w-3 h-3 rounded-full shrink-0 ${
+                    hud.drsState.disabledByWeather
+                      ? 'bg-sky-400'
+                      : !hud.drsState.gapQualified
+                        ? 'bg-slate-400'
+                        : hud.drsActive
+                          ? 'bg-emerald-300 shadow-[0_0_12px_#34D399] animate-pulse'
+                          : 'bg-emerald-400 animate-pulse'
+                  }`}
+                />
+                <div className="flex flex-col items-center leading-tight">
+                  <span
+                    className={`font-display font-black text-xs tracking-wider ${
+                      hud.drsState.disabledByWeather
+                        ? 'text-sky-300'
+                        : !hud.drsState.gapQualified
+                          ? 'text-slate-300'
+                          : 'text-emerald-300'
+                    }`}
+                  >
+                    {hud.drsState.disabledByWeather
+                      ? `DRS Z${hud.drsState.zoneNumber} DISABLED • WET TRACK`
+                      : !hud.drsState.gapQualified
+                        ? `DRS Z${hud.drsState.zoneNumber} LOCKED • GAP > 1.0s`
+                        : hud.drsActive
+                          ? `DRS ACTIVE • Z${hud.drsState.zoneNumber}/${hud.drsState.totalZones} FLAP OPEN`
+                          : `DRS AVAILABLE • Z${hud.drsState.zoneNumber}/${hud.drsState.totalZones}`}
+                  </span>
+                  <span className="font-mono-telemetry text-[10px] text-emerald-100/90 tabular-nums">
+                    {hud.drsState.zoneName} · {hud.drsState.remainingMeters ?? 0}m REMAINING
+                  </span>
+                </div>
+              </div>
+              {hud.drsState.zoneLengthMeters && hud.drsState.remainingMeters !== null && (
+                <div className="w-full h-1 rounded-full bg-black/50 overflow-hidden border border-white/10">
+                  <div
+                    className={`h-full transition-all duration-100 ${
+                      hud.drsState.disabledByWeather
+                        ? 'bg-sky-400'
+                        : hud.drsActive
+                          ? 'bg-emerald-300'
+                          : 'bg-emerald-500'
+                    }`}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(0, (hud.drsState.remainingMeters / hud.drsState.zoneLengthMeters) * 100)
+                      )}%`,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            hud.drsState?.approachingMeters !== null &&
+            !hud.drsState.notification && (
+              <div className="rounded-lg border border-emerald-400/50 bg-slate-950/90 px-3 py-1 flex items-center gap-2 shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-emerald-400/80" />
+                <span className="font-mono-telemetry text-[10px] font-bold text-emerald-300 tabular-nums tracking-wide">
+                  DRS Z{hud.drsState.approachingZoneNumber} ({hud.drsState.approachingZoneName}) IN{' '}
+                  {hud.drsState.approachingMeters}m
+                </span>
+              </div>
+            )
+          )}
         </div>
       )}
 
@@ -397,6 +544,7 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                 />
                 <span className="text-[9px] font-mono-telemetry font-bold text-slate-300">
                   {WEATHER_LABELS[hud.liveWeather]}
+                  {hud.liveTimeOfDay ? ` · ${hud.liveTimeOfDay.replace('_', ' ').toUpperCase()}` : ''}
                 </span>
               </div>
             </div>
@@ -745,7 +893,7 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
               </div>
 
               {/* Bottom Row: BEST Lap + Delta */}
-              <div className="px-3 py-1 flex items-center justify-between text-xs font-mono-telemetry bg-black/55">
+              <div className="px-3 py-1 flex items-center justify-between text-xs font-mono-telemetry bg-black/55 border-b border-white/10">
                 <span className="font-display font-bold text-[11px] text-slate-300 tracking-wider">
                   BEST
                 </span>
@@ -759,6 +907,20 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                     {formatLapTime(displayedBestMs)}
                   </span>
                 </div>
+              </div>
+
+              {/* Asphalt Track Temp & Active Sector Grip Telemetry Strip */}
+              <div className="px-3 py-1 flex items-center justify-between text-[9px] font-mono-telemetry tabular-nums bg-black/75 text-slate-300">
+                <span>
+                  TRK TEMP:{' '}
+                  <strong className="text-amber-300">{hud.trackTemperature ?? 34}°C</strong>
+                </span>
+                <span>
+                  S{hud.currentSector} GRIP:{' '}
+                  <strong className="text-emerald-300">
+                    {hud.sectorGripPct[hud.currentSector - 1] ?? hud.surfaceGripPct}%
+                  </strong>
+                </span>
               </div>
             </div>
 
@@ -860,15 +1022,265 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
             isExiting ? 'animate-hud-exit-bl' : 'animate-hud-enter-bl [animation-delay:90ms]'
           }`}
         >
-          <div className="hidden sm:block">
+          <div className="hidden sm:flex flex-col gap-2">
+            {/* Hardcore Pro Race Strategy, Stint Plan & Fuel Calculus Card */}
+            <div
+              className={`pit-card-transition flex flex-col gap-1.5 p-2.5 rounded-xl border shadow-2xl min-w-[232px] max-w-[264px] text-white ${
+                pitWindowOpen
+                  ? 'border-emerald-400/60 bg-slate-950/94 shadow-[0_0_22px_rgba(16,185,129,0.22)]'
+                  : pitWindowTransition === 'closing'
+                    ? 'border-amber-400/50 bg-slate-950/92'
+                    : 'border-white/15 bg-slate-950/92'
+              } ${
+                pitWindowTransition === 'opening'
+                  ? 'pit-window-open-anim'
+                  : pitWindowTransition === 'closing'
+                    ? 'pit-window-close-anim'
+                    : ''
+              }`}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 pb-1">
+                <div className="flex items-center gap-1.5">
+                  {/* Live Pit Strategy Glowing Status Beacon */}
+                  <span className="relative flex h-2 w-2 items-center justify-center" aria-hidden="true">
+                    {pitWindowOpen && (
+                      <span className="pit-beacon-halo absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                    <span
+                      className={`relative inline-flex h-2 w-2 rounded-full transition-colors duration-500 ${
+                        pitWindowOpen
+                          ? 'bg-emerald-400 shadow-[0_0_10px_#34D399]'
+                          : pitWindowTransition === 'closing'
+                            ? 'bg-amber-400 shadow-[0_0_8px_#FBBF24]'
+                            : 'bg-slate-500'
+                      }`}
+                    />
+                  </span>
+                  <span
+                    className={`text-[10px] font-display font-black tracking-wider transition-colors duration-300 ${
+                      pitWindowOpen ? 'text-emerald-300' : 'text-amber-400'
+                    }`}
+                  >
+                    PIT STRATEGY
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded border font-display font-bold text-[8px] transition-all duration-400 ${
+                      pitWindowOpen
+                        ? 'pit-window-glow-pulse bg-emerald-500/20 border-emerald-400/60 text-emerald-200 opacity-100 scale-100'
+                        : pitWindowTransition === 'closing'
+                          ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 opacity-100 scale-95'
+                          : 'bg-white/5 border-white/10 text-slate-400 opacity-85 scale-95'
+                    }`}
+                  >
+                    {pitWindowOpen
+                      ? 'WINDOW OPEN'
+                      : pitWindowTransition === 'closing'
+                        ? 'WINDOW CLOSED'
+                        : 'STANDBY'}
+                  </span>
+                </div>
+                <span className="text-[9px] font-mono-telemetry text-slate-400 tabular-nums">
+                  L{hud.lap}/{hud.totalLaps} · W:L{hud.pitStrategy?.pitWindowStartLap ?? 1}-L{hud.pitStrategy?.pitWindowEndLap ?? 2}
+                </span>
+              </div>
+
+              {/* Live Stint & Pit Stop Plan Timeline */}
+              {(() => {
+                const totalL = Math.max(1, hud.totalLaps);
+                const stops = [...(hud.pitStrategy?.plannedStops ?? [])].sort(
+                  (a, b) => a.pitLap - b.pitLap
+                );
+                const startCmp = hud.pitStrategy?.startingCompound ?? hud.tyreCompound;
+                const stints: Array<{
+                  key: string;
+                  startLap: number;
+                  endLap: number;
+                  compound: typeof hud.tyreCompound;
+                  completed: boolean;
+                }> = [];
+                let curStart = 1;
+                let curCmp = startCmp;
+                for (const st of stops) {
+                  stints.push({
+                    key: `st_${st.id}`,
+                    startLap: curStart,
+                    endLap: st.pitLap,
+                    compound: curCmp,
+                    completed: st.completed,
+                  });
+                  curStart = st.pitLap + 1;
+                  curCmp = st.compound;
+                }
+                if (curStart <= totalL) {
+                  stints.push({
+                    key: 'st_final',
+                    startLap: curStart,
+                    endLap: totalL,
+                    compound: curCmp,
+                    completed: false,
+                  });
+                }
+                const cmpColor = (c: typeof hud.tyreCompound) =>
+                  c === 'soft'
+                    ? '#EF4444'
+                    : c === 'medium'
+                      ? '#FACC15'
+                      : c === 'hard'
+                        ? '#F8FAFC'
+                        : '#38BDF8';
+                const lapMarkerPct = Math.min(100, Math.max(2, ((hud.lap - 0.5) / totalL) * 100));
+
+                return (
+                  <div className="flex flex-col gap-1">
+                    <div className="relative flex items-center gap-0.5 h-3.5 rounded bg-black/50 p-0.5 border border-white/10">
+                      {stints.map((s) => {
+                        const span = Math.max(1, s.endLap - s.startLap + 1);
+                        const wPct = (span / totalL) * 100;
+                        const darkText = s.compound === 'hard' || s.compound === 'medium';
+                        return (
+                          <div
+                            key={s.key}
+                            style={{
+                              width: `${wPct}%`,
+                              backgroundColor: cmpColor(s.compound),
+                              color: darkText ? '#090B0F' : '#FFFFFF',
+                              opacity: s.completed ? 0.5 : 0.92,
+                            }}
+                            className="h-full rounded-[2px] flex items-center justify-center text-[7px] font-display font-black leading-none overflow-hidden"
+                          >
+                            {s.compound.slice(0, 1).toUpperCase()}
+                            {span > 1 ? ` L${s.startLap}-${s.endLap}` : ''}
+                          </div>
+                        );
+                      })}
+                      {/* Live Current Lap Progress Pin */}
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_6px_#ffffff]"
+                        style={{ left: `${lapMarkerPct}%` }}
+                        title={`Current Lap ${hud.lap}`}
+                      />
+                    </div>
+
+                    {/* Next Scheduled Stop Row */}
+                    {hud.pitStrategy?.nextPlannedStop ? (
+                      <div
+                        className={`px-1.5 py-0.5 rounded border flex items-center justify-between text-[8px] font-mono-telemetry ${
+                          hud.lap >= hud.pitStrategy.nextPlannedStop.pitLap
+                            ? 'bg-amber-500/20 border-amber-400/60 text-amber-200 font-bold'
+                            : 'bg-white/[0.04] border-white/10 text-slate-200'
+                        }`}
+                      >
+                        <span>
+                          {hud.lap >= hud.pitStrategy.nextPlannedStop.pitLap
+                            ? 'BOX NOW'
+                            : `NEXT PIT: L${hud.pitStrategy.nextPlannedStop.pitLap}`}
+                        </span>
+                        <span>
+                          {hud.pitStrategy.nextPlannedStop.compound.toUpperCase()} ·{' '}
+                          {hud.pitStrategy.nextPlannedStop.fuelLoadPct}% FUEL
+                        </span>
+                      </div>
+                    ) : stops.length > 0 ? (
+                      <div className="flex items-center justify-between text-[8px] font-mono-telemetry text-emerald-300">
+                        <span>ALL PLANNED STOPS DONE</span>
+                        <span>TO FINISH</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-[8px] font-mono-telemetry text-slate-300">
+                        <span>PLAN: 0-STOP SPRINT</span>
+                        <span>START {startCmp.toUpperCase()}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Live Fuel Load & Range Bar */}
+              <div className="flex flex-col gap-0.5 pt-0.5">
+                <div className="flex items-center justify-between text-[8px] font-mono-telemetry tabular-nums">
+                  <span className="text-slate-400">FUEL LOAD</span>
+                  <span
+                    className={`font-bold ${
+                      hud.fuelPct < 20
+                        ? 'text-red-400'
+                        : hud.fuelPct < 40
+                          ? 'text-amber-300'
+                          : 'text-cyan-300'
+                    }`}
+                  >
+                    {hud.fuelPct}% · ~{hud.pitStrategy?.estimatedFuelLapsRemaining ?? Math.max(0.5, Number((hud.fuelPct / 16).toFixed(1)))} LAPS
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      hud.fuelPct < 20 ? 'bg-red-500' : hud.fuelPct < 40 ? 'bg-amber-400' : 'bg-cyan-400'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, hud.fuelPct))}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[9px] pt-0.5">
+                <span className="text-slate-400 font-sans">TARGET TYRE:</span>
+                <span className="font-display font-bold text-white flex items-center gap-1">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full inline-block"
+                    style={{
+                      backgroundColor:
+                        hud.pitStrategy?.recommendedCompound === 'soft'
+                          ? '#EF4444'
+                          : hud.pitStrategy?.recommendedCompound === 'medium'
+                            ? '#FACC15'
+                            : hud.pitStrategy?.recommendedCompound === 'hard'
+                              ? '#FFFFFF'
+                              : '#38BDF8',
+                    }}
+                  />
+                  {hud.pitStrategy?.recommendedCompound?.toUpperCase() ?? 'MEDIUM'}
+                </span>
+              </div>
+
+              {hud.pitStrategy?.undercutViable && (
+                <div className="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-between text-[8px] text-emerald-300 font-mono-telemetry font-bold">
+                  <span>UNDERCUT VIABLE:</span>
+                  <span>-{hud.pitStrategy.undercutDeltaSec}s GAIN</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-[8px] font-mono-telemetry text-slate-300 pt-0.5">
+                <span>PIT LOSS: ~{hud.pitStrategy?.estimatedPitLossSec ?? 20.5}s</span>
+                <span>EXIT: P{hud.pitStrategy?.predictedExitPosition ?? 4}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-[8px] font-mono-telemetry border-t border-white/10 pt-1">
+                <span className="text-slate-400">TYRE STAGE:</span>
+                <span
+                  className={`font-bold uppercase ${
+                    hud.pitStrategy?.tyreDegradationStage === 'cliff'
+                      ? 'text-red-400'
+                      : hud.pitStrategy?.tyreDegradationStage === 'degrading'
+                        ? 'text-amber-400'
+                        : 'text-emerald-400'
+                  }`}
+                >
+                  {hud.pitStrategy?.tyreDegradationStage ?? 'OPTIMAL'}
+                </span>
+              </div>
+            </div>
+
             <MiniMap
               trackName={trackName}
               miniMapPath={hud.miniMapPath}
               miniMapStart={hud.miniMapStart}
               blips={hud.miniMapBlips}
               hazards={hud.miniMapHazards}
+              drsZones={hud.miniMapDrsZones}
               trackFlag={hud.trackFlag}
               currentSector={hud.currentSector}
+              sectorGripPct={hud.sectorGripPct}
+              miniMapSectorPaths={hud.miniMapSectorPaths}
+              miniMapRacingLinePaths={hud.miniMapRacingLinePaths}
             />
           </div>
 
@@ -983,13 +1395,33 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                   {hud.drsActive ? 'OVERTAKE ERS MODE' : 'HARVESTING'}
                 </div>
 
-                {/* [L1 / SPACE] OVERTAKE Pill */}
-                <div className="mt-1 px-2 py-0.5 rounded bg-black/80 border border-white/25 flex items-center gap-1.5">
-                  <span className="px-1 py-0.2 rounded bg-white text-slate-950 font-display font-black text-[8px]">
+                {/* [L1 / SPACE] DRS / OVERTAKE Pill */}
+                <div
+                  className={`mt-1 px-2 py-0.5 rounded border flex items-center gap-1.5 transition-colors ${
+                    hud.drsActive
+                      ? 'bg-emerald-950/90 border-emerald-400/80'
+                      : hud.drsAvailable
+                        ? 'bg-emerald-950/60 border-emerald-400/50'
+                        : 'bg-black/80 border-white/25'
+                  }`}
+                >
+                  <span
+                    className={`px-1 py-0.2 rounded font-display font-black text-[8px] ${
+                      hud.drsActive ? 'bg-emerald-400 text-slate-950' : 'bg-white text-slate-950'
+                    }`}
+                  >
                     L1 / SPACE
                   </span>
-                  <span className="font-display font-bold text-[9px] text-white tracking-wider">
-                    {hud.drsActive ? 'DRS + ERS ON' : 'OVERTAKE'}
+                  <span
+                    className={`font-display font-bold text-[9px] tracking-wider ${
+                      hud.drsActive
+                        ? 'text-emerald-300'
+                        : hud.drsAvailable
+                          ? 'text-emerald-200'
+                          : 'text-white'
+                    }`}
+                  >
+                    {hud.drsActive ? 'DRS + ERS ON' : hud.drsAvailable ? 'DRS READY' : 'OVERTAKE'}
                   </span>
                 </div>
               </div>
@@ -1102,71 +1534,387 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
 
           {/* Compact Tire Status + Pit Compound + MFD Panel */}
           <div
-            className="rounded-2xl border border-white/15 px-3 py-2.5 flex items-center gap-3 shadow-2xl"
+            className={`pit-card-transition rounded-2xl border px-3 py-2.5 flex items-center gap-3 shadow-2xl ${
+              pitWindowOpen
+                ? 'border-emerald-400/55 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                : hud.queuedCompound
+                  ? 'border-amber-400/55 shadow-[0_0_16px_rgba(245,158,11,0.18)]'
+                  : 'border-white/15'
+            } ${
+              pitWindowTransition === 'opening'
+                ? 'pit-window-open-anim'
+                : pitWindowTransition === 'closing'
+                  ? 'pit-window-close-anim'
+                  : ''
+            }`}
             style={{
               background:
                 'linear-gradient(180deg, rgba(14, 18, 25, 0.92) 0%, rgba(8, 10, 14, 0.95) 100%)',
             }}
           >
-            {/* 4-Wheel Tire Status Indicators (FL / FR / RL / RR) */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[9px] font-semibold tracking-wider text-slate-400">
-                  TYRES ({activeCompoundMeta.short})
-                </span>
-                <div className="pointer-events-auto flex items-center gap-1">
-                  {COMPOUND_OPTIONS.map((c) => {
-                    const isActive = hud.tyreCompound === c.id;
-                    const isQueued = hud.queuedCompound === c.id;
-                    return (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => onRequestTyreSwitch(c.id)}
-                        title={`Pit for ${c.id.toUpperCase()} tyres`}
-                        className={`w-4 h-4 rounded-full text-[8px] font-display font-bold border transition-colors cursor-pointer flex items-center justify-center ${
-                          isQueued
-                            ? 'border-amber-400 bg-amber-500/30 text-amber-200'
-                            : isActive
-                              ? 'border-white bg-white/20 text-white'
-                              : 'border-white/20 bg-black/40 text-slate-400 hover:text-white'
-                        }`}
-                        style={{ borderColor: isActive ? c.color : undefined }}
-                      >
-                        {c.short}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            {/* 4-Wheel Tire Core & Surface Temperature + Wear Visualization (FL / FR / RL / RR) */}
+            <div className="flex flex-col gap-1.5 relative">
+            {(() => {
+              const compoundWin = getTyreCompoundTempWindow(hud.tyreCompound);
+              const cpSurf = hud.tyreContactPatch?.wheelSurfaceTempC;
+              const cpCore = hud.tyreContactPatch?.wheelCoreTempC;
+              const wheels = [
+                {
+                  label: 'FL',
+                  wear: flWear,
+                  surfTemp: cpSurf?.[0] ?? baseTempC + 1,
+                  coreTemp: cpCore?.[0] ?? baseTempC + 4,
+                  slip: hud.tyreContactPatch?.wheelMicroSlipPct?.[0] ?? 6,
+                },
+                {
+                  label: 'FR',
+                  wear: frWear,
+                  surfTemp: cpSurf?.[1] ?? baseTempC + 2,
+                  coreTemp: cpCore?.[1] ?? baseTempC + 5,
+                  slip: hud.tyreContactPatch?.wheelMicroSlipPct?.[1] ?? 6,
+                },
+                {
+                  label: 'RL',
+                  wear: rlWear,
+                  surfTemp: cpSurf?.[2] ?? baseTempC + 4,
+                  coreTemp: cpCore?.[2] ?? baseTempC + 7,
+                  slip: hud.tyreContactPatch?.wheelMicroSlipPct?.[2] ?? 7,
+                },
+                {
+                  label: 'RR',
+                  wear: rrWear,
+                  surfTemp: cpSurf?.[3] ?? baseTempC + 3,
+                  coreTemp: cpCore?.[3] ?? baseTempC + 6,
+                  slip: hud.tyreContactPatch?.wheelMicroSlipPct?.[3] ?? 7,
+                },
+              ];
 
-              <div className="grid grid-cols-2 gap-x-2.5 gap-y-1">
-                {[
-                  { label: 'FL', wear: flWear, temp: baseTempC + 1 },
-                  { label: 'FR', wear: frWear, temp: baseTempC + 2 },
-                  { label: 'RL', wear: rlWear, temp: baseTempC + 4 },
-                  { label: 'RR', wear: rrWear, temp: baseTempC + 3 },
-                ].map((t) => {
-                  const col = tyreColorForWear(t.wear);
-                  return (
-                    <div key={t.label} className="flex items-center gap-1.5">
-                      <div className="w-3 h-5 rounded-xs border border-white/30 flex flex-col justify-end overflow-hidden bg-slate-900">
+              return (
+                <>
+                  {showTyreThermalOverlay && (
+                    <div
+                      className="pointer-events-auto absolute bottom-full right-0 mb-2.5 w-[380px] sm:w-[430px] rounded-2xl border border-sky-400/45 p-3 shadow-2xl z-30"
+                      style={{
+                        background:
+                          'linear-gradient(180deg, rgba(10, 14, 22, 0.97) 0%, rgba(6, 9, 15, 0.98) 100%)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                        <div className="flex items-center gap-1.5">
+                          <Thermometer className="w-3.5 h-3.5 text-sky-400" />
+                          <span className="font-display font-black text-[10px] tracking-wider uppercase text-white">
+                            4-Corner Tyre Core & Surface Thermal Telemetry
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowTyreThermalOverlay(false)}
+                          className="w-5 h-5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer"
+                          title="Close Thermal Telemetry"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <TyreTemperatureOverlay hud={hud} compound={hud.tyreCompound} />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-semibold tracking-wider text-slate-300">
+                        TYRES ({activeCompoundMeta.short})
+                      </span>
+                      <span
+                        className="text-[7px] font-mono-telemetry px-1 py-0.2 rounded border border-emerald-400/35 bg-emerald-500/12 text-emerald-300 tabular-nums"
+                        title={`Optimal surface operating window: ${compoundWin.surfMin}–${compoundWin.surfMax}°C | Core: ${compoundWin.coreMin}–${compoundWin.coreMax}°C`}
+                      >
+                        OPT {compoundWin.surfMin}–{compoundWin.surfMax}°C
+                      </span>
+                    </div>
+                    <div className="pointer-events-auto flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowTyreThermalOverlay((v) => !v)}
+                        title="Toggle 4-Corner Tyre Core & Surface Thermal Telemetry"
+                        className={`h-4 px-1 rounded text-[7px] font-mono-telemetry font-bold border transition-colors cursor-pointer flex items-center gap-0.5 ${
+                          showTyreThermalOverlay
+                            ? 'border-sky-400 bg-sky-500/25 text-sky-200'
+                            : 'border-white/20 bg-black/50 text-slate-300 hover:text-white hover:border-white/40'
+                        }`}
+                      >
+                        <Thermometer className="w-2.5 h-2.5 text-sky-400" />
+                        <span>TEMP</span>
+                      </button>
+                      {COMPOUND_OPTIONS.map((c) => {
+                        const isActive = hud.tyreCompound === c.id;
+                        const isQueued = hud.queuedCompound === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => onRequestTyreSwitch(c.id)}
+                            title={`Pit for ${c.id.toUpperCase()} tyres`}
+                            className={`w-4 h-4 rounded-full text-[8px] font-display font-bold border transition-colors cursor-pointer flex items-center justify-center ${
+                              isQueued
+                                ? 'border-amber-400 bg-amber-500/30 text-amber-200'
+                                : isActive
+                                  ? 'border-white bg-white/20 text-white'
+                                  : 'border-white/20 bg-black/40 text-slate-400 hover:text-white'
+                            }`}
+                            style={{ borderColor: isActive ? c.color : undefined }}
+                          >
+                            {c.short}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 4-Wheel Dual-Layer Core + Surface Thermal Grid */}
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                    {wheels.map((t) => {
+                      const wearCol = tyreColorForWear(t.wear);
+                      const surfMeta = getTyreTempColorMeta(t.surfTemp, hud.tyreCompound, 'surface');
+                      const coreMeta = getTyreTempColorMeta(t.coreTemp, hud.tyreCompound, 'core');
+                      return (
                         <div
-                          className="w-full transition-all"
-                          style={{ height: `${t.wear}%`, backgroundColor: col }}
+                          key={t.label}
+                          className="flex items-center gap-1.5 rounded-lg border px-1.5 py-1 transition-colors"
+                          style={{
+                            borderColor: surfMeta.borderHex,
+                            backgroundColor: 'rgba(9, 13, 20, 0.86)',
+                          }}
+                          title={`${t.label} Tyre — Surface: ${t.surfTemp}°C (${surfMeta.label}) | Core: ${t.coreTemp}°C (${coreMeta.label}) | Wear: ${t.wear}%`}
+                        >
+                          {/* Vertical Tread Wear Bar */}
+                          <div className="w-1.5 h-7 rounded-xs border border-white/25 flex flex-col justify-end overflow-hidden bg-slate-950 shrink-0">
+                            <div
+                              className="w-full transition-all"
+                              style={{ height: `${t.wear}%`, backgroundColor: wearCol }}
+                            />
+                          </div>
+
+                          {/* Dual-Zone Tire Thermal Graphic: Outer Surface Shell + Inner Carcass Core */}
+                          <div
+                            className="w-4 h-7 rounded-[3px] p-[2px] flex items-center justify-center shrink-0 transition-colors"
+                            style={{
+                              backgroundColor: surfMeta.bgTint,
+                              border: `1.5px solid ${surfMeta.hex}`,
+                              boxShadow:
+                                surfMeta.state === 'overheating'
+                                  ? '0 0 8px rgba(239, 68, 68, 0.55)'
+                                  : surfMeta.state === 'optimal'
+                                    ? '0 0 6px rgba(16, 185, 129, 0.35)'
+                                    : 'none',
+                            }}
+                          >
+                            <div
+                              className="w-full h-full rounded-[1.5px] flex items-center justify-center transition-colors"
+                              style={{
+                                backgroundColor: coreMeta.hex,
+                                opacity: 0.9,
+                              }}
+                            >
+                              <span className="text-[6px] font-display font-black text-slate-950 leading-none select-none">
+                                {t.label}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Real-Time Surface (S) & Core (C) Temperature + Wear Readout */}
+                          <div className="flex flex-col leading-tight min-w-[54px]">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-[8px] font-mono-telemetry font-bold text-white tabular-nums">
+                                {t.wear}%
+                              </span>
+                              <span
+                                className="text-[6.5px] font-mono-telemetry font-bold uppercase px-0.5 rounded"
+                                style={{
+                                  color: surfMeta.hex,
+                                  backgroundColor: surfMeta.bgTint,
+                                }}
+                              >
+                                {surfMeta.shortLabel}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[7.5px] font-mono-telemetry tabular-nums">
+                              <span className="text-slate-400">S</span>
+                              <span className={`font-bold ${surfMeta.textClass}`}>{t.surfTemp}°C</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[7.5px] font-mono-telemetry tabular-nums">
+                              <span className="text-slate-400">C</span>
+                              <span className={`font-bold ${coreMeta.textClass}`}>{t.coreTemp}°C</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Operating Window Color Legend Bar */}
+                  <div className="flex items-center justify-between px-1 pt-0.5 text-[6.5px] font-mono-telemetry uppercase tracking-wider text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block" />
+                      Cold
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                      Opt
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                      Warm
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                      Hot
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
+
+              {/* Microscopic Contact Patch: Real-Time Micro-Slip & Graining Probability */}
+              {(() => {
+                const cp = hud.tyreContactPatch;
+                const microSlipPct = cp?.microSlipPct ?? 6;
+                const grainProbPct = cp?.grainingProbabilityPct ?? 8;
+                const patchState = cp?.patchState ?? 'stick';
+                const stateBadge =
+                  patchState === 'graining_risk'
+                    ? { label: 'GRAINING', cls: 'text-amber-300 border-amber-400/50 bg-amber-500/15' }
+                    : patchState === 'thermal_blister'
+                      ? { label: 'BLISTER', cls: 'text-red-300 border-red-400/50 bg-red-500/15' }
+                      : patchState === 'macro_slide'
+                        ? { label: 'SLIDING', cls: 'text-red-300 border-red-400/60 bg-red-500/20' }
+                        : patchState === 'micro_slip'
+                          ? { label: 'MICRO-SLIP', cls: 'text-cyan-300 border-cyan-400/45 bg-cyan-500/15' }
+                          : { label: 'ADHESION', cls: 'text-emerald-300 border-emerald-400/45 bg-emerald-500/15' };
+
+                return (
+                  <div className="flex flex-col gap-1 pt-1 border-t border-white/10 text-[8px] font-mono-telemetry tabular-nums">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-slate-400 font-bold">CONTACT PATCH</span>
+                      <span className={`px-1 py-0.2 rounded border text-[7px] font-display font-bold ${stateBadge.cls}`}>
+                        {stateBadge.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-slate-400">MICRO-SLIP</span>
+                      <div className="w-12 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className={`h-full ${
+                            microSlipPct > 55
+                              ? 'bg-red-500'
+                              : microSlipPct > 25
+                                ? 'bg-amber-400'
+                                : 'bg-emerald-400'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, microSlipPct))}%` }}
                         />
                       </div>
-                      <div className="flex flex-col leading-none">
-                        <span className="text-[9px] font-mono-telemetry font-bold text-white tabular-nums">
-                          {t.wear}%
-                        </span>
-                        <span className="text-[8px] font-mono-telemetry text-cyan-300 tabular-nums">
-                          {t.temp}°C
-                        </span>
-                      </div>
+                      <span className="text-white font-bold w-6 text-right">{microSlipPct}%</span>
                     </div>
-                  );
-                })}
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-slate-400">GRAIN PROB</span>
+                      <div className="w-12 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className={`h-full ${
+                            grainProbPct > 55
+                              ? 'bg-red-500'
+                              : grainProbPct > 32
+                                ? 'bg-amber-400'
+                                : 'bg-sky-400'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, grainProbPct))}%` }}
+                        />
+                      </div>
+                      <span
+                        className={`font-bold w-6 text-right ${
+                          grainProbPct > 50 ? 'text-amber-300' : 'text-sky-300'
+                        }`}
+                      >
+                        {grainProbPct}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-slate-400">GRAIN SEV</span>
+                      <div className="w-12 h-1 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className={`h-full ${
+                            (cp?.grainingSeverityPct ?? 0) > 45
+                              ? 'bg-red-500'
+                              : (cp?.grainingSeverityPct ?? 0) > 20
+                                ? 'bg-amber-400'
+                                : 'bg-emerald-400'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.max(0, cp?.grainingSeverityPct ?? 0))}%` }}
+                        />
+                      </div>
+                      <span
+                        className={`font-bold w-6 text-right ${
+                          (cp?.grainingSeverityPct ?? 0) > 35 ? 'text-red-400' : 'text-emerald-300'
+                        }`}
+                      >
+                        {cp?.grainingSeverityPct ?? 0}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10 text-[8px] font-mono-telemetry tabular-nums">
+                <span className="text-slate-400">FUEL</span>
+                <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className={`h-full ${hud.fuelPct < 20 ? 'bg-red-500' : 'bg-cyan-400'}`}
+                    style={{ width: `${Math.min(100, Math.max(0, hud.fuelPct))}%` }}
+                  />
+                </div>
+                <span className={hud.fuelPct < 20 ? 'text-red-400 font-bold' : 'text-cyan-300 font-bold'}>
+                  {hud.fuelPct}%
+                </span>
+              </div>
+            </div>
+
+            {/* Authentic FIA F1 Live Circular G-Force Telemetry Meter */}
+            <div className="hidden md:flex flex-col items-center justify-center p-2 rounded-xl border border-white/15 bg-black/85 shadow-lg min-w-[76px]">
+              <div className="flex items-center justify-between w-full mb-1">
+                <span className="text-[8px] font-display font-bold text-slate-300 uppercase tracking-wider">
+                  G-FORCE
+                </span>
+                <span className="text-[9px] font-mono-telemetry font-bold text-amber-400 tabular-nums">
+                  {hud.gForceTotal.toFixed(1)}G
+                </span>
+              </div>
+              <div className="relative w-14 h-14 flex items-center justify-center">
+                <svg viewBox="-30 -30 60 60" className="w-full h-full">
+                  <circle cx="0" cy="0" r="6" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" />
+                  <circle cx="0" cy="0" r="12" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" />
+                  <circle cx="0" cy="0" r="18" fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="0.8" />
+                  <circle cx="0" cy="0" r="24" fill="none" stroke="rgba(255,255,255,0.24)" strokeWidth="0.9" />
+                  <line x1="-24" y1="0" x2="24" y2="0" stroke="rgba(255,255,255,0.18)" strokeWidth="0.8" strokeDasharray="1.5 1.5" />
+                  <line x1="0" y1="-24" x2="0" y2="24" stroke="rgba(255,255,255,0.18)" strokeWidth="0.8" strokeDasharray="1.5 1.5" />
+                  <line
+                    x1="0"
+                    y1="0"
+                    x2={Math.max(-23, Math.min(23, hud.gForceLat * 4.8))}
+                    y2={Math.max(-23, Math.min(23, -hud.gForceLong * 4.8))}
+                    stroke={hud.gForceTotal > 3.5 ? '#EF4444' : '#F59E0B'}
+                    strokeWidth="1.5"
+                    strokeOpacity="0.75"
+                  />
+                  <circle
+                    cx={Math.max(-23, Math.min(23, hud.gForceLat * 4.8))}
+                    cy={Math.max(-23, Math.min(23, -hud.gForceLong * 4.8))}
+                    r="2.8"
+                    fill={hud.gForceTotal > 3.5 ? '#EF4444' : '#F59E0B'}
+                  />
+                </svg>
+              </div>
+              <div className="flex items-center justify-between w-full mt-1 text-[7px] font-mono-telemetry tabular-nums text-slate-400">
+                <span>{(hud.gForceLat > 0 ? '+' : '') + hud.gForceLat.toFixed(1)}</span>
+                <span>{hud.gForceLong < 0 ? 'B' : 'A'}:{Math.abs(hud.gForceLong).toFixed(1)}</span>
               </div>
             </div>
 

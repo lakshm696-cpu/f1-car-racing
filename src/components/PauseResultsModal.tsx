@@ -1,19 +1,32 @@
 import React, { useState } from 'react';
 import { Flag, Home, Play, RotateCcw, Trophy } from 'lucide-react';
 import {
+  GRAPHICS_CODE_CSV,
+  GRAPHICS_CODE_ENTRIES,
+  GRAPHICS_COLOR_CODE_PROFILES,
+} from '../data/graphicsCodePalette';
+import {
   AdaptiveTriggersLevel,
+  AmbientOcclusionQuality,
+  AntiAliasingMode,
   BrakingAssistLevel,
   CameraMode,
   CarDamageMode,
   DifficultyLevel,
   GameSettings,
+  GraphicsColorCodeMode,
   GraphicsQuality,
   HapticFeedbackLevel,
   HdrOutputMode,
+  MotionBlurQuality,
+  ParticleDensityQuality,
   Ps5GraphicsMode,
   RacerStanding,
   RacingLineMode,
   RayTracingQuality,
+  ReflectionQuality,
+  ShadowQuality,
+  TextureQuality,
   TractionControlMode,
   TransmissionMode,
 } from '../types/racing';
@@ -39,6 +52,12 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
   onExitToTitle,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('all');
+  const [showCodeCsv, setShowCodeCsv] = useState(false);
+  const [copiedCodeCsv, setCopiedCodeCsv] = useState(false);
+
+  const colorCodeMode: GraphicsColorCodeMode = settings.graphicsColorCode ?? 'palette_lut';
+  const colorCodeIntensity =
+    settings.graphicsColorCodeIntensity ?? GRAPHICS_COLOR_CODE_PROFILES[colorCodeMode].defaultMix;
 
   const ps5Mode = settings.ps5GraphicsMode ?? 'rt_pro';
   const rtQuality = settings.rayTracingQuality ?? 'ultra';
@@ -63,8 +82,26 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
   const showCamera = activeTab === 'all' || activeTab === 'camera';
   const showDualsense = activeTab === 'all' || activeTab === 'dualsense';
 
-  const applyPs5Preset = (preset: 'rt_pro' | 'perf_120' | 'sim_pro' | 'broadcast') => {
-    if (preset === 'rt_pro') {
+  const applyPs5Preset = (preset: 'extreme_graphics' | 'rt_pro' | 'perf_120' | 'sim_pro' | 'broadcast') => {
+    if (preset === 'extreme_graphics') {
+      onUpdateSettings({
+        graphicsQuality: 'extreme',
+        resolutionScale: 2.0,
+        textureQuality: 'ultra',
+        shadowQuality: 'ultra',
+        reflectionQuality: 'ultra',
+        ambientOcclusion: 'ultra',
+        antiAliasing: 'high',
+        particleDensity: 'ultra',
+        motionBlurLevel: 'cinematic',
+        motionBlur: true,
+        hdrMode: 'hdr10',
+        ps5GraphicsMode: 'cinematic',
+        rayTracingQuality: 'ultra',
+        pssrUpscaling: true,
+        targetFps: 60,
+      });
+    } else if (preset === 'rt_pro') {
       onUpdateSettings({
         ps5GraphicsMode: 'rt_pro',
         graphicsQuality: 'ultra',
@@ -175,36 +212,43 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
 
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              PS5™ Quick Presets:
+              Graphics & Sim Presets:
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => applyPs5Preset('extreme_graphics')}
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-gradient-to-r from-amber-500/25 via-red-500/25 to-sky-500/25 border border-amber-400/70 text-amber-200 hover:brightness-125 cursor-pointer shadow-sm shadow-amber-500/20"
+              >
+                ⭐ Recommended EXTREME (4K 200%)
+              </button>
               <button
                 type="button"
                 onClick={() => applyPs5Preset('rt_pro')}
                 className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-sky-500/20 border border-sky-400/40 text-sky-200 hover:bg-sky-500/30 cursor-pointer"
               >
-                PS5 Pro 4K Ray Tracing
+                PS5 Pro 4K RT
               </button>
               <button
                 type="button"
                 onClick={() => applyPs5Preset('perf_120')}
                 className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/5 border border-white/15 text-slate-200 hover:bg-white/10 cursor-pointer"
               >
-                PS5 120Hz Performance
+                120Hz Performance
               </button>
               <button
                 type="button"
                 onClick={() => applyPs5Preset('broadcast')}
                 className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/30 cursor-pointer"
               >
-                Standard F1 Assists
+                Standard Assists
               </button>
               <button
                 type="button"
                 onClick={() => applyPs5Preset('sim_pro')}
                 className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500/30 cursor-pointer"
               >
-                Esports Pro (No Assists)
+                Esports Pro
               </button>
             </div>
           </div>
@@ -214,58 +258,43 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
         <div className="flex flex-col gap-4">
           {showGraphics && (
             <div className="flex flex-col gap-3.5 rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
-              <div className="text-xs font-bold uppercase tracking-wider text-sky-400">
-                1. PS5™ Graphics & Ray Tracing Settings
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                  1. AAA Next-Generation Graphics Engine & PBR Settings
+                </div>
+                <button
+                  type="button"
+                  onClick={() => applyPs5Preset('extreme_graphics')}
+                  className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-slate-950 hover:bg-amber-300 cursor-pointer shadow-sm shadow-amber-400/30"
+                >
+                  Apply EXTREME Preset
+                </button>
               </div>
 
+              {/* Graphics Quality Presets */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-white">PS5™ Graphics Mode</div>
-                  <div className="text-xs text-slate-400">Quality (4K/60), Performance (120Hz), RT Pro or Cinematic Max</div>
+                  <div className="text-sm font-semibold text-white">Graphics Preset</div>
+                  <div className="text-xs text-slate-400">Global fidelity preset (LOW through CINEMATIC)</div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(
-                    [
-                      ['quality', '4K'],
-                      ['performance', '120Hz'],
-                      ['rt_pro', 'RT Pro'],
-                      ['cinematic', 'Cinematic'],
-                    ] as [Ps5GraphicsMode, string][]
-                  ).map(([m, label]) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() =>
-                        onUpdateSettings({
-                          ps5GraphicsMode: m,
-                          targetFps: m === 'performance' ? 120 : 60,
-                          graphicsQuality: m === 'performance' ? 'high' : m === 'cinematic' ? 'cinematic' : 'ultra',
-                          rayTracingQuality: m === 'performance' ? 'medium' : m === 'cinematic' ? 'cinematic' : 'ultra',
-                        })
-                      }
-                      className={`px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer ${
-                        ps5Mode === m ? 'bg-sky-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-white">Graphics Quality Preset</div>
-                  <div className="text-xs text-slate-400">Shadows, resolution scale & post-processing</div>
-                </div>
-                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['low', 'medium', 'high', 'ultra', 'cinematic'] as GraphicsQuality[]).map((q) => (
+                  {(['low', 'medium', 'high', 'ultra', 'extreme', 'cinematic'] as GraphicsQuality[]).map((q) => (
                     <button
                       key={q}
                       type="button"
-                      onClick={() => onUpdateSettings({ graphicsQuality: q })}
-                      className={`px-2.5 py-1.5 rounded-md text-xs font-semibold capitalize cursor-pointer ${
-                        settings.graphicsQuality === q ? 'bg-sky-400 text-slate-950' : 'text-slate-300 hover:text-white'
+                      onClick={() => {
+                        if (q === 'extreme') {
+                          applyPs5Preset('extreme_graphics');
+                        } else {
+                          onUpdateSettings({ graphicsQuality: q });
+                        }
+                      }}
+                      className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer transition-all ${
+                        settings.graphicsQuality === q
+                          ? q === 'extreme'
+                            ? 'bg-amber-400 text-slate-950 font-bold shadow-md shadow-amber-400/30'
+                            : 'bg-sky-400 text-slate-950'
+                          : 'text-slate-300 hover:text-white'
                       }`}
                     >
                       {q}
@@ -274,175 +303,504 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                 </div>
               </div>
 
+              {/* Resolution / Render Scale */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-white">Ray Tracing Quality</div>
-                  <div className="text-xs text-slate-400">22-car reflections, wet asphalt mirrors & RTAO</div>
+                  <div className="text-sm font-semibold text-white">Resolution & Render Scale</div>
+                  <div className="text-xs text-slate-400">
+                    Supersampled render quality up to 200% (3840×2160 true 4K)
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['off', 'medium', 'high', 'ultra', 'cinematic'] as RayTracingQuality[]).map((rt) => (
-                    <button
-                      key={rt}
-                      type="button"
-                      onClick={() => onUpdateSettings({ rayTracingQuality: rt })}
-                      className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
-                        rtQuality === rt ? 'bg-cyan-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      {rt}
-                    </button>
-                  ))}
+                  {([0.5, 0.75, 1.0, 1.5, 2.0] as const).map((scale) => {
+                    const isSel =
+                      (settings.resolutionScale ??
+                        (settings.graphicsQuality === 'extreme'
+                          ? 2.0
+                          : settings.graphicsQuality === 'ultra'
+                            ? 1.5
+                            : 1.0)) === scale;
+                    return (
+                      <button
+                        key={scale}
+                        type="button"
+                        onClick={() => onUpdateSettings({ resolutionScale: scale })}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer ${
+                          isSel ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {Math.round(scale * 100)}%
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
+              {/* Texture Quality */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-white">Frame Rate, PSSR & Motion Blur</div>
-                  <div className="text-xs text-slate-400">VRR 120Hz support, PSSR upscaling & shutter blur</div>
+                  <div className="text-sm font-semibold text-white">Texture Quality</div>
+                  <div className="text-xs text-slate-400">
+                    4K procedural asphalt grain, 2x2 carbon twill & slotted brake rotors
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['medium', 'high', 'ultra'] as TextureQuality[]).map((tq) => {
+                    const isSel =
+                      (settings.textureQuality ??
+                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                          ? 'ultra'
+                          : 'high')) === tq;
+                    return (
+                      <button
+                        key={tq}
+                        type="button"
+                        onClick={() => onUpdateSettings({ textureQuality: tq })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-sky-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {tq}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Shadow Quality */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Shadow Quality</div>
+                  <div className="text-xs text-slate-400">
+                    PCF Soft shadow filtering with up to 4096×4096 shadow map
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['off', 'medium', 'high', 'ultra', 'cinematic'] as ShadowQuality[]).map((sq) => {
+                    const isSel =
+                      (settings.shadowQuality ??
+                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                          ? 'ultra'
+                          : 'high')) === sq;
+                    return (
+                      <button
+                        key={sq}
+                        type="button"
+                        onClick={() => onUpdateSettings({ shadowQuality: sq })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-sky-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {sq}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Reflections & Ray Tracing */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Reflections & Ray Tracing</div>
+                  <div className="text-xs text-slate-400">
+                    Dynamic HalfFloat HDR CubeCamera reflections on car bodywork & wet asphalt
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['off', 'medium', 'high', 'ultra'] as ReflectionQuality[]).map((rq) => {
+                    const isSel =
+                      (settings.reflectionQuality ??
+                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                          ? 'ultra'
+                          : 'high')) === rq;
+                    return (
+                      <button
+                        key={rq}
+                        type="button"
+                        onClick={() => onUpdateSettings({ reflectionQuality: rq, rayTracingQuality: rq })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-cyan-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {rq}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Screen-Space Ambient Occlusion */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Screen-Space Ambient Occlusion (SSAO)</div>
+                  <div className="text-xs text-slate-400">
+                    Multi-tap crevice shadowing & aerodynamic underfloor grounding
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['off', 'low', 'medium', 'high', 'ultra'] as AmbientOcclusionQuality[]).map((ao) => {
+                    const isSel =
+                      (settings.ambientOcclusion ??
+                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                          ? 'ultra'
+                          : 'high')) === ao;
+                    return (
+                      <button
+                        key={ao}
+                        type="button"
+                        onClick={() => onUpdateSettings({ ambientOcclusion: ao })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-white text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {ao}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Anti-Aliasing */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Anti-Aliasing & Sharpening</div>
+                  <div className="text-xs text-slate-400">
+                    Sub-pixel geometry reconstruction & Contrast-Adaptive Sharpening (PSSR)
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['off', 'fxaa', 'smaa', 'high'] as AntiAliasingMode[]).map((aa) => {
+                    const isSel = (settings.antiAliasing ?? 'high') === aa;
+                    return (
+                      <button
+                        key={aa}
+                        type="button"
+                        onClick={() => onUpdateSettings({ antiAliasing: aa, pssrUpscaling: aa === 'high' })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-emerald-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {aa}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Motion Blur Quality */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Motion Blur Quality</div>
+                  <div className="text-xs text-slate-400">
+                    12-tap cinematic radial shutter blur & chromatic dispersion
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['off', 'low', 'medium', 'high', 'cinematic'] as MotionBlurQuality[]).map((mb) => {
+                    const isSel =
+                      (settings.motionBlurLevel ?? (settings.motionBlur ? 'cinematic' : 'off')) === mb;
+                    return (
+                      <button
+                        key={mb}
+                        type="button"
+                        onClick={() => onUpdateSettings({ motionBlurLevel: mb, motionBlur: mb !== 'off' })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-cyan-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {mb}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Particle Density */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Particle Density</div>
+                  <div className="text-xs text-slate-400">
+                    Titanium sparks, tyre smoke puffs & high-speed rain spray plumes
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['low', 'medium', 'high', 'ultra'] as ParticleDensityQuality[]).map((pd) => {
+                    const isSel =
+                      (settings.particleDensity ??
+                        (settings.graphicsQuality === 'extreme' ? 'ultra' : 'high')) === pd;
+                    return (
+                      <button
+                        key={pd}
+                        type="button"
+                        onClick={() => onUpdateSettings({ particleDensity: pd })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          isSel ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {pd}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Target Frame Rate & HDR */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Target Frame Rate & HDR</div>
+                  <div className="text-xs text-slate-400">VRR 120Hz support, uncapped pacing & ACES Filmic HDR</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                    {([30, 60, 120] as const).map((fps) => (
+                    {([30, 60, 120, 0] as const).map((fps) => (
                       <button
                         key={fps}
                         type="button"
                         onClick={() => onUpdateSettings({ targetFps: fps })}
-                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer ${
-                          settings.targetFps === fps ? 'bg-white text-slate-950' : 'text-slate-300 hover:text-white'
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer ${
+                          settings.targetFps === fps ? 'bg-white text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
                         }`}
                       >
-                        {fps}Hz
+                        {fps === 0 ? 'Uncapped' : `${fps}Hz`}
                       </button>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateSettings({ pssrUpscaling: !pssrOn })}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
-                      pssrOn
-                        ? 'border-sky-400 bg-sky-500/20 text-sky-300'
-                        : 'border-white/15 bg-white/5 text-slate-300'
-                    }`}
-                  >
-                    PSSR {pssrOn ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateSettings({ motionBlur: !settings.motionBlur })}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ${
-                      settings.motionBlur
-                        ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300'
-                        : 'border-white/15 bg-white/5 text-slate-300'
-                    }`}
-                  >
-                    Blur {settings.motionBlur ? 'ON' : 'OFF'}
-                  </button>
+
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(['off', 'scrgb', 'hdr10'] as HdrOutputMode[]).map((hMode) => (
+                      <button
+                        key={hMode}
+                        type="button"
+                        onClick={() => onUpdateSettings({ hdrMode: hMode })}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold uppercase cursor-pointer ${
+                          (settings.hdrMode ?? 'hdr10') === hMode
+                            ? 'bg-amber-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {hMode}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-white">HDR Tone Mapping & Peak Brightness</div>
-                  <div className="text-xs text-slate-400">High Dynamic Range color space & specular highlights</div>
+              {/* 12-Color Graphics Code LUT & Color Grading */}
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-white">
+                      Graphics Code Color LUT (12-Hex Palette)
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {GRAPHICS_COLOR_CODE_PROFILES[colorCodeMode].description}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(Object.keys(GRAPHICS_COLOR_CODE_PROFILES) as GraphicsColorCodeMode[]).map((cMode) => (
+                      <button
+                        key={cMode}
+                        type="button"
+                        onClick={() =>
+                          onUpdateSettings({
+                            graphicsColorCode: cMode,
+                            graphicsColorCodeIntensity: GRAPHICS_COLOR_CODE_PROFILES[cMode].defaultMix,
+                          })
+                        }
+                        className={`px-2 py-1 rounded-md text-[11px] font-semibold cursor-pointer ${
+                          colorCodeMode === cMode
+                            ? 'bg-violet-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {GRAPHICS_COLOR_CODE_PROFILES[cMode].label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['off', 'scrgb', 'hdr10'] as HdrOutputMode[]).map((hMode) => (
-                    <button
-                      key={hMode}
-                      type="button"
-                      onClick={() => onUpdateSettings({ hdrMode: hMode })}
-                      className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer ${
-                        hdrMode === hMode ? 'bg-amber-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                      }`}
+
+                {colorCodeMode !== 'standard' && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] text-slate-400">LUT Blend Intensity</span>
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {([0.25, 0.42, 0.7, 1.0] as const).map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => onUpdateSettings({ graphicsColorCodeIntensity: lvl })}
+                          className={`px-2 py-0.5 rounded text-[11px] font-mono font-semibold cursor-pointer ${
+                            Math.abs(colorCodeIntensity - lvl) < 0.04
+                              ? 'bg-sky-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {Math.round(lvl * 100)}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                  {GRAPHICS_CODE_ENTRIES.map((entry) => (
+                    <div
+                      key={entry.id}
+                      title={`${entry.name} (${entry.hex}, alpha ${entry.alpha}) — ${entry.role}`}
+                      className="flex flex-col items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1"
                     >
-                      {hMode}
-                    </button>
+                      <span
+                        className="w-full h-4 rounded border border-white/20"
+                        style={{ backgroundColor: entry.hex, opacity: entry.alpha }}
+                      />
+                      <span className="text-[9px] font-mono text-slate-300 leading-none">
+                        {entry.hex}
+                      </span>
+                    </div>
                   ))}
                 </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeCsv((prev) => !prev)}
+                    className="text-[11px] font-semibold text-sky-300 hover:text-sky-200 cursor-pointer"
+                  >
+                    {showCodeCsv ? 'Hide Graphics Code CSV' : 'View Graphics Code CSV (name,hex,alpha)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(GRAPHICS_CODE_CSV).catch(() => {});
+                      }
+                      setCopiedCodeCsv(true);
+                      window.setTimeout(() => setCopiedCodeCsv(false), 1600);
+                    }}
+                    className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/15 text-[10px] font-mono font-semibold text-slate-200 cursor-pointer"
+                  >
+                    {copiedCodeCsv ? 'Copied CSV' : 'Copy CSV'}
+                  </button>
+                </div>
+
+                {showCodeCsv && (
+                  <pre className="rounded-lg bg-black/50 border border-white/10 p-2.5 text-[10px] font-mono text-slate-200 overflow-x-auto leading-relaxed">
+                    {GRAPHICS_CODE_CSV}
+                  </pre>
+                )}
               </div>
 
-              {/* PS5 F1 Next-Generation AAA Graphics Pipeline Specification Readout */}
-              <div className="rounded-xl border border-sky-500/25 bg-white/[0.03] p-3 mt-1">
+              {/* AAA Racing Engine Specification Readout */}
+              <div className="rounded-xl border border-amber-400/30 bg-gradient-to-br from-amber-500/[0.04] via-sky-500/[0.03] to-white/[0.02] p-3.5 mt-1">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-sky-400">
-                    PS5™ F1 EGO ENGINE · RAY-TRACED PIPELINE
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                    AAA RACING GRAPHICS ENGINE · ACTIVE SPECIFICATION
                   </span>
-                  <span className="text-[11px] font-mono font-semibold text-emerald-400">
-                    {pssrOn ? 'PSSR 4K + RT ACTIVE' : 'NATIVE RENDER ACTIVE'}
+                  <span className="text-[11px] font-mono font-bold text-emerald-400">
+                    {settings.graphicsQuality === 'extreme'
+                      ? '⭐ EXTREME 4K PIPELINE ACTIVE'
+                      : `${settings.graphicsQuality.toUpperCase()} PRESET ACTIVE`}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-[11px]">
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Resolution</span>
                     <span className="font-mono font-bold text-white">
-                      {settings.graphicsQuality === 'ultra' ? '4K (3840×2160)' : settings.graphicsQuality === 'high' ? '1440p QHD' : '1080p FHD'}
+                      {(settings.resolutionScale ?? (settings.graphicsQuality === 'extreme' ? 2.0 : 1.0)) >= 2.0
+                        ? '3840×2160 (4K)'
+                        : (settings.resolutionScale ?? 1.0) >= 1.5
+                          ? '2560×1440 (QHD)'
+                          : '1920×1080 (FHD)'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                    <span className="text-slate-400">Texture quality</span>
-                    <span className="font-mono font-bold text-sky-300 uppercase">{settings.graphicsQuality}</span>
+                    <span className="text-slate-400">Render quality</span>
+                    <span className="font-mono font-bold text-amber-300">
+                      {Math.round((settings.resolutionScale ?? (settings.graphicsQuality === 'extreme' ? 2.0 : 1.0)) * 100)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-slate-400">Textures</span>
+                    <span className="font-mono font-bold text-sky-300 uppercase">
+                      {settings.textureQuality ?? (settings.graphicsQuality === 'extreme' ? 'Ultra' : settings.graphicsQuality)}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Shadows</span>
                     <span className="font-mono font-bold text-sky-300 uppercase">
-                      {settings.graphicsQuality === 'ultra' ? 'Ultra (RT)' : settings.graphicsQuality}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
-                    <span className="text-slate-400">Anti-aliasing</span>
-                    <span className="font-mono font-bold text-white">
-                      {pssrOn ? 'High (PSSR)' : '8x MSAA'}
+                      {settings.shadowQuality ?? (settings.graphicsQuality === 'extreme' ? 'Ultra (4096)' : settings.graphicsQuality)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Reflections</span>
-                    <span className="font-mono font-bold text-sky-300 uppercase">
-                      {rtQuality === 'ultra' ? 'Ultra (RT)' : rtQuality}
+                    <span className="font-mono font-bold text-cyan-300 uppercase">
+                      {settings.reflectionQuality ?? (settings.graphicsQuality === 'extreme' ? 'Ultra (RT)' : rtQuality)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-slate-400">Ambient occlusion</span>
+                    <span className="font-mono font-bold text-white uppercase">
+                      {settings.ambientOcclusion ?? (settings.graphicsQuality === 'extreme' ? 'Ultra (SSAO)' : 'High')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-slate-400">Anti-aliasing</span>
+                    <span className="font-mono font-bold text-emerald-400 uppercase">
+                      {settings.antiAliasing ?? 'High (PSSR)'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Lighting</span>
-                    <span className="font-mono font-bold text-amber-300 uppercase">{hdrMode}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Ambient occlusion</span>
-                    <span className="font-mono font-bold text-white">
-                      {rtQuality !== 'off' ? 'High (RTAO)' : 'Off'}
+                    <span className="font-mono font-bold text-amber-300 uppercase">
+                      {settings.hdrMode ?? 'HDR10 (ACES)'}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Motion blur</span>
-                    <span className="font-mono font-bold text-cyan-300">
-                      {settings.motionBlur ? 'Cinematic' : 'Off'}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-slate-400">Post-processing</span>
+                    <span className="font-mono font-bold text-cyan-300 uppercase">
+                      {settings.motionBlurLevel ?? (settings.motionBlur ? 'Cinematic' : 'Off')}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Weather effects</span>
                     <span className="font-mono font-bold text-sky-300 uppercase">
-                      {settings.graphicsQuality === 'ultra' ? 'Ultra' : 'High'}
+                      {settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra' ? 'Maximum' : 'High'}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3 mt-1 pt-2 border-t border-white/10">
-                    <div>
-                      <div className="text-sm font-semibold text-white">NVIDIA Reflex / PS5™ Low Latency Input</div>
-                      <div className="text-xs text-slate-400">Sub-frame steering & pedal response pipeline</div>
-                    </div>
-                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                      {(['off', 'on', 'boost'] as const).map((rx) => (
-                        <button
-                          key={rx}
-                          type="button"
-                          onClick={() => onUpdateSettings({ reflexLowLatency: rx })}
-                          className={`px-2.5 py-1 rounded-md text-xs font-semibold uppercase cursor-pointer ${
-                            (settings.reflexLowLatency ?? 'boost') === rx
-                              ? 'bg-emerald-400 text-slate-950'
-                              : 'text-slate-300 hover:text-white'
-                          }`}
-                        >
-                          {rx}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-slate-400">Particle density</span>
+                    <span className="font-mono font-bold text-amber-300 uppercase">
+                      {settings.particleDensity ?? (settings.graphicsQuality === 'extreme' ? 'Ultra' : 'High')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                    <span className="text-slate-400">Frame rate</span>
+                    <span className="font-mono font-bold text-white">
+                      {settings.targetFps === 0 ? 'Uncapped' : `${settings.targetFps} FPS`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Sky & clouds</span>
+                    <span className="font-mono font-bold text-cyan-300 uppercase">
+                      {settings.graphicsQuality === 'low' ? 'Standard' : 'Volumetric HDR'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">3D Environment</span>
+                    <span className="font-mono font-bold text-emerald-400 uppercase">
+                      {settings.graphicsQuality === 'low' ? 'LOD Fast' : 'Photorealistic'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Trees & fog</span>
+                    <span className="font-mono font-bold text-amber-300 uppercase">
+                      {settings.graphicsQuality === 'low' ? 'Basic' : 'High Detail'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between col-span-3 border-t border-white/5 pt-1.5 mt-0.5">
+                    <span className="text-slate-400">Graphics Color Code</span>
+                    <span className="font-mono font-bold text-violet-300 uppercase">
+                      {GRAPHICS_COLOR_CODE_PROFILES[colorCodeMode].label} ({Math.round(colorCodeIntensity * 100)}%)
+                    </span>
                   </div>
                 </div>
               </div>
@@ -735,11 +1093,16 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                   {(
                     [
                       ['chase', 'Chase'],
-                      ['tcam', 'TV Pod'],
+                      ['tcam', 'T-Cam'],
                       ['cockpit', 'Cockpit'],
+                      ['bumper', 'Bumper'],
                       ['low_track', 'Low Track'],
                       ['wing_tyre', 'Wing Cam'],
-                      ['tv_wide', 'TV Broadcast'],
+                      ['side', 'Side Pod'],
+                      ['rear', 'Chase Rear'],
+                      ['tv_wide', 'Broadcast'],
+                      ['heli', 'Helicopter TV'],
+                      ['trackside', 'Trackside'],
                     ] as [CameraMode, string][]
                   ).map(([cam, label]) => (
                     <button

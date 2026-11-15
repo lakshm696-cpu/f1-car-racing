@@ -1,0 +1,22 @@
+Seele 3ds Max Receiver Installation
+====================================
+
+First installation:
+1. Close 3ds Max.
+2. Run Install.cmd as an administrator.
+3. The package installs the bundled environment configuration automatically.
+4. Start 3ds Max again.
+5. Verify the receiver at http://127.0.0.1:9880/healthz.
+
+The installer places the plugin in:
+%PROGRAMDATA%\Autodesk\ApplicationPlugins\SeeleReceiver.bundle
+
+The automatic startup loader is installed in the existing 3ds Max user profile:
+%LOCALAPPDATA%\Autodesk\3dsMax\<version> - 64bit\<language>\scripts\startup
+
+Configure.cmd opens the interactive configuration wizard when a custom setup is needed.
+Install.cmd preserves an existing user configuration during upgrades.
+Uninstall.cmd disables the plugin but preserves the configuration and cache.
+
+The release package contains ENVIRONMENT.txt and config.json so production and test
+packages can be distributed independently.

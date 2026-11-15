@@ -12,9 +12,12 @@ import { EngineerRadio } from './components/EngineerRadio';
 import { TelemetryOverlay } from './components/TelemetryOverlay';
 import { Activity } from 'lucide-react';
 import { RacingHUD } from './components/RacingHUD';
+import { PitStrategyModal } from './components/PitStrategyModal';
 import { TitleOverlay } from './components/TitleOverlay';
 import { CIRCUIT_TRACKS, FORMULA_DRIVERS, FORMULA_TEAMS, WHEEL_FINISHES } from './data/racingData';
+import { buildDefaultPitStrategy, normalizePitStrategyPlan } from './physics/simulationCalculus';
 import { RacingEngine } from './three/RacingEngine';
+import { getCircuitEnvironmentConfig } from './three/circuitEnvironments';
 import {
   CareerProgress,
   CarUpgrades,
@@ -26,8 +29,10 @@ import {
   GameSettings,
   HudTelemetry,
   PodiumCameraShot,
+  PreRacePitStrategy,
   RacerStanding,
   RivalEncounter,
+  TimeOfDayMode,
   TyreCompound,
   WeatherMode,
   WheelFinish,
@@ -90,16 +95,36 @@ const INITIAL_HUD: HudTelemetry = {
   miniMapStart: { x: 20, y: 20 },
   miniMapBlips: [],
   miniMapHazards: [],
+  miniMapDrsZones: [],
+  drsState: {
+    inZone: false,
+    zoneNumber: null,
+    zoneName: null,
+    totalZones: 1,
+    zoneLengthMeters: null,
+    remainingMeters: null,
+    approachingMeters: null,
+    approachingZoneName: null,
+    approachingZoneNumber: null,
+    gapQualified: true,
+    disabledByWeather: false,
+    notification: null,
+    notificationZoneNumber: null,
+    notificationZoneName: null,
+    notificationSeq: 0,
+  },
   standings: [],
   cameraMode: 'chase',
   pitBoardActive: false,
   gapAheadSeconds: null,
   damagePct: 0,
-  liveWeather: 'rain',
+  liveWeather: 'day',
   nextWeather: null,
   dynamicWeather: false,
-  trackWetnessPct: 78,
-  surfaceGripPct: 76,
+  liveTimeOfDay: 'afternoon',
+  trackWetnessPct: 0,
+  trackTemperature: 36,
+  surfaceGripPct: 98,
   currentSector: 2,
   sectorGripPct: [82, 74, 79],
   activeSurfaceHazard: null,
@@ -107,6 +132,36 @@ const INITIAL_HUD: HudTelemetry = {
   pitStopRemainingSec: 0,
   inPitWindow: false,
   trackFlag: { flag: 'none', reason: '', distanceMeters: null },
+  gForceLat: 0,
+  gForceLong: 0,
+  gForceTotal: 0,
+  pitStrategy: {
+    pitWindowStartLap: 1,
+    pitWindowEndLap: 2,
+    isWindowOpen: false,
+    recommendedCompound: 'medium',
+    estimatedPitLossSec: 20.5,
+    undercutViable: false,
+    undercutDeltaSec: null,
+    predictedExitPosition: 4,
+    tyreDegradationStage: 'fresh',
+    tacticalRadioCall: null,
+  },
+  tyreContactPatch: {
+    trackTemperatureC: 36,
+    contactAreaRatio: 0.88,
+    adhesionRatio: 0.94,
+    microSlipRatio: 0.06,
+    microSlipPct: 6,
+    grainingProbabilityPct: 9,
+    grainingSeverityPct: 0,
+    wheelMicroSlipPct: [6, 6, 7, 7],
+    wheelSurfaceTempC: [93, 93, 95, 95],
+    wheelCoreTempC: [95, 95, 97, 97],
+    patchState: 'stick',
+    gripPenaltyMultiplier: 1.0,
+    wearRateMultiplier: 1.0,
+  },
 };
 
 export default function App() {
@@ -115,6 +170,7 @@ export default function App() {
 
   const [screen, setScreen] = useState<GameScreen>('title');
   const [showTitleSettings, setShowTitleSettings] = useState(false);
+  const [showPitStrategy, setShowPitStrategy] = useState(false);
   const [egoHudMode, setEgoHudMode] = useState(true);
 
   const [selectedTrack, setSelectedTrack] = useState<CircuitTrack>(CIRCUIT_TRACKS[0]);
@@ -123,7 +179,7 @@ export default function App() {
   const [customPrimaryHex, setCustomPrimaryHex] = useState<string>('#10131A');
   const [customNumber, setCustomNumber] = useState<string>('');
   const [selectedWheel, setSelectedWheel] = useState<WheelFinish>(WHEEL_FINISHES[0]);
-  const [selectedCompound, setSelectedCompound] = useState<TyreCompound>('wet');
+  const [selectedCompound, setSelectedCompound] = useState<TyreCompound>('medium');
   const [upgrades, setUpgrades] = useState<CarUpgrades>({
     engineLevel: 1,
     tyreLevel: 1,
@@ -135,23 +191,35 @@ export default function App() {
   const [showTelemetryModal, setShowTelemetryModal] = useState(false);
   const [gameMode, setGameMode] = useState<GameMode>('quick_race');
   const [podiumShot, setPodiumShot] = useState<PodiumCameraShot>('auto');
-  const [settings, setSettings] = useState<GameSettings>(() => ({
-    transmission: 'auto',
-    steeringSensitivity: 1.0,
-    difficulty: 'pro',
-    touchControls: typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
-    muted: false,
-    cameraMode: 'chase',
-    weather: 'rain',
-    dynamicWeather: false,
-    totalLaps: 3,
-    graphicsQuality: 'cinematic',
+  const [settings, setSettings] = useState<GameSettings>(() => {
+    const initialEnv = getCircuitEnvironmentConfig(CIRCUIT_TRACKS[0]);
+    return {
+      transmission: 'auto',
+      steeringSensitivity: 1.0,
+      difficulty: 'pro',
+      touchControls: typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+      muted: false,
+      cameraMode: 'chase',
+      weather: initialEnv.defaultWeather,
+      dynamicWeather: false,
+      timeOfDay: initialEnv.defaultTimeOfDay,
+      dynamicTimeOfDay: false,
+      totalLaps: 3,
+    graphicsQuality: 'extreme',
+    resolutionScale: 2.0,
+    textureQuality: 'ultra',
+    shadowQuality: 'ultra',
+    reflectionQuality: 'ultra',
+    ambientOcclusion: 'ultra',
+    antiAliasing: 'high',
+    particleDensity: 'ultra',
+    motionBlurLevel: 'cinematic',
     targetFps: 60,
     motionBlur: true,
     absAssist: true,
     tcAssist: true,
     ps5GraphicsMode: 'cinematic',
-    rayTracingQuality: 'cinematic',
+    rayTracingQuality: 'ultra',
     pssrUpscaling: true,
     hdrMode: 'hdr10',
     steeringAssist: false,
@@ -176,7 +244,11 @@ export default function App() {
     raceObjectives: true,
     launchClutchAssist: true,
     reflexLowLatency: 'boost',
-  }));
+    graphicsColorCode: 'palette_lut',
+    graphicsColorCodeIntensity: 0.42,
+    pitStrategyPlan: buildDefaultPitStrategy(3, initialEnv.defaultWeather, 'medium'),
+    };
+  });
 
   const [hud, setHud] = useState<HudTelemetry>(INITIAL_HUD);
   const [finalStandings, setFinalStandings] = useState<RacerStanding[]>([]);
@@ -274,6 +346,9 @@ export default function App() {
         }
       },
       onPauseRequested: handlePauseToggle,
+      onCameraModeChanged: (cameraMode) => {
+        setSettings((prev) => (prev.cameraMode === cameraMode ? prev : { ...prev, cameraMode }));
+      },
     });
     engineRef.current = engine;
 
@@ -321,34 +396,136 @@ export default function App() {
 
   const startRace = useCallback(() => {
     setShowTitleSettings(false);
+    setShowPitStrategy(false);
     setScreen('playing');
     engineRef.current?.startNewRace();
   }, []);
 
   const openDrivers = useCallback(() => {
     setShowTitleSettings(false);
+    setShowPitStrategy(false);
     setScreen('drivers');
     engineRef.current?.setScreen('drivers');
   }, []);
 
   const openGarage = useCallback(() => {
     setShowTitleSettings(false);
+    setShowPitStrategy(false);
     setScreen('garage');
     engineRef.current?.setScreen('garage');
   }, []);
 
   const exitToTitle = useCallback(() => {
     setShowTitleSettings(false);
+    setShowPitStrategy(false);
     setScreen('title');
     engineRef.current?.setScreen('title');
   }, []);
 
   const updateSettings = useCallback((patch: Partial<GameSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.totalLaps !== undefined && patch.pitStrategyPlan === undefined && prev.pitStrategyPlan) {
+        next.pitStrategyPlan = normalizePitStrategyPlan({
+          ...prev.pitStrategyPlan,
+          totalLaps: patch.totalLaps,
+        });
+      }
+      return next;
+    });
   }, []);
 
-  const handleSelectWeather = useCallback((weather: WeatherMode) => {
-    setSettings((prev) => ({ ...prev, weather }));
+  const handleSavePitStrategy = useCallback((plan: PreRacePitStrategy) => {
+    const normalized = normalizePitStrategyPlan(plan);
+    setSelectedCompound(normalized.startingCompound);
+    setSettings((prev) => ({
+      ...prev,
+      totalLaps: normalized.totalLaps,
+      pitStrategyPlan: normalized,
+    }));
+    setShowPitStrategy(false);
+  }, []);
+
+  const handleSaveAndStartStrategy = useCallback((plan: PreRacePitStrategy) => {
+    const normalized = normalizePitStrategyPlan(plan);
+    setSelectedCompound(normalized.startingCompound);
+    setSettings((prev) => ({
+      ...prev,
+      totalLaps: normalized.totalLaps,
+      pitStrategyPlan: normalized,
+    }));
+    engineRef.current?.configureSession({
+      compound: normalized.startingCompound,
+      settings: {
+        totalLaps: normalized.totalLaps,
+        pitStrategyPlan: normalized,
+      },
+    });
+    setShowPitStrategy(false);
+    setShowTitleSettings(false);
+    setScreen('playing');
+    engineRef.current?.startNewRace();
+  }, []);
+
+  const handleSelectTrack = useCallback((track: CircuitTrack) => {
+    setSelectedTrack(track);
+    const envCfg = getCircuitEnvironmentConfig(track);
+    const nextCmp: TyreCompound =
+      envCfg.defaultWeather === 'rain' || envCfg.defaultWeather === 'heavy_rain' ? 'wet' : 'medium';
+    setSettings((prev) => ({
+      ...prev,
+      weather: envCfg.defaultWeather,
+      timeOfDay: envCfg.defaultTimeOfDay,
+      pitStrategyPlan: prev.pitStrategyPlan
+        ? normalizePitStrategyPlan({
+            ...prev.pitStrategyPlan,
+            startingCompound: nextCmp,
+          })
+        : buildDefaultPitStrategy(prev.totalLaps, envCfg.defaultWeather, nextCmp),
+    }));
+    setSelectedCompound(nextCmp);
+  }, []);
+
+  const handleSelectWeather = useCallback(
+    (weather: WeatherMode) => {
+      setSettings((prev) => {
+        const defaultTod = getCircuitEnvironmentConfig(selectedTrack).defaultTimeOfDay;
+        const fallbackDayTod: TimeOfDayMode =
+          defaultTod === 'night' || defaultTod === 'sunset' ? 'afternoon' : defaultTod;
+        return {
+          ...prev,
+          weather,
+          timeOfDay:
+            weather === 'night'
+              ? 'night'
+              : weather === 'sunset'
+                ? 'sunset'
+                : prev.timeOfDay === 'night' || prev.timeOfDay === 'sunset'
+                  ? fallbackDayTod
+                  : prev.timeOfDay,
+        };
+      });
+    },
+    [selectedTrack]
+  );
+
+  const handleSelectTimeOfDay = useCallback((timeOfDay: TimeOfDayMode) => {
+    setSettings((prev) => ({
+      ...prev,
+      timeOfDay,
+      weather:
+        timeOfDay === 'night' || timeOfDay === 'sunset'
+          ? prev.weather === 'rain' ||
+            prev.weather === 'heavy_rain' ||
+            prev.weather === 'cloudy' ||
+            prev.weather === 'fog' ||
+            prev.weather === 'partly_cloudy'
+            ? prev.weather
+            : 'day'
+          : prev.weather === 'night' || prev.weather === 'sunset'
+            ? 'day'
+            : prev.weather,
+    }));
   }, []);
 
   const handleSelectDriver = useCallback((driver: DriverProfile) => {
@@ -391,15 +568,22 @@ export default function App() {
           gameMode={gameMode}
           weather={settings.weather}
           dynamicWeather={settings.dynamicWeather}
+          timeOfDay={settings.timeOfDay ?? 'afternoon'}
+          dynamicTimeOfDay={settings.dynamicTimeOfDay ?? false}
           totalLaps={settings.totalLaps}
+          pitStrategyPlan={settings.pitStrategyPlan}
           muted={settings.muted}
           egoHudMode={egoHudMode}
           onToggleEgoHudMode={() => setEgoHudMode((prev) => !prev)}
-          onSelectTrack={setSelectedTrack}
+          onSelectTrack={handleSelectTrack}
           onSelectMode={setGameMode}
           onSelectWeather={handleSelectWeather}
           onToggleDynamicWeather={() =>
             updateSettings({ dynamicWeather: !settings.dynamicWeather })
+          }
+          onSelectTimeOfDay={handleSelectTimeOfDay}
+          onToggleDynamicTimeOfDay={() =>
+            updateSettings({ dynamicTimeOfDay: !settings.dynamicTimeOfDay })
           }
           onToggleMute={() => {
             engineRef.current?.unlockAudio();
@@ -411,6 +595,7 @@ export default function App() {
           }}
           onOpenDrivers={openDrivers}
           onOpenGarage={openGarage}
+          onOpenPitStrategy={() => setShowPitStrategy(true)}
           onOpenSettings={() => setShowTitleSettings(true)}
           onJumpTitleScene={(sceneNum) => engineRef.current?.jumpToTitleScene(sceneNum)}
           onStartRace={startRace}
@@ -426,6 +611,21 @@ export default function App() {
           onResume={() => setShowTitleSettings(false)}
           onRestart={startRace}
           onExitToTitle={() => setShowTitleSettings(false)}
+        />
+      )}
+
+      {/* Pre-Race Interactive Pit Strategy Planner Modal */}
+      {(screen === 'title' || screen === 'garage') && showPitStrategy && (
+        <PitStrategyModal
+          track={selectedTrack}
+          weather={settings.weather}
+          initialPlan={
+            settings.pitStrategyPlan ??
+            buildDefaultPitStrategy(settings.totalLaps, settings.weather, selectedCompound)
+          }
+          onSave={handleSavePitStrategy}
+          onSaveAndStartRace={handleSaveAndStartStrategy}
+          onClose={() => setShowPitStrategy(false)}
         />
       )}
 
@@ -458,11 +658,20 @@ export default function App() {
           onSelectPaint={setCustomPrimaryHex}
           onSelectNumber={setCustomNumber}
           onSelectWheel={setSelectedWheel}
-          onSelectCompound={setSelectedCompound}
+          onSelectCompound={(cmp) => {
+            setSelectedCompound(cmp);
+            setSettings((prev) => ({
+              ...prev,
+              pitStrategyPlan: prev.pitStrategyPlan
+                ? { ...prev.pitStrategyPlan, startingCompound: cmp }
+                : buildDefaultPitStrategy(prev.totalLaps, prev.weather, cmp),
+            }));
+          }}
           onPurchaseUpgrade={handlePurchaseUpgrade}
           onCameraPreset={(p) => engineRef.current?.setGarageCameraPreset(p)}
           onZoom={(d) => engineRef.current?.adjustGarageZoom(d)}
           onToggleLights={() => engineRef.current?.toggleGarageLights() ?? true}
+          onOpenPitStrategy={() => setShowPitStrategy(true)}
           onBack={exitToTitle}
           onStartRace={startRace}
         />

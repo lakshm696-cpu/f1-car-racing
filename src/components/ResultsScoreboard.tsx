@@ -17,10 +17,12 @@ interface ResultsScoreboardProps {
 
 const WEATHER_LABELS: Record<WeatherMode, string> = {
   day: 'Dry Sunlight',
+  partly_cloudy: 'Partly Cloudy',
   sunset: 'Golden Sunset',
   cloudy: 'Overcast',
   rain: 'Wet Track',
   heavy_rain: 'Heavy Storm',
+  fog: 'Misty Fog',
   night: 'Night Grand Prix',
 };
 

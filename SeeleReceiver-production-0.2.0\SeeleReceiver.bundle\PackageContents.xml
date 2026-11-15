@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0"
+                    AutodeskProduct="3ds Max"
+                    Name="Seele Receiver"
+                    Description="dcc-transfer.v1 local asset receiver"
+                    AppVersion="0.2.0"
+                    ProductCode="{2C96847C-0B70-4E65-B2A5-8A98C20DC622}"
+                    UpgradeCode="{55B70F86-F46B-4B7D-98AF-5BE589BB7498}">
+  <CompanyDetails Name="Seele" />
+  <Components Description="Seele Receiver">
+    <RuntimeRequirements OS="Win64" Platform="3ds Max" />
+    <ComponentEntry AppName="Seele Receiver" ModuleName="./Contents/scripts/startup/seele_receiver_bootstrap.ms" />
+  </Components>
+</ApplicationPackage>

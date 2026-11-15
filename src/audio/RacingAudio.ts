@@ -670,10 +670,11 @@ export class RacingAudio {
     const engineVol = (0.13 + input.throttle * 0.15 + rpmNorm * 0.095) * limiterGate;
     this.engineBus.gain.setTargetAtTime(engineVol, now, 0.03);
 
-    // Throttle-lift exhaust overrun crackle when lifting from high RPM
-    if (this.prevThrottle > 0.55 && input.throttle < 0.15 && rpmNorm > 0.55 && now - this.lastOverrunTime > 0.28) {
+    // Throttle-lift exhaust overrun crackle & turbo wastegate flutter when lifting from high RPM
+    if (this.prevThrottle > 0.45 && input.throttle < 0.15 && rpmNorm > 0.48 && now - this.lastOverrunTime > 0.28) {
       this.lastOverrunTime = now;
       this.playOverrunCrackle();
+      this.playWastegateFlutter();
     }
     this.prevThrottle = input.throttle;
 
@@ -1128,6 +1129,75 @@ export class RacingAudio {
     });
   }
 
+  public playWastegateFlutter() {
+    if (!this.ctx || !this.compressor || this.muted) return;
+    const now = this.ctx.currentTime;
+    // Characteristic 2026 F1 turbo compressor stall / wastegate flutter ("ch-ch-ch-ch")
+    const pulseDelays = [0, 0.042, 0.088, 0.136, 0.188];
+    pulseDelays.forEach((delay, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const filter = this.ctx!.createBiquadFilter();
+      const gain = this.ctx!.createGain();
+
+      osc.type = 'sawtooth';
+      const baseFreq = 2200 - idx * 240;
+      osc.frequency.setValueAtTime(baseFreq, now + delay);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.55, now + delay + 0.038);
+
+      filter.type = 'bandpass';
+      filter.frequency.value = baseFreq;
+      filter.Q.value = 4.2;
+
+      const vol = (0.16 - idx * 0.025) * 0.85;
+      gain.gain.setValueAtTime(vol, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.039);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.compressor!);
+      if (this.verbSend) gain.connect(this.verbSend);
+
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.042);
+    });
+
+    // High pressure air blow-off hiss
+    if (this.noiseBuffer) {
+      const hiss = this.ctx.createBufferSource();
+      hiss.buffer = this.noiseBuffer;
+      const hf = this.ctx.createBiquadFilter();
+      hf.type = 'highpass';
+      hf.frequency.value = 2800;
+      const hg = this.ctx.createGain();
+      hg.gain.setValueAtTime(0.12, now);
+      hg.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      hiss.connect(hf);
+      hf.connect(hg);
+      hg.connect(this.compressor);
+      if (this.verbSend) hg.connect(this.verbSend);
+      hiss.start(now, Math.random() * 0.4, 0.24);
+    }
+  }
+
+  public playStrategyAlert() {
+    if (!this.initialized || !this.ctx || !this.compressor || this.muted) return;
+    const now = this.ctx.currentTime;
+    [1046.5, 1318.5, 1567.98].forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'sine';
+      const t = now + idx * 0.075;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc.connect(gain);
+      gain.connect(this.compressor!);
+      if (this.verbSend) gain.connect(this.verbSend);
+      osc.start(t);
+      osc.stop(t + 0.09);
+    });
+  }
+
   public playSuspensionBump(intensity: number) {
     if (!this.initialized || !this.ctx || !this.compressor || this.muted) return;
     const now = this.ctx.currentTime;
@@ -1369,6 +1439,25 @@ export class RacingAudio {
       bf.connect(bg);
       bg.connect(this.compressor);
       squelch.start(now, Math.random() * 0.5, 0.35);
+    }
+  }
+
+  public playDrsBeep(entered: boolean) {
+    if (!this.initialized || !this.ctx || !this.compressor || this.muted) return;
+    const now = this.ctx.currentTime;
+    const freqs = entered ? [1180, 1580] : [920, 680];
+    for (let i = 0; i < freqs.length; i++) {
+      const startTime = now + i * 0.065;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freqs[i], startTime);
+      gain.gain.setValueAtTime(entered ? 0.12 : 0.08, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.06);
+      osc.connect(gain);
+      gain.connect(this.compressor);
+      osc.start(startTime);
+      osc.stop(startTime + 0.065);
     }
   }
 

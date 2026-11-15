@@ -1,27 +1,66 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Radio, ShieldAlert } from 'lucide-react';
-import { MiniMapBlip, TrackHazardBlip } from '../types/racing';
+import { AlertTriangle, Flame, Radio } from 'lucide-react';
+import { MiniMapBlip, MiniMapDrsZone, TrackHazardBlip } from '../types/racing';
 
 interface MiniMapProps {
   trackName: string;
   miniMapPath: string;
+  miniMapSectorPaths?: [string, string, string];
+  miniMapRacingLinePaths?: [string, string, string];
   miniMapStart: { x: number; y: number };
   blips: MiniMapBlip[];
   hazards?: TrackHazardBlip[];
+  drsZones?: MiniMapDrsZone[];
   trackFlag?: { flag: string; reason: string; distanceMeters: number | null };
   currentSector?: number;
+  sectorGripPct?: [number, number, number];
+}
+
+function getGripHeatmapColors(gripPct: number): {
+  bandColor: string;
+  lineColor: string;
+  labelColor: string;
+  stateLabel: string;
+} {
+  if (gripPct >= 88) {
+    return {
+      bandColor: '#10B981',
+      lineColor: '#34D399',
+      labelColor: 'text-emerald-300',
+      stateLabel: 'HIGH',
+    };
+  }
+  if (gripPct >= 72) {
+    return {
+      bandColor: '#F59E0B',
+      lineColor: '#FACC15',
+      labelColor: 'text-amber-300',
+      stateLabel: 'MED',
+    };
+  }
+  return {
+    bandColor: '#EF4444',
+    lineColor: '#FB923C',
+    labelColor: 'text-red-400',
+    stateLabel: 'LOW',
+  };
 }
 
 export const MiniMap: React.FC<MiniMapProps> = ({
   trackName,
   miniMapPath,
+  miniMapSectorPaths,
+  miniMapRacingLinePaths,
   miniMapStart,
   blips,
   hazards = [],
+  drsZones = [],
   trackFlag,
   currentSector = 1,
+  sectorGripPct = [96, 93, 95],
 }) => {
   const [showRadarList, setShowRadarList] = useState(false);
+  const [showGripHeatmap, setShowGripHeatmap] = useState(true);
 
   const opponents = blips.filter((b) => !b.isPlayer);
   const player = blips.find((b) => b.isPlayer);
@@ -34,56 +73,80 @@ export const MiniMap: React.FC<MiniMapProps> = ({
   const isYellowFlag = trackFlag?.flag === 'yellow';
 
   return (
-    <div className="relative rounded-xl border border-white/12 bg-[#090B0F]/90 px-2.5 py-2 flex flex-col gap-1.5 shadow-2xl backdrop-blur-md">
+    <div
+      className="relative rounded-xl border border-white/12 px-2.5 py-2 flex flex-col gap-1.5 shadow-2xl"
+      style={{ backgroundColor: 'rgba(9, 11, 15, 0.92)' }}
+    >
       {/* Header Row */}
       <div className="flex items-center justify-between gap-2 text-[10px] font-semibold tracking-wider">
         <button
           type="button"
           onClick={() => setShowRadarList(!showRadarList)}
-          className="flex items-center gap-1.5 truncate max-w-[100px] text-slate-300 hover:text-white uppercase transition-colors cursor-pointer text-left"
+          className="flex items-center gap-1.5 truncate max-w-[92px] text-slate-300 hover:text-white uppercase transition-colors cursor-pointer text-left whitespace-nowrap shrink-0"
           title="Toggle Proximity Radar List"
         >
-          <Radio className="w-3 h-3 text-sky-400 animate-pulse" />
+          <Radio className="w-3 h-3 text-sky-400 shrink-0" />
           <span className="truncate">{trackName}</span>
         </button>
 
-        {isYellowFlag ? (
-          <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-500/25 text-amber-300 border border-amber-400/50 animate-pulse flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3 text-amber-400" />
-            YELLOW S{currentSector}
-          </span>
-        ) : nearestClose ? (
-          <span
-            className={`font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none ${
-              nearestClose.gapToPlayerSeconds < 0
-                ? 'bg-red-500/20 text-red-300 border border-red-400/40'
-                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40'
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowGripHeatmap(!showGripHeatmap)}
+            title="Toggle Surface Grip Heatmap & Racing Line Overlay"
+            className={`pointer-events-auto flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono-telemetry font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0 border ${
+              showGripHeatmap
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
             }`}
           >
-            {closeOpponents.length} &le;2s · {nearestClose.gapToPlayerSeconds >= 0 ? '+' : ''}
-            {nearestClose.gapToPlayerSeconds.toFixed(1)}s
-          </span>
-        ) : hazards.length > 0 ? (
-          <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-500/20 text-amber-300 border border-amber-400/40">
-            {hazards.length} HAZ
-          </span>
-        ) : (
-          <span className="font-mono-telemetry text-slate-400">RADAR</span>
-        )}
+            <Flame className="w-2.5 h-2.5" />
+            <span>GRIP</span>
+          </button>
+
+          {isYellowFlag ? (
+            <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-500/25 text-amber-300 border border-amber-400/50 flex items-center gap-1 whitespace-nowrap shrink-0">
+              <AlertTriangle className="w-3 h-3 text-amber-400" />
+              YELLOW S{currentSector}
+            </span>
+          ) : nearestClose ? (
+            <span
+              className={`font-mono-telemetry tabular-nums px-1.5 py-0.5 rounded text-[9px] font-bold leading-none whitespace-nowrap shrink-0 ${
+                nearestClose.gapToPlayerSeconds < 0
+                  ? 'bg-red-500/20 text-red-300 border border-red-400/40'
+                  : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40'
+              }`}
+            >
+              {closeOpponents.length} &le;2s · {nearestClose.gapToPlayerSeconds >= 0 ? '+' : ''}
+              {nearestClose.gapToPlayerSeconds.toFixed(1)}s
+            </span>
+          ) : hazards.length > 0 ? (
+            <span className="font-mono-telemetry tabular-nums px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-500/20 text-amber-300 border border-amber-400/40 whitespace-nowrap shrink-0">
+              {hazards.length} HAZ
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      {/* Dynamic SVG Circuit Map with Yellow Flag Sector Highlighting & Relative AI Blips */}
+      {/* Dynamic SVG Circuit Map with Sector Grip Heatmap, High-Grip Racing Lines & Relative AI Blips */}
       <div className="relative">
         <svg
           viewBox="0 0 100 100"
           role="img"
-          aria-label={`Live dynamic circuit mini-map for ${trackName}`}
+          aria-label={`Live dynamic circuit mini-map and surface grip heatmap for ${trackName}`}
           className="w-36 h-28 sm:w-40 sm:h-32 overflow-visible cursor-pointer"
           onClick={() => setShowRadarList(!showRadarList)}
         >
           <defs>
             <filter id="minimap-glow" x="-40%" y="-40%" width="180%" height="180%">
               <feGaussianBlur stdDeviation="1.4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="grip-heatmap-glow" x="-45%" y="-45%" width="190%" height="190%">
+              <feGaussianBlur stdDeviation="1.9" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -125,23 +188,110 @@ export const MiniMap: React.FC<MiniMapProps> = ({
           <path
             d={miniMapPath}
             fill="none"
-            stroke="rgba(255, 255, 255, 0.24)"
+            stroke="rgba(255, 255, 255, 0.22)"
             strokeWidth="4.8"
             strokeLinejoin="round"
             strokeLinecap="round"
           />
 
-          {/* Racing Centerline */}
-          <path
-            d={miniMapPath}
-            fill="none"
-            stroke="#94A3B8"
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
+          {/* Surface Grip Heatmap & High-Grip Racing Line Overlay (Per-Sector S1 / S2 / S3) */}
+          {showGripHeatmap ? (
+            <g>
+              {[0, 1, 2].map((secIdx) => {
+                const gripVal = sectorGripPct[secIdx] ?? 95;
+                const colors = getGripHeatmapColors(gripVal);
+                const isActiveSec = currentSector === secIdx + 1;
+                const secPath = miniMapSectorPaths?.[secIdx];
+                const linePath = miniMapRacingLinePaths?.[secIdx];
 
-          {/* Yellow Flag Sector Highlighting (Flashing Amber Track Overlay) */}
+                if (secPath) {
+                  return (
+                    <g key={`grip-sec-${secIdx}`}>
+                      {/* Sector Surface Grip Thermal Band */}
+                      <path
+                        d={secPath}
+                        fill="none"
+                        stroke={colors.bandColor}
+                        strokeOpacity={isActiveSec ? 0.58 : 0.38}
+                        strokeWidth={isActiveSec ? 5.6 : 4.6}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        filter="url(#grip-heatmap-glow)"
+                      />
+                      {/* Rubbered-In High-Grip Racing Line Trajectory */}
+                      <path
+                        d={linePath || secPath}
+                        fill="none"
+                        stroke={colors.lineColor}
+                        strokeOpacity={isActiveSec ? 0.98 : 0.84}
+                        strokeWidth={isActiveSec ? 2.1 : 1.65}
+                        strokeDasharray={gripVal >= 88 ? undefined : '3.5 1.8'}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                      />
+                    </g>
+                  );
+                }
+
+                // Fallback segmented path when miniMapSectorPaths is not yet populated
+                return (
+                  <g key={`grip-fallback-${secIdx}`}>
+                    <path
+                      d={miniMapPath}
+                      pathLength={300}
+                      strokeDasharray="100 200"
+                      strokeDashoffset={-secIdx * 100}
+                      fill="none"
+                      stroke={colors.bandColor}
+                      strokeOpacity={isActiveSec ? 0.58 : 0.38}
+                      strokeWidth={isActiveSec ? 5.4 : 4.4}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      filter="url(#grip-heatmap-glow)"
+                    />
+                    <path
+                      d={miniMapPath}
+                      pathLength={300}
+                      strokeDasharray="100 200"
+                      strokeDashoffset={-secIdx * 100}
+                      fill="none"
+                      stroke={colors.lineColor}
+                      strokeOpacity={0.92}
+                      strokeWidth="1.7"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          ) : (
+            <path
+              d={miniMapPath}
+              fill="none"
+              stroke="#94A3B8"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          )}
+
+          {/* Official Circuit DRS Activation Zones */}
+          {drsZones.map((dz) => (
+            <path
+              key={dz.id}
+              d={dz.path}
+              fill="none"
+              stroke={dz.active ? '#34D399' : '#10B981'}
+              strokeOpacity={dz.active ? 0.98 : 0.58}
+              strokeWidth={dz.active ? 4.2 : 2.6}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              filter={dz.active ? 'url(#minimap-glow)' : undefined}
+            />
+          ))}
+
+          {/* Yellow Flag Sector Highlighting (Amber Track Overlay) */}
           {isYellowFlag && (
             <path
               d={miniMapPath}
@@ -152,7 +302,6 @@ export const MiniMap: React.FC<MiniMapProps> = ({
               strokeLinejoin="round"
               strokeLinecap="round"
               filter="url(#yellow-flag-glow)"
-              className="animate-pulse"
             />
           )}
 
@@ -298,7 +447,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
 
         {/* Proximity Radar List Overlay Modal */}
         {showRadarList && (
-          <div className="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-xl rounded-xl p-2.5 flex flex-col gap-1.5 overflow-y-auto text-[10px] text-slate-100 shadow-2xl border border-sky-500/40">
+          <div className="absolute inset-0 z-30 bg-slate-950/96 rounded-xl p-2.5 flex flex-col gap-1.5 overflow-y-auto text-[10px] text-slate-100 shadow-2xl border border-sky-500/40">
             <div className="flex items-center justify-between pb-1 border-b border-white/10 font-display font-bold uppercase text-sky-400">
               <span>Proximity Radar ({closeOpponents.length} Nearby)</span>
               <button
@@ -319,7 +468,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
                     <span className="font-bold text-white">Opponent</span>
                   </div>
                   <span
-                    className={`font-mono-telemetry font-bold ${
+                    className={`font-mono-telemetry font-bold tabular-nums ${
                       car.gapToPlayerSeconds < 0 ? 'text-red-400' : 'text-cyan-300'
                     }`}
                   >
@@ -331,6 +480,30 @@ export const MiniMap: React.FC<MiniMapProps> = ({
           </div>
         )}
       </div>
+
+      {/* Per-Sector Surface Grip Readout & Racing Line Legend */}
+      {showGripHeatmap && (
+        <div className="mt-1 pt-1 border-t border-white/10 flex items-center justify-between gap-1 text-[8px] font-mono-telemetry tabular-nums">
+          {([0, 1, 2] as const).map((idx) => {
+            const gripVal = sectorGripPct[idx] ?? 90;
+            const palette = getGripHeatmapColors(gripVal);
+            const isCurrent = currentSector === idx + 1;
+            return (
+              <div
+                key={`sector-grip-${idx}`}
+                className={`flex-1 flex items-center justify-between px-1.5 py-0.5 rounded border ${
+                  isCurrent ? 'bg-white/10 border-white/30' : 'bg-black/40 border-white/10'
+                }`}
+              >
+                <span className="text-slate-400 font-bold">S{idx + 1}</span>
+                <span className="font-bold" style={{ color: palette.lineColor }}>
+                  {gripVal}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

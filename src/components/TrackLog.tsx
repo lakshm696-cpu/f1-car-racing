@@ -4,8 +4,10 @@ import {
   ChevronDown,
   ChevronUp,
   Cloud,
+  CloudFog,
   CloudLightning,
   CloudRain,
+  CloudSun,
   Moon,
   Sun,
   Sunset,
@@ -46,25 +48,31 @@ interface TrackLogProps {
 
 const WEATHER_SHORT: Record<WeatherMode, string> = {
   day: 'Clear',
+  partly_cloudy: 'Pt. Cloudy',
   sunset: 'Sunset',
   cloudy: 'Overcast',
   rain: 'Rain',
   heavy_rain: 'Storm',
+  fog: 'Foggy',
   night: 'Night',
 };
 
 const WEATHER_COLOR: Record<WeatherMode, string> = {
   day: '#FACC15',
+  partly_cloudy: '#FDE047',
   sunset: '#F97316',
   cloudy: '#94A3B8',
   rain: '#38BDF8',
   heavy_rain: '#818CF8',
+  fog: '#CBD5E1',
   night: '#60A5FA',
 };
 
 const WeatherMiniIcon: React.FC<{ mode: WeatherMode; className?: string }> = ({ mode, className }) => {
   if (mode === 'heavy_rain') return <CloudLightning className={className} />;
   if (mode === 'rain') return <CloudRain className={className} />;
+  if (mode === 'fog') return <CloudFog className={className} />;
+  if (mode === 'partly_cloudy') return <CloudSun className={className} />;
   if (mode === 'cloudy') return <Cloud className={className} />;
   if (mode === 'sunset') return <Sunset className={className} />;
   if (mode === 'night') return <Moon className={className} />;

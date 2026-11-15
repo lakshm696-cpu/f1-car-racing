@@ -2,7 +2,23 @@ export type GameScreen = 'title' | 'drivers' | 'garage' | 'playing' | 'paused' |
 
 export type GameMode = 'quick_race' | 'career' | 'time_trial' | 'championship';
 
-export type WeatherMode = 'day' | 'sunset' | 'cloudy' | 'rain' | 'heavy_rain' | 'night';
+export type WeatherMode =
+  | 'day'
+  | 'partly_cloudy'
+  | 'sunset'
+  | 'cloudy'
+  | 'rain'
+  | 'heavy_rain'
+  | 'fog'
+  | 'night';
+
+export type TimeOfDayMode =
+  | 'morning'
+  | 'midday'
+  | 'afternoon'
+  | 'golden_hour'
+  | 'sunset'
+  | 'night';
 
 export type TransmissionMode = 'auto' | 'manual';
 
@@ -15,7 +31,9 @@ export type CameraMode =
   | 'rear'
   | 'low_track'
   | 'wing_tyre'
-  | 'tv_wide';
+  | 'tv_wide'
+  | 'heli'
+  | 'trackside';
 
 export type GarageCameraPreset = 'overview' | 'front' | 'side' | 'cockpit' | 'rear';
 
@@ -23,7 +41,7 @@ export type PodiumCameraShot = 'auto' | 'wide' | 'winner' | 'trophy' | 'full' | 
 
 export type DifficultyLevel = 'rookie' | 'pro' | 'legend';
 
-export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra' | 'cinematic';
+export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra' | 'extreme' | 'cinematic';
 
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'wet';
 
@@ -79,16 +97,70 @@ export interface WheelFinish {
   roughness: number;
 }
 
+export type CircuitBiome =
+  | 'monza'
+  | 'singapore'
+  | 'alpine'
+  | 'monaco'
+  | 'silverstone'
+  | 'spa'
+  | 'suzuka'
+  | 'las_vegas'
+  | 'abu_dhabi'
+  | 'bahrain'
+  | 'qatar'
+  | 'melbourne';
+
+export interface DrsZoneConfig {
+  id: string;
+  zoneNumber: number;
+  name: string;
+  realLengthMeters: number;
+  detectionT: number;
+  startT: number;
+  endT: number;
+}
+
+export type DrsZoneNotificationType = 'entered' | 'exited' | null;
+
+export interface DrsStateTelemetry {
+  inZone: boolean;
+  zoneNumber: number | null;
+  zoneName: string | null;
+  totalZones: number;
+  zoneLengthMeters: number | null;
+  remainingMeters: number | null;
+  approachingMeters: number | null;
+  approachingZoneName: string | null;
+  approachingZoneNumber: number | null;
+  gapQualified: boolean;
+  disabledByWeather: boolean;
+  notification: DrsZoneNotificationType;
+  notificationZoneNumber: number | null;
+  notificationZoneName: string | null;
+  notificationSeq: number;
+}
+
+export interface MiniMapDrsZone {
+  id: string;
+  zoneNumber: number;
+  path: string;
+  active: boolean;
+}
+
 export interface CircuitTrack {
   id: string;
   name: string;
   country: string;
+  shortCountry?: string;
+  biome?: CircuitBiome;
   lengthKm: number;
   corners: number;
   defaultLaps: number;
   trackWidth: number;
   kerbColorA: string;
   kerbColorB: string;
+  drsZones?: DrsZoneConfig[];
   controlPoints: [number, number, number][];
 }
 
@@ -134,6 +206,15 @@ export type HapticFeedbackLevel = 'off' | 'subtle' | 'full';
 export type SpeedUnitMode = 'kmh' | 'mph';
 export type ReflexLowLatencyMode = 'off' | 'on' | 'boost';
 
+export type TextureQuality = 'medium' | 'high' | 'ultra';
+export type ShadowQuality = 'off' | 'medium' | 'high' | 'ultra' | 'cinematic';
+export type ReflectionQuality = 'off' | 'medium' | 'high' | 'ultra';
+export type AmbientOcclusionQuality = 'off' | 'low' | 'medium' | 'high' | 'ultra';
+export type ParticleDensityQuality = 'low' | 'medium' | 'high' | 'ultra';
+export type AntiAliasingMode = 'off' | 'fxaa' | 'smaa' | 'high';
+export type MotionBlurQuality = 'off' | 'low' | 'medium' | 'high' | 'cinematic';
+export type GraphicsColorCodeMode = 'standard' | 'palette_lut' | 'twilight_neon' | 'carbon_cinema';
+
 export interface GameSettings {
   transmission: TransmissionMode;
   steeringSensitivity: number; // 0.5 - 1.5
@@ -143,12 +224,26 @@ export interface GameSettings {
   cameraMode: CameraMode;
   weather: WeatherMode;
   dynamicWeather: boolean;
+  timeOfDay?: TimeOfDayMode;
+  dynamicTimeOfDay?: boolean;
   totalLaps: number;
   graphicsQuality: GraphicsQuality;
-  targetFps: 30 | 60 | 120;
+  targetFps: 30 | 60 | 120 | 0; // 0 = Uncapped
   motionBlur: boolean;
   absAssist: boolean;
   tcAssist: boolean;
+  // Granular AAA Graphics Settings Engine
+  resolutionScale?: number; // 0.5, 0.75, 1.0, 1.5, 2.0 (200% for extreme/4k supersampling)
+  textureQuality?: TextureQuality;
+  shadowQuality?: ShadowQuality;
+  reflectionQuality?: ReflectionQuality;
+  ambientOcclusion?: AmbientOcclusionQuality;
+  particleDensity?: ParticleDensityQuality;
+  antiAliasing?: AntiAliasingMode;
+  motionBlurLevel?: MotionBlurQuality;
+  graphicsColorCode?: GraphicsColorCodeMode;
+  graphicsColorCodeIntensity?: number; // 0..1 LUT blend intensity
+  pitStrategyPlan?: PreRacePitStrategy;
   // PS5 F1 Game (EA Sports F1 25) Complete Settings Suite
   ps5GraphicsMode?: Ps5GraphicsMode;
   rayTracingQuality?: RayTracingQuality;
@@ -234,6 +329,66 @@ export interface RacerStanding {
   finished: boolean;
 }
 
+export interface PlannedPitStop {
+  id: string;
+  stopNumber: number;
+  pitLap: number;
+  compound: TyreCompound;
+  fuelLoadPct: number;
+}
+
+export interface PreRacePitStrategy {
+  totalLaps: number;
+  startingCompound: TyreCompound;
+  startingFuelPct: number;
+  stops: PlannedPitStop[];
+}
+
+export interface PlannedStopHudStatus extends PlannedPitStop {
+  completed: boolean;
+}
+
+export interface PitStrategyData {
+  pitWindowStartLap: number;
+  pitWindowEndLap: number;
+  isWindowOpen: boolean;
+  recommendedCompound: TyreCompound;
+  estimatedPitLossSec: number;
+  undercutViable: boolean;
+  undercutDeltaSec: number | null;
+  predictedExitPosition: number;
+  tyreDegradationStage: 'fresh' | 'optimal' | 'degrading' | 'cliff';
+  tacticalRadioCall: string | null;
+  startingCompound?: TyreCompound;
+  startingFuelPct?: number;
+  plannedStops?: PlannedStopHudStatus[];
+  nextPlannedStop?: PlannedPitStop | null;
+  estimatedFuelLapsRemaining?: number;
+}
+
+export type ContactPatchState =
+  | 'stick'
+  | 'micro_slip'
+  | 'graining_risk'
+  | 'thermal_blister'
+  | 'macro_slide';
+
+export interface TyreContactPatchTelemetry {
+  trackTemperatureC: number;
+  contactAreaRatio: number; // 0.55..1.15 normalized footprint under aero/mechanical vertical load
+  adhesionRatio: number; // 0..1 fraction of contact patch in static bristle adhesion
+  microSlipRatio: number; // 0..1 combined microscopic bristle deflection & shear slip
+  microSlipPct: number; // 0..100% readout
+  grainingProbabilityPct: number; // 0..100% instantaneous graining probability from sectorGripPct & trackTemperature
+  grainingSeverityPct: number; // 0..100% accumulated surface graining abrasion
+  wheelMicroSlipPct: [number, number, number, number]; // [FL, FR, RL, RR] micro-slip %
+  wheelSurfaceTempC: [number, number, number, number]; // [FL, FR, RL, RR] flash surface temperature (°C)
+  wheelCoreTempC?: [number, number, number, number]; // [FL, FR, RL, RR] bulk carcass/core temperature (°C)
+  patchState: ContactPatchState;
+  gripPenaltyMultiplier: number; // 0.82..1.04 physical grip feedback multiplier
+  wearRateMultiplier: number; // 0.90..1.85 physical wear feedback multiplier
+}
+
 export interface HudTelemetry {
   speedKmh: number;
   rpm: number;
@@ -257,9 +412,13 @@ export interface HudTelemetry {
   bannerMessage: string | null;
   wrongWay: boolean;
   miniMapPath: string;
+  miniMapSectorPaths?: [string, string, string];
+  miniMapRacingLinePaths?: [string, string, string];
   miniMapStart: { x: number; y: number };
   miniMapBlips: MiniMapBlip[];
   miniMapHazards: TrackHazardBlip[];
+  miniMapDrsZones?: MiniMapDrsZone[];
+  drsState: DrsStateTelemetry;
   standings: RacerStanding[];
   cameraMode: CameraMode;
   pitBoardActive: boolean;
@@ -268,7 +427,9 @@ export interface HudTelemetry {
   liveWeather: WeatherMode;
   nextWeather: WeatherMode | null;
   dynamicWeather: boolean;
+  liveTimeOfDay?: TimeOfDayMode;
   trackWetnessPct: number;
+  trackTemperature: number; // Asphalt surface temperature in °C
   surfaceGripPct: number;
   currentSector: 1 | 2 | 3;
   sectorGripPct: [number, number, number];
@@ -277,4 +438,12 @@ export interface HudTelemetry {
   pitStopRemainingSec: number;
   inPitWindow: boolean;
   trackFlag: TrackFlagState;
+  // Realism Upgrade: Real-time G-force physics, pit strategy, and microscopic tyre contact patch calculus
+  gForceLat: number;
+  gForceLong: number;
+  gForceTotal: number;
+  pitStrategy: PitStrategyData;
+  tyreContactPatch?: TyreContactPatchTelemetry;
 }
+
+

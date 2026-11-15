@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Clock,
   Cloud,
+  CloudFog,
   CloudLightning,
   CloudRain,
+  CloudSun,
   Eye,
   Film,
   Globe,
+  Layers,
   Moon,
   Play,
   Settings2,
   ShieldCheck,
   Sun,
+  Sunrise,
   Sunset,
   Trophy,
   UserCheck,
@@ -25,12 +30,15 @@ import {
   F1_WORLD_MAP_PINS,
   F1WorldMapPin,
 } from '../data/racingData';
+import { getCircuitEnvironmentConfig } from '../three/circuitEnvironments';
 import {
   CareerProgress,
   CircuitTrack,
   DriverProfile,
   FormulaTeam,
   GameMode,
+  PreRacePitStrategy,
+  TimeOfDayMode,
   WeatherMode,
 } from '../types/racing';
 
@@ -42,7 +50,10 @@ interface TitleOverlayProps {
   gameMode: GameMode;
   weather: WeatherMode;
   dynamicWeather: boolean;
+  timeOfDay?: TimeOfDayMode;
+  dynamicTimeOfDay?: boolean;
   totalLaps: number;
+  pitStrategyPlan?: PreRacePitStrategy;
   muted: boolean;
   egoHudMode?: boolean;
   onToggleEgoHudMode?: () => void;
@@ -50,10 +61,13 @@ interface TitleOverlayProps {
   onSelectMode: (mode: GameMode) => void;
   onSelectWeather: (weather: WeatherMode) => void;
   onToggleDynamicWeather: () => void;
+  onSelectTimeOfDay?: (tod: TimeOfDayMode) => void;
+  onToggleDynamicTimeOfDay?: () => void;
   onToggleMute: () => void;
   onEnableAudio: () => void;
   onOpenDrivers: () => void;
   onOpenGarage: () => void;
+  onOpenPitStrategy?: () => void;
   onOpenSettings: () => void;
   onJumpTitleScene: (scene: 1 | 2 | 3 | 4 | 5) => void;
   onStartRace: () => void;
@@ -106,7 +120,10 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   gameMode,
   weather,
   dynamicWeather,
+  timeOfDay = 'afternoon',
+  dynamicTimeOfDay = false,
   totalLaps,
+  pitStrategyPlan,
   muted,
   egoHudMode = true,
   onToggleEgoHudMode,
@@ -114,10 +131,13 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   onSelectMode,
   onSelectWeather,
   onToggleDynamicWeather,
+  onSelectTimeOfDay,
+  onToggleDynamicTimeOfDay,
   onToggleMute,
   onEnableAudio,
   onOpenDrivers,
   onOpenGarage,
+  onOpenPitStrategy,
   onOpenSettings,
   onJumpTitleScene,
   onStartRace,
@@ -285,6 +305,19 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             <span>Garage &amp; R&amp;D</span>
           </button>
 
+          {onOpenPitStrategy && (
+            <button
+              type="button"
+              onClick={onOpenPitStrategy}
+              className="px-2.5 py-1.5 rounded-lg border border-amber-400/50 bg-amber-500/15 text-xs font-semibold text-amber-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Layers className="w-3.5 h-3.5 text-amber-300" />
+              <span>
+                Pit Strategy ({totalLaps}L · {pitStrategyPlan?.stops.length ?? 0}-Stop)
+              </span>
+            </button>
+          )}
+
           <div className="hidden md:flex items-center gap-1 bg-white/5 px-1.5 py-1 rounded-lg">
             {TRAILER_SCENES.map((s) => (
               <button
@@ -395,7 +428,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-6">
+    <div className="fixed inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-6 bg-gradient-to-b from-black/25 via-transparent to-black/45">
       {/* TOP BAR: F1 25 Navigation Tabs + Top-Right F1 World Player Status Bar (Tier 50 · Tech Level 929 · Safety Rating A) */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -444,6 +477,16 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               <Wrench className="w-3.5 h-3.5" />
               <span>ENGINEERING &amp; R&amp;D</span>
             </button>
+            {onOpenPitStrategy && (
+              <button
+                type="button"
+                onClick={onOpenPitStrategy}
+                className="px-3 py-1.5 rounded-lg font-display font-bold text-xs tracking-wider text-emerald-300 hover:text-white hover:bg-white/5 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>PIT STRATEGY</span>
+              </button>
+            )}
           </div>
 
           {/* F1 World Top-Right Status Bar (from Screenshot 1) + Audio / Settings */}
@@ -519,8 +562,11 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         {/* Title Lockup & Active Driver/Team Strip (when in Showroom Mode) */}
         {f1WorldTab === 'showroom' && (
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-xl">
-              <div className="flex items-center gap-3 mb-1.5">
+            <div
+              className="max-w-xl rounded-2xl border border-white/10 px-4 py-2.5 shadow-xl"
+              style={{ backgroundColor: 'rgba(9, 11, 15, 0.72)' }}
+            >
+              <div className="flex items-center gap-3 mb-1">
                 <svg width="42" height="20" viewBox="0 0 44 24" fill="none" aria-hidden="true">
                   <path d="M2 18L14 6H42L36 12H18L10 18H2Z" fill="#EF4444" />
                   <path d="M12 20L20 13H40L35 18H19L15 20H12Z" fill="#F8FAFC" />
@@ -535,8 +581,11 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               >
                 Ultimate Formula Racing
               </h1>
-              <p className="text-xs sm:text-sm text-slate-300 mt-1">
+              <p className="text-xs sm:text-sm text-slate-100 mt-1">
                 {selectedDriver.name} (#{selectedDriver.number}) · {selectedTeam.name} · {selectedTrack.name} ({selectedTrack.lengthKm} km)
+              </p>
+              <p className="text-[11px] font-mono-telemetry text-cyan-300 mt-0.5">
+                Environment: {getCircuitEnvironmentConfig(selectedTrack).displayLabel}
               </p>
             </div>
 
@@ -838,18 +887,18 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
 
           {/* Circuit Selector */}
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold tracking-wider text-slate-400">CIRCUIT</span>
-            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+            <span className="text-[10px] font-semibold tracking-wider text-slate-400">CIRCUIT ({CIRCUIT_TRACKS.length})</span>
+            <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg max-w-[540px]">
               {CIRCUIT_TRACKS.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => onSelectTrack(t)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     selectedTrack.id === t.id ? 'bg-white text-slate-950' : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  {t.country}
+                  {t.shortCountry ?? t.country}
                 </button>
               ))}
             </div>
@@ -857,95 +906,161 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
 
           <div className="hidden sm:block w-px h-9 bg-white/10" />
 
-          {/* Weather Selector */}
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold tracking-wider text-slate-400">CONDITIONS</span>
-            <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg flex-wrap">
-              <button
-                type="button"
-                onClick={() => onSelectWeather('day')}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                  weather === 'day' ? 'bg-amber-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Sun className="w-3.5 h-3.5" />
-                <span>Sun</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onSelectWeather('sunset')}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                  weather === 'sunset' ? 'bg-orange-500 text-slate-950' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Sunset className="w-3.5 h-3.5" />
-                <span>Sunset</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onSelectWeather('cloudy')}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                  weather === 'cloudy' ? 'bg-slate-200 text-slate-950' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>Cloudy</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onSelectWeather('rain')}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                  weather === 'rain' ? 'bg-cyan-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <CloudRain className="w-3.5 h-3.5" />
-                <span>Rain</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onSelectWeather('heavy_rain')}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                  weather === 'heavy_rain' ? 'bg-indigo-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <CloudLightning className="w-3.5 h-3.5" />
-                <span>Storm</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onSelectWeather('night')}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
-                  weather === 'night' ? 'bg-sky-400 text-slate-950' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <Moon className="w-3.5 h-3.5" />
-                <span>Night</span>
-              </button>
-              <button
-                type="button"
-                onClick={onToggleDynamicWeather}
-                className={`px-2 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap border ${
-                  dynamicWeather || totalLaps >= 5
-                    ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-300'
-                    : 'border-white/10 text-slate-300 hover:text-white'
-                }`}
-              >
-                <span>Dynamic</span>
-              </button>
+          {/* Weather & Time of Day Selectors */}
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold tracking-wider text-slate-400">CONDITIONS</span>
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('day')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'day' ? 'bg-amber-400 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5" />
+                  <span>Sun</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('partly_cloudy')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'partly_cloudy' ? 'bg-amber-200 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <CloudSun className="w-3.5 h-3.5" />
+                  <span>Pt. Cloudy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('cloudy')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'cloudy' ? 'bg-slate-200 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>Overcast</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('rain')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'rain' ? 'bg-cyan-400 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <CloudRain className="w-3.5 h-3.5" />
+                  <span>Rain</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('heavy_rain')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'heavy_rain' ? 'bg-indigo-400 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <CloudLightning className="w-3.5 h-3.5" />
+                  <span>Storm</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('fog')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'fog' ? 'bg-slate-300 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <CloudFog className="w-3.5 h-3.5" />
+                  <span>Foggy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleDynamicWeather}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap border ${
+                    dynamicWeather || totalLaps >= 5
+                      ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-300'
+                      : 'border-white/10 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <span>Dynamic</span>
+                </button>
+              </div>
             </div>
+
+            {onSelectTimeOfDay && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold tracking-wider text-slate-400">TIME OF DAY</span>
+                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg flex-wrap">
+                  {(
+                    [
+                      { id: 'morning', label: 'Morning', Icon: Sunrise, activeCls: 'bg-sky-300 text-slate-950' },
+                      { id: 'midday', label: 'Midday', Icon: Sun, activeCls: 'bg-amber-300 text-slate-950' },
+                      { id: 'afternoon', label: 'Afternoon', Icon: Clock, activeCls: 'bg-amber-400 text-slate-950' },
+                      { id: 'golden_hour', label: 'Golden Hr', Icon: Sunset, activeCls: 'bg-orange-400 text-slate-950' },
+                      { id: 'sunset', label: 'Sunset', Icon: Sunset, activeCls: 'bg-orange-500 text-slate-950' },
+                      { id: 'night', label: 'Night', Icon: Moon, activeCls: 'bg-indigo-400 text-slate-950' },
+                    ] as const
+                  ).map(({ id, label, Icon, activeCls }) => {
+                    const effectiveTod =
+                      weather === 'night' ? 'night' : weather === 'sunset' ? 'sunset' : timeOfDay;
+                    const isActive = effectiveTod === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => onSelectTimeOfDay(id)}
+                        className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                          isActive ? activeCls : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                  {onToggleDynamicTimeOfDay && (
+                    <button
+                      type="button"
+                      onClick={onToggleDynamicTimeOfDay}
+                      className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap border ${
+                        dynamicTimeOfDay
+                          ? 'border-amber-400/70 bg-amber-500/20 text-amber-300'
+                          : 'border-white/10 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <span>Dynamic TOD</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Start CTA & Control Hint */}
+        {/* Start CTA & Pit Strategy Summary */}
         <div className="flex flex-col items-start lg:items-end gap-2">
-          <button
-            type="button"
-            onClick={onStartRace}
-            className="pointer-events-auto px-7 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold text-base sm:text-lg tracking-wide flex items-center gap-2.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-xl"
-          >
-            <Play className="w-5 h-5 fill-current" />
-            <span>Start Race</span>
-          </button>
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+            {onOpenPitStrategy && (
+              <button
+                type="button"
+                onClick={onOpenPitStrategy}
+                className="px-4 py-3 rounded-xl border border-amber-400/50 bg-[#0E121A]/90 hover:bg-white/10 text-amber-200 hover:text-white font-display font-semibold text-xs sm:text-sm flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap shadow-lg"
+              >
+                <Layers className="w-4 h-4 text-amber-400" />
+                <span>
+                  Pit Strategy · {totalLaps}L ·{' '}
+                  {(pitStrategyPlan?.startingCompound ?? 'medium').slice(0, 1).toUpperCase()} ·{' '}
+                  {pitStrategyPlan?.stops.length ?? 0}-Stop · {pitStrategyPlan?.startingFuelPct ?? 100}% Fuel
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onStartRace}
+              className="px-7 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold text-base sm:text-lg tracking-wide flex items-center gap-2.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-xl"
+            >
+              <Play className="w-5 h-5 fill-current" />
+              <span>Start Race</span>
+            </button>
+          </div>
           <p className="text-xs text-slate-300" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
             WASD / Arrows Drive · Space Overtake ERS/DRS · 1-5 Scenes · H OSD
           </p>
