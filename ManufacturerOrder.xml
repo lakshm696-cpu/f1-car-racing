@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+
+<OrderList>
+	<Manufacturer name="Acura" />
+	<Manufacturer name="Ariel" />
+	<Manufacturer name="Aston Martin" />
+	<Manufacturer name="Audi" />
+	<Manufacturer name="Bentley" />
+	<Manufacturer name="BMW" />
+	<Manufacturer name="Bugatti" />
+	<Manufacturer name="Cadillac" />
+	<Manufacturer name="Caterham" />
+	<Manufacturer name="Chevrolet" />
+	<Manufacturer name="Dodge" />
+	<Manufacturer name="Ferrari" />
+	<Manufacturer name="Ford" />
+	<Manufacturer name="Formula 1" />
+	<Manufacturer name="Formula_E" />
+	<Manufacturer name="Gumpert" />
+	<Manufacturer name="Hennessey" />
+	<Manufacturer name="Holden" />
+	<Manufacturer name="Honda" />
+	<Manufacturer name="Hyundai" />
+	<Manufacturer name="Jaguar" />
+	<Manufacturer name="Koenigsegg" />
+	<Manufacturer name="KTM" />
+	<Manufacturer name="Lamborghini" />
+	<Manufacturer name="Lancia" />
+	<Manufacturer name="Lexus" />
+	<Manufacturer name="Lotus" />
+	<Manufacturer name="Maserati" />
+	<Manufacturer name="Mazda" />
+	<Manufacturer name="McLaren" />
+	<Manufacturer name="Mercedes" />
+	<Manufacturer name="NextEV" />
+	<Manufacturer name="NISSAN" />
+	<Manufacturer name="Pagani" />
+	<Manufacturer name="Porsche" />
+	<Manufacturer name="Renault" />
+	<Manufacturer name="Shelby" />
+	<Manufacturer name="Spada" />
+	<Manufacturer name="SRT" />
+	<Manufacturer name="Toyota" />
+</OrderList>

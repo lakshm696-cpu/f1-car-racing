@@ -1,0 +1,80 @@
+; Animations file
+; =============================
+
+; Format:
+; <png name> <Direction> <Anim type> <Frames> <Time>
+
+; png name: The name of the png to scroll
+
+; <Direction>
+; This represents the direction of the frames, both primary and secondary
+; Must be a combination of [LR, RL, TB, BT]
+; LR = left to right
+; RL = right to left
+; TB = top to bottom
+; BT = bottom to top
+;
+; eg LRTB: frames go from left to right then when it gets to the edge goes down to the next row
+
+; <Anim type>
+; The type of animation, must be one of [S, J]
+; S = Scrolling, the image will scroll smoothly between frames, this only works properly with single row or single column textures
+; J = Jumping, the image will jump from one frame to the next
+
+; <Rows and columns>
+; Two numbers representing rows and columns consecutively
+; - If this is set to 1 1, the whole texture will be shown on the mesh.
+; - If either of these values are greater than one, the image will be divided into that many parts.
+;   For example if rows was set to 2 and columns to 1, the image would be divided into 2 halves
+;   and you would only see half of the image at a time. If the animation type was set
+;   to J (jumping), the animation would jump from the first half to the second, and if
+;   it was S (scrolling) the animation would scroll smoothly between the 2 frames.
+
+; <Time>
+; The total time (in milliseconds) taken to complete an animation cycle
+; Keep in mind that due to the precision of values in the code times that are not a power of 2 may
+; lose a small amount of accuracy.
+
+; NOTES:
+; - Any line starting with a ";" is a comment
+; - All of those flags must be there for each png listed.
+; - Make sure that the UV coords for each animated texture are either 0 or 1.
+;   Which basically means that in max you'll see all the frames on the mesh at once,
+;   and that they'll be squashed up. This allows us to easily add/remove frames later
+;   simply by changing the 'rows and columns' attributes.
+
+; WARNING!!! The following information is probably out of date.
+; *** IMPORTANT ***
+; In motorway, you can load an instance file and turn textures on to view the animations
+; before they go in the game. There's a "Reload Animations" button in motorway which
+; allows you to edit this file, and then reload the animations to see the changes
+; instantly.
+; One thing to be aware of however, is if you do change the animations after you've
+; already saved some M3G's that use those animations, YOU MUST RE EXPORT THOSE M3Gs!!!
+; This is because this animation file is loaded whenever an ase is loaded, and the UV
+; coords inside the model are changed based on this animation data.
+
+; example row: (remove the ";")
+; blue_guide_arrow.png	LRTB J 4 2 8192
+
+T crowd_anim_celeb.png LRTB J 2 4 2000
+T flagswinger_anim.pvr LRTB J 4 2 1000
+T crowd_sitting_celeb.png LRTB J 2 2 1000
+T standing_crowd.pvr LRTB J 2 4 1500
+T flag_anim_beecherton.pvr LRTB J 2 2 1000
+T corona_green_animated_add.pvr LRTB J 2 2 2000 
+T corona_red_animated_add.pvr LRTB J 2 2 2250
+T mckinley_waterfall.pvr BTBT S 1 1 3000
+T fountain_water.pvr BTBT S 1 1 1000
+T animated_traffic_light.pvr LRLR J 2 1 1200
+T animated_traffic_light_hd.pvr LRLR J 2 1 1200
+T prop_chopper_blade_anim.pvr LRTB J 2 2 250
+T corner_arrow_kruger_animated_unlit.pvr LRTB J 1 2 1000
+T anim_camera_flash.pvr LRTB J 8 8 500
+T anim_camera_flash_2.pvr RLBT J 8 8 600
+T anim_camera_flash_3.pvr RLBT J 8 8 540
+T crowd_grandstand_hd_anim.pvr LRTB J 2 2 1200
+T crowd_grandstand_king_hd_anim.pvr LRTB J 2 2 1200
+T corner_arrow_animated_unlit.pvr LRTB J 1 3 1000
+F mat_branding_television_base.pvr 3000
+F mat_branding_television_wide_base.pvr 3000

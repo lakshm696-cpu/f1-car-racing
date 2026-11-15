@@ -1,0 +1,8 @@
+<onlyWIFI>
+    <carrier name="Sprint">
+		<device id="N9810"/>
+	</carrier>
+    <carrier name="Virgin Mobile">
+		<device id="N9810"/>
+	</carrier>
+</onlyWIFI>

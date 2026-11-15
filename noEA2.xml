@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- HOW TO
+
+Devices that match these conditions will NOT have EA2.
+
+See https://confluence.ea.com/display/Firemonkeys/Device+Pattern+Matcher for details
+
+-->
+
+<devices>
+	<deviceId equal="SAMSUNG-SGH-I747" />
+	<deviceId equal="SAMSUNG-SGH-I727" />
+	<deviceId equal="SAMSUNG-SGH-I777" />
+	<deviceId equal="SGH-T989" />
+	<deviceId equal="SGH-i727R" />
+	<deviceId equal="SPH-D710" />
+	<deviceId equal="SPH-D700" />
+	<deviceId equal="GT-I9300" />
+	<deviceId equal="GT-I9100" />
+	<deviceId equal="GT-I9100P" />
+	<deviceId equal="GT-I9100T" />
+	<deviceId equal="GT-I9210T" />
+	<deviceId equal="GT-I9210" />
+	<deviceId equal="SHW-M250S1" />
+	<deviceId equal="SPH-D710VMUB" />
+	<deviceId equal="SPH-D710BST" />
+</devices>

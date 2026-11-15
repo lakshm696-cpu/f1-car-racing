@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- HOW TO
+
+Devices that match these conditions will show a popup warning that there may be issue running the game.
+
+See https://confluence.ea.com/display/Firemonkeys/Device+Pattern+Matcher for details
+
+-->
+<devices>
+	<gpuBrand equal="Adreno">
+		<gpuModel equalOrBelow="225" />
+	</gpuBrand>
+	<gpuBrand equal="Tegra">
+		<gpuModel equalOrBelow="2" />
+	</gpuBrand>
+	<deviceId equal="C5303">
+		<firmware below="4.3" />
+	</deviceId>
+	<deviceId equal="TF700T" />
+	<deviceId equal="falcon_cdma" />
+	<deviceId equal="falcon_umts" />
+	<deviceId equal="falcon_umtsds" />
+	<deviceId equal="cdma_maserati" />
+</devices>

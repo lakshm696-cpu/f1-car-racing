@@ -1,0 +1,354 @@
+<?xml version="1.0"?>
+
+<Streams>
+
+	<!-- HERO SERIES -->
+	<Stream id="0"  align="right"  image="events/map/cards/amatuer/main_event_pure_stock_challenge.png" 		r="255" g="255" b="255" />
+	<Stream id="1"  align="right" image="events/map/cards/amatuer/main_event_street-spec_skirmish.png" 			r="255" g="255" b="255" />
+	<Stream id="2"  align="right"  image="events/map/cards/pro_am/main_event_performance_rumble.png" 			r="255" g="255" b="255" />
+	<Stream id="3"  align="left" image="events/map/cards/pro_am/main_event_everyday_heroes.png" 				r="255" g="255" b="255" />
+	<Stream id="4"  align="right"  image="events/map/cards/expert/main_event_accolade_open.png" 				r="255" g="255" b="255" />
+	<Stream id="5"  align="left" image="events/map/cards/master/main_event_gt3_world_series.png" 				r="255" g="255" b="255" />
+	<Stream id="6"  align="left"  image="events/map/cards/elite/main_event_gt1_grand_tour.png" 				r="255" g="255" b="255" />
+	<Stream id="7"  align="right" image="events/map/cards/pro/main_event_proam_supercar_club.png" 			r="255" g="255" b="255" />
+	<Stream id="8"  align="left"  image="events/map/cards/pro/main_event_supercar_masters_league.png" 		r="255" g="255" b="255" />
+	<Stream id="9"  align="left" image="events/map/cards/elite/main_event_vanguard_challenge.png" 			r="255" g="255" b="255" />
+	<Stream id="10" align="right"  image="events/map/cards/legend/main_event_supercar_elites.png" 				r="255" g="255" b="255" />
+	<Stream id="11" align="left" image="events/map/cards/legend/main_event_zenith_series.png" 					r="255" g="255" b="255" />
+	<Stream id="29" align="left"  image="events/map/cards/pro_am/main_event_v8_naturals.png" 					r="255" g="255" b="255" />
+	<Stream id="30" align="left" image="events/map/cards/elite/main_event_lexus_lfa_showcase_series.png"		r="255" g="255" b="255" />
+	<Stream id="31" align="right"  image="events/map/cards/master/main_event_euro_supercar_club.png"			r="255" g="255" b="255" />
+	<Stream id="32" align="left" image="events/map/cards/expert/main_event_clash_of_titans.png" 				r="255" g="255" b="255" />
+	<Stream id="33" align="left" image="events/map/cards/pro/main_event_classic_detroit_metal.png" 			r="255" g="255" b="255" />
+	<Stream id="37" align="left" image="events/map/cards/elite/main_event_ferrari.png" 						r="255" g="255" b="255" />
+	<Stream id="39" align="right" image="events/map/cards/legend/main_event_spirit_of_ferrari.png" 			r="255" g="255" b="255" />
+	<Stream id="43" align="left" image="events/map/cards/legend/main_event_vertex_series.png" 					r="255" g="255" b="255" />
+	<Stream id="44" align="right" image="events/map/cards/expert/main_event_astonmartin_series.png" 			r="255" g="255" b="255" />
+	<Stream id="46" align="right" image="events/map/cards/master/main_event_open_sky_challenge.png" 			r="255" g="255" b="255" />
+	<Stream id="47" align="right" image="events/map/cards/lemans_event_silverstone.png" 				r="255" g="255" b="255" />
+	<Stream id="48" align="right" image="events/map/cards/lemans_event_spa.png" 						r="255" g="255" b="255" />
+	<Stream id="51" align="left" image="events/map/cards/master/main_event_classic_ferraris.png" 				r="255" g="255" b="255" />
+	<Stream id="53" align="left" image="events/map/cards/missing/main_event_spyders.png" 						r="255" g="255" b="255" />
+	<Stream id="68" align="left" image="events/map/cards/legend/main_event_ferrari_f1_2014.png" 				r="255" g="255" b="255" />
+	<Stream id="80" align="left" image="events/map/cards/legend/main_event_racing_spirit.png" 					r="255" g="255" b="255" />
+	<Stream id="107" align="right" image="events/map/cards/legend/main_event_mclaren_generations.png" 			r="255" g="255" b="255" />
+	<Stream id="129" align="right" image="events/map/cards/nascar/nascar_allstar_nexus.png" 			r="255" g="255" b="255" />
+	<Stream id="187" align="right" image="events/map/cards/elite/main_event_supercars_championship.png" 			r="255" g="255" b="255" />
+	<Stream id="254" align="right" image="events/map/cards/legend/main_event_group_c_championship.png" 			r="255" g="255" b="255" />
+	<Stream id="271" align="right" image="events/map/cards/elite/main_event_supercars_championship_2.png"	r="255" g="255" b="255" />
+	<Stream id="366" align="left" image="events/map/cards/legend/main_event_endurance_legends.png"	r="255" g="255" b="255" xml="EventMapScreen_event_card_large_left_morecars.xml" />
+	<Stream id="415" align="left" image="events/map/cards/legend/main_event_vertex_series.png"	r="255" g="255" b="255" />
+	<Stream id="670" align="left" image="events/map/cards/expert/alt_event_bmw_m2.png" 				r="40" g="95" b="180" />
+	<Stream id="663" align="left" image="events/map/cards/master/alt_event_bmw_m5.png" 				r="120" g="120" b="120" />
+
+	
+	<!-- ALT SERIES -->
+	<Stream id="12" align="left" image="events/map/cards/amatuer/alt_event_road_car_international.png" 		r="51" g="75" b="181" />
+	<Stream id="13" align="left" image="events/map/cards/pro_am/alt_event_v8_performance_brawl.png" 			r="233" g="63" b="62" />
+	<Stream id="14" align="left" image="events/map/cards/legend/alt_event_speed_demons.png" 					r="89" g="155" b="227" />
+	<Stream id="15" align="left" image="events/map/cards/pro/alt_event_v10_showdown_series.png" 			r="63" g="102" b="187" />
+	<Stream id="16" align="left" image="events/map/cards/elite/alt_event_high-rev_rush.png" 						r="241" g="181" b="60" />
+	<Stream id="17" align="left" image="events/map/cards/amatuer/alt_event_6_cyl_annihilation_series.png" 		r="68" g="131" b="201" />
+	<Stream id="18" align="left" image="events/map/cards/elite/alt_event_global_gt_clash.png" 				r="239" g="65" b="59" />
+	<Stream id="19" align="left" image="events/map/cards/pro/alt_event_deutsch_duell.png" 						r="100" g="130" b="160" />
+	<Stream id="20" align="left" image="events/map/cards/pro_am/alt_event_prime_production_matchup.png" 		r="103" g="28" b="95" />
+	<Stream id="21" align="left" image="events/map/cards/master/alt_event_eastwest_throwdown.png"					r="133" g="153" b="163" />
+	<Stream id="22" align="left" image="events/map/cards/pro_am/alt_event_v8_muscle_hustle.png" 				r="182" g="51" b="67" />
+	<Stream id="23" align="left" image="events/map/cards/pro/alt_event_rwd_open_revolution.png" 			r="240" g="179" b="28" />
+	<Stream id="24" align="left" image="events/map/cards/elite/alt_event_12_cyl_slam.png" 					r="57" g="189" b="195" />
+	<Stream id="25" align="left" image="events/map/cards/expert/alt_event_v10_grand_open.png" 					r="245" g="49" b="96" />
+	<Stream id="26" align="left" image="events/map/cards/pro/alt_event_modern_sports_classics.png" 		r="223" g="117" b="61" />
+	<Stream id="27" align="left" image="events/map/cards/pro_am/alt_event_coupe_clash.png" 					r="50" g="116" b="237" />
+	<Stream id="28" align="left" image="events/map/cards/amatuer/alt_event_global_production_pursuit.png" 		r="29" g="82" b="114" />
+	<Stream id="35" align="left" image="events/map/cards/elite/alt_event_the_legend_continues.png"			r="29" g="82" b="114" />
+	<Stream id="36" align="left" image="events/map/cards/elite/alt_event_50_years_of_911.png"				r="239" g="129" b="1"	xml="EventMapScreen_event_card_porsche.xml"/>
+	<Stream id="38" align="left" image="events/map/cards/elite/alt_event_battle_italia.png"					r="191" g="1" b="18" />
+	<Stream id="42" align="left" image="events/map/cards/pro_am/alt_event_power_slide_series.png"				r="9" g="184" b="209" />
+	<Stream id="41" align="left" image="events/map/cards/master/alt_event_grand_tourer_supremacy_series.png"	r="45" g="60" b="73" />
+	<Stream id="40" align="left" image="events/map/cards/legend/alt_event_enzo_ferrari_triumph.png"			r="123" g="16" b="12" />
+	<Stream id="45" align="left" image="events/map/cards/legend/alt_event_allstar_vendetta_series.png"		r="224" g="159" b="2" />
+	<Stream id="49" align="left" image="events/map/cards/legend/alt_event_lmp1_series.png"					r="1" g="28" b="71" />
+	<Stream id="52" align="left" image="events/map/cards/master/alt_event_grip_fiends_series.png"				r="196" g="83" b="0" />
+	<Stream id="54" align="left" image="events/map/cards/legend/alt_event_spider_showdown_series.png"			r="255" g="143" b="39" />
+	<Stream id="58" align="left" image="events/map/cards/legend/alt_event_clash_of_the_classics_series.png"	r="133" g="186" b="81" />
+	<Stream id="59" align="left" image="events/map/cards/expert/alt_event_luxury_tourer_series.png"			r="163" g="28" b="18" />
+	<Stream id="60" align="left" image="events/map/cards/master/alt_event_maserati_world_tour_series.png"		r="207" g="1" b="36" />
+	<Stream id="62" align="left" image="events/map/cards/legend/alt_event_hybrid_hypercar_series.png"			r="142" g="3" b="3" />
+	<Stream id="66" align="left" image="events/map/cards/master/alt_event_ferrari_f1_1951.png"				r="194" g="40" b="28" />
+	<Stream id="67" align="left" image="events/map/cards/legend/alt_event_ferrari_f1_1995_2014.png"			r="194" g="40" b="28" />
+	<Stream id="72" align="left" image="events/map/cards/pro/alt_event_eagle_series.png"					r="183" g="141" b="2" />
+	<Stream id="73" align="left" image="events/map/cards/expert/alt_event_spada_series.png"					r="229" g="112" b="18" />
+	<Stream id="76" align="left" image="events/map/cards/expert/alt_event_track_aces.png"						r="35" g="46" b="50" />
+	<Stream id="77" align="left" image="events/map/cards/legend/alt_event_masters_of_speed.png"				r="17" g="60" b="41" />
+	<Stream id="79" align="left" image="events/map/cards/pro_am/alt_event_hot_hatch_hustle.png"				r="245" g="160" b="5" />	
+	<Stream id="81" align="left" image="events/map/cards/pro/alt_event_renault_dezir_global_passion.png"	r="55" g="5" b="10" />
+	<Stream id="84" align="left" image="events/map/cards/legend/alt_event_endurance_kings_2015.png"			r="160" g="30" b="30" />
+	<Stream id="89" align="left" image="events/map/cards/legend/alt_event_concept_car_clash.png"			r="212" g="63" b="0" />
+	<Stream id="90" align="left" image="events/map/cards/master/alt_event_boxster_series.png"			r="147" g="11" b="11" />
+	<Stream id="95" align="left" image="events/map/cards/nascar/alt_event_nascar_preseason.png" 				r="50" g="88" b="124"/>
+	<Stream id="96" align="left" image="events/map/cards/nascar/alt_event_nascar_team_penske.png"			r="228" g="172" b="0" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="97" align="left" image="events/map/cards/nascar/alt_event_nascar_joe_gibbs_racing.png"			r="144" g="172" b="0" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="98" align="left" image="events/map/cards/nascar/alt_event_nascar_stewart_haas_racing.png"			r="255" g="132" b="96" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="99" align="left" image="events/map/cards/nascar/alt_event_nascar_hendrick_motorsports.png"			r="34" g="131" b="44" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="108" align="left" image="events/map/cards/legend/alt_event_high_tech_legends.png"			r="206" g="160" b="0" />
+	<Stream id="109" align="left" image="events/map/cards/elite/alt_event_international_powermatch.png"			r="210" g="97" b="2" />
+	<Stream id="115" align="left" image="events/map/cards/legend/alt_event_hypercar_charge.png"			r="57" g="64" b="110" />
+	<Stream id="121" align="left" image="events/map/cards/expert/alt_event_muscle_and_prestige.png"			r="253" g="173" b="0" />
+	<Stream id="130" align="left" image="events/map/cards/nascar/alt_event_nascar_richard_petty_champion_cup.png"			r="0" g="125" b="178" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="131" align="left" image="events/map/cards/nascar/alt_event_nascar_daytona500_penske.png"			r="40" g="81" b="232" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="132" align="left" image="events/map/cards/nascar/alt_event_nascar_daytona500_joe_gibbs.png"			r="255" g="174" b="0" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="133" align="left" image="events/map/cards/nascar/alt_event_nascar_daytona500_hendrick.png"			r="190" g="25" b="25" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="134" align="left" image="events/map/cards/nascar/alt_event_nascar_daytona500_stewart_haas.png"			r="80" g="25" b="10" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="122" align="left" image="events/map/cards/legend/alt_event_del_toro.png"			r="47" g="57" b="66"/>
+	<Stream id="141" align="left" image="events/map/cards/pro/alt_event_vintage_rwd_tour.png"			r="48" g="134" b="200"/>
+	<Stream id="142" align="left" image="events/map/cards/master/alt_event_hommage_r_series.png"			r="48" g="134" b="200"/>
+	<Stream id="143" align="left" image="events/map/cards/legend/alt_event_venom_series.png"			r="115" g="115" b="115"/>
+	<Stream id="155" align="left" image="events/map/cards/elite/alt_event_automotive_mastery.png"			r="98" g="103" b="104"/>
+	<Stream id="151" align="left" image="events/map/cards/legend/alt_event_gte_pro_ford_vs_ferrari.png"			r="154" g="32" b="24"/>
+	<Stream id="152" align="left" image="events/map/cards/legend/alt_event_gte_pro_chevrolet_vs_porsche.png"			r="255" g="165" b="0"/>
+	<Stream id="160" align="left" image="events/map/cards/elite/alt_event_exos_experience.png"			r="123" g="99" b="41"/>
+	<Stream id="161" align="left" image="events/map/cards/legend/alt_event_italian_prime.png"			r="193" g="19" b="11"/>
+	<Stream id="162" align="left" image="events/map/cards/master/alt_event_open_sky_challenge_2_series.png"			r="50" g="130" b="94"/>
+	<Stream id="163" align="left" image="events/map/cards/master/alt_event_6_cyl_mastery_series.png"			r="82" g="83" b="78"/>
+	<Stream id="174" align="left" image="events/map/cards/expert/alt_event_hellcat.png"			r="62" g="110" b="41"/>
+	<Stream id="175" align="left" image="events/map/cards/legend/alt_event_xj220.png"			r="29" g="58" b="59"/>
+	<Stream id="176" align="left" image="events/map/cards/elite/alt_event_jaguar_ftype_svr.png"			r="204" g="83" b="29"/>
+	<Stream id="177" align="left" image="events/map/cards/expert/alt_event_carrera_s.png"			r="25" g="74" b="134"/>
+	<Stream id="178" align="left" image="events/map/cards/pro/alt_event_etype.png"	r="82" g="83" b="78"/>
+	<Stream id="188" align="left" image="events/map/cards/elite/alt_event_track_thrillers.png"			r="240" g="175" b="60"/>
+	<Stream id="189" align="left" image="events/map/cards/elite/alt_event_supercars_altima_power_play.png"	r="230" g="0" b="20"/>
+	<Stream id="190" align="left" image="events/map/cards/elite/alt_event_holden_vs_ford.png"	r="9" g="43" b="59"/>
+	<Stream id="198" align="left" image="events/map/cards/legend/alt_event_cutting_edge.png"			r="20" g="30" b="45"/>
+	<Stream id="199" align="left" image="events/map/cards/elite/alt_event_road_masters.png"	r="125" g="195" b="75"/>
+	<Stream id="200" align="left" image="events/map/cards/elite/alt_event_grand_adventure.png"	r="241" g="170" b="32"/>
+	<Stream id="214" align="left" image="events/map/cards/elite/alt_event_allout_attack.png"	r="241" g="170" b="32"/>
+	<Stream id="216" align="left" image="events/map/cards/master/alt_event_formulae_showcase.png"	r="186" g="19" b="9"/>
+	<Stream id="217" align="left" image="events/map/cards/master/alt_event_ecollect.png"	r="10" g="56" b="130"/>
+	<Stream id="223" align="left" image="events/map/cards/pro_am/alt_event_hot_hatch_hustle_2.png"	r="0" g="60" b="120"/>
+	<Stream id="225" align="left" image="events/map/cards/elite/alt_event_r3_spec_lamborghini_huracan.png"	r="178" g="147" b="0"/>
+	<Stream id="226" align="left" image="events/map/cards/elite/alt_event_r3_spec_ford_shelby_gt350r.png"	r="105" g="110" b="115"/>
+	<Stream id="231" align="left" image="events/map/cards/legend/alt_event_hypercar_club.png"	r="255" g="190" b="40"/>
+	<Stream id="234" align="left" image="events/map/cards/expert/alt_event_cayman_718_series.png"	r="207" g="59" b="30"/>
+	<Stream id="232" align="left" image="events/map/cards/nascar/alt_event_nascar_danica_patrick.png"	r="21" g="56" b="123" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="233" align="left" image="events/map/cards/nascar/alt_event_nascar_jimmie_johnsons.png"	r="14" g="71" b="140" xml="EventMapScreen_event_card_singlecar.xml"/>
+	<Stream id="241" align="left" image="events/map/cards/pro/alt_event_nissan_skyline_BNR32.png"					r="5" g="85" b="145" />
+	<Stream id="245" align="left" image="events/map/cards/pro_am/alt_event_skyline_kpgc10.png"					r="195" g="95" b="0" />
+	<Stream id="238" align="left" image="events/map/cards/master/alt_event_mid_range_series.png"			r="15" g="140" b="205"/>
+	<Stream id="252" align="left" image="events/map/cards/legend/alt_event_group_c_jaguar_XJR-9_legends.png"	r="100" g="35" b="155"/>
+	<Stream id="253" align="left" image="events/map/cards/legend/alt_event_mazda_787B_series.png"	r="5" g="105" b="205"/>
+	<Stream id="255" align="left" image="events/map/cards/legend/alt_event_2017_rsr.png"	r="220" g="65" b="0"/>
+	<Stream id="262" align="left" image="events/map/cards/elite/alt_event_jaguar_cx75.png"	r="145" g="7" b="20"/>
+	<Stream id="264" align="left" image="events/map/cards/pro/alt_event_rx-7.png"	r="230" g="185" b="20"/>
+	<Stream id="263" align="left" image="events/map/cards/pro_am/alt_event_rx-3.png"	r="140" g="2" b="2"/>
+	<Stream id="265" align="left" image="events/map/cards/legend/alt_event_furai.png"	r="190" g="55" b="0"/>
+	<Stream id="272" align="left" image="events/map/cards/elite/alt_event_holden_v8_2017.png"		r="2" g="75" b="95"/>
+	<Stream id="273" align="left" image="events/map/cards/elite/alt_event_ford_v8_2017.png"		r="165" g="5" b="0"/>
+	<Stream id="275" align="left" image="events/map/cards/elite/alt_event_mclaren_720s.png"		r="210" g="95" b="5"/>
+	<Stream id="283" align="left" image="events/map/cards/expert/alt_event_vantage_amr_pro.png"		r="120" g="170" b="5"/>
+	<Stream id="284" align="left" image="events/map/cards/legend/alt_event_one_77.png"		r="65" g="65" b="70"/>
+	<Stream id="282" align="left" image="events/map/cards/elite/alt_event_jaguar_ex_xv_project_8.png"		r="195" g="75" b="10"/>
+	<Stream id="291" align="left" image="events/map/cards/expert/alt_event_silvia_r3_spec.png"		r="226" g="165" b="39"/>
+	<Stream id="292" align="left" image="events/map/cards/elite/alt_event_super_trofeo_2017.png"		r="250" g="180" b="0"/>
+	<Stream id="295" align="left" image="events/map/cards/legend/alt_event_mp44_historia_series.png"		r="208" g="14" b="18"/>
+	<Stream id="298" align="left" image="events/map/cards/elite/alt_event_lamborghini_performante.png"		r="3" g="75" b="15"/>
+	<Stream id="304" align="left" image="events/map/cards/elite/alt_event_2017_ford_gt.png"		r="5" g="60" b="120"/>
+	<Stream id="330" align="left" image="events/map/cards/legend/alt_event_2017_aston_martin_gte.png"	r="130" g="160" b="6"/>
+	<Stream id="316" align="left" image="events/map/cards/pro/alt_event_camaro_ss_1967.png"					r="170" g="15" b="15" />
+	<Stream id="317" align="left" image="events/map/cards/pro/alt_event_camaro_ss_2017.png"					r="195" g="85" b="5" />
+	<Stream id="338" align="left" image="events/map/cards/elite/alt_event_812_superfast.png"		r="150" g="20" b="15"/>
+	<Stream id="337" align="left" image="events/map/cards/master/alt_event_ferrari_j50.png"		r="200" g="145" b="35"/>
+	<Stream id="336" align="left" image="events/map/cards/expert/alt_event_ferrari_f430.png"		r="20" g="50" b="110"/>
+	<Stream id="335" align="left" image="events/map/cards/legend/alt_event_testarossa.png"		r="150" g="20" b="30"/>
+	<Stream id="373" align="left" image="events/map/cards/legend/alt_event_porsche_959_sport.png"		r="60" g="75" b="85"/>
+	<Stream id="372" align="left" image="events/map/cards/pro_am/alt_event_190_evo.png"		r="15" g="15" b="15"/>
+	<Stream id="391" align="left" image="events/map/cards/legend/alt_event_essential_pagani.png"		r="00" g="164" b="201"/>
+	<Stream id="392" align="left" image="events/map/cards/elite/alt_event_600lt.png"		r="25" g="55" b="95"/>
+	<Stream id="408" align="left" image="events/map/cards/elite/alt_event_porsche_ascendancy.png"		r="70" g="75" b="85"/>
+	<Stream id="413" align="left" image="events/map/cards/master/alt_event_mountain_spider.png"		r="5" g="80" b="25"/>
+	<Stream id="433" align="left" image="events/map/cards/master/alt_event_718_rsk.png"		r="135" g="135" b="125"/>
+	<Stream id="456" align="left" image="events/map/cards/legend/alt_event_fxx-k_evo.png"		r="205" g="155" b="25"/>
+	<Stream id="446" align="left" image="events/map/cards/pro_am/alt_event_nissan_300zx_z32.png"		r="30" g="75" b="45"/>
+	<Stream id="447" align="left" image="events/map/cards/pro/alt_event_nissan_350z_z33.png"		r="115" g="25" b="25"/>
+	<Stream id="448" align="left" image="events/map/cards/master/alt_event_nissan_gtr_nismo_r35.png"		r="135" g="25" b="25"/>
+	<Stream id="468" align="left" image="events/map/cards/master/alt_event_gts_r34_r3spec.png"		r="25" g="95" b="165"/>
+	<Stream id="467" align="left" image="events/map/cards/elite/alt_event_gtr_r35_r3spec.png"		r="150" g="20" b="25"/>
+	<Stream id="507" align="left" image="events/map/cards/pro_am/alt_event_honda_s2000.png"		r="120" g="120" b="115"/>
+	<Stream id="508" align="left" image="events/map/cards/pro/alt_event_nissan_nsx_r.png"		r="130" g="130" b="135"/>
+	<Stream id="529" align="left" image="events/map/cards/legend/alt_event_chiron_showcase.png"		r="10" g="40" b="85"/>
+	<Stream id="531" align="left" image="events/map/cards/expert/alt_event_autobahn_aces.png"	r="10" g="45" b="80"/>
+	<Stream id="532" align="left" image="events/map/cards/legend/alt_event_clash_of_icons.png" 			r="115" g="115" b="115" />
+	<Stream id="540" align="left" image="events/map/cards/legend/alt_event_tribute_tour.png" 			r="249" g="64" b="59" />
+	<Stream id="548" align="left" image="events/map/cards/elite/alt_event_spirit_of_59.png" 			r="80" g="110" b="22" />
+	<Stream id="575" align="left" image="events/map/cards/elite/alt_event_road_to_gt3.png" 			r="125" g="195" b="75" />
+	<Stream id="574" align="left" image="events/map/cards/legend/alt_event_masters_of_the_track.png" 			r="255" g="69" b="8" />
+	<Stream id="573" align="left" image="events/map/cards/elite/alt_event_maximum_performance.png" 			r="115" g="115" b="115" />
+	<Stream id="592" align="left" image="events/map/cards/expert/alt_event_ferrari_360_modena_592.png" 			r="120" g="15" b="15" />
+	<Stream id="595" align="left" image="events/map/cards/pro/alt_event_ferrari_500_trc_595.png" 			r="120" g="15" b="15" />
+	<Stream id="590" align="left" image="events/map/cards/elite/alt_event_track_power_trio.png" 			r="145" g="7" b="20" />
+	<Stream id="612" align="left" image="events/map/cards/elite/alt_event_super_speed_factor.png" 			r="10" g="130" b="35" />
+	<Stream id="613" align="left" image="events/map/cards/legend/alt_event_lamborghini_legends.png" 			r="185" g="140" b="15" />
+	<Stream id="654" align="left" image="events/map/cards/legend/alt_event_agera_rs_showcase.png"		r="180" g="75" b="35"/>
+	<Stream id="655" align="left" image="events/map/cards/pro_am/alt_event_vtec_for_victory.png"		r="245" g="160" b="5"/>
+
+	<!-- CAREER QUESTS -->	
+	<Stream id="50"  align="right"  image="events/map/cards/legend/quest_lemans.png" 							r="255" g="255" b="255" /> <!-- LeMans -->
+	<Stream id="55"  align="right"  image="events/map/cards/elite/quest_speedrush.png" 							r="255" g="255" b="255" /> <!-- Speedrush -->
+	<Stream id="56"  align="right"  image="events/map/cards/amatuer/quest_bootcamp.png" 						r="255" g="255" b="255" /> <!-- Racing School Advanced -->
+	<Stream id="61"  align="right"  image="events/map/cards/expert/quest_maserati.png" 							r="255" g="255" b="255" /> <!-- Marquis -->
+	<Stream id="63"  align="right"  image="events/map/cards/master/quest_redline.png" 							r="255" g="255" b="255" /> <!-- Redline Origins -->
+	<Stream id="64"  align="right"  image="events/map/cards/legend/quest_motorfiesta.png" 						r="255" g="255" b="255" /> <!-- Motorfiesta -->
+
+
+	<!-- EXCLUSIVE SERIES -->	
+	<Stream id="169"  image="events/exclusive/cards/exclusive_series_card_ferrari_fxxk.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="170"  image="events/exclusive/cards/exclusive_series_card_ariel_atom_v8.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="171"  image="events/exclusive/cards/exclusive_series_card_jaguar_ftype_svr.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="172"  image="events/exclusive/cards/exclusive_series_card_bmw_m3_gts.png" 				xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="173"  image="events/exclusive/cards/exclusive_series_card_nissan_skyline.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="193"  image="events/exclusive/cards/exclusive_series_card_ferrari_f12tdf.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="194"  image="events/exclusive/cards/exclusive_series_card_koenigsegg_regera.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="195"  image="events/exclusive/cards/exclusive_series_card_lamborghini_gallardo.png" 	xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="204"  image="events/exclusive/cards/exclusive_series_card_mclaren_mp4x.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="205"  image="events/exclusive/cards/exclusive_series_card_mclaren_p1_gtr.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="206"  image="events/exclusive/cards/exclusive_series_card_audi_r8_lms_ultra.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="213"  image="events/exclusive/cards/exclusive_series_card_mercedes_amg_gt3.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="212"  image="events/exclusive/cards/exclusive_series_card_porsche_918_rsr.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="224"  image="events/exclusive/cards/exclusive_series_card_aston_martin_vantage.png" 	xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="239"  image="events/exclusive/cards/exclusive_series_card_ferrari_f14t.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="246"  image="events/exclusive/cards/exclusive_series_card_koenigsegg_one.png"			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="259"  image="events/exclusive/cards/exclusive_series_card_mazda_rx-7.png" 				xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="274"  image="events/exclusive/cards/exclusive_series_card_mazda_furai.png" 				xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="277"  image="events/exclusive/cards/exclusive_series_card_mclaren_720s.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="278"  image="events/exclusive/cards/exclusive_series_card_bugatti_veyron.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="290"  image="events/exclusive/cards/exclusive_series_card_lefarrari.png" 				xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="289"  image="events/exclusive/cards/exclusive_series_card_astonmartin_amrpro.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="306"  image="events/exclusive/cards/exclusive_series_card_astonmartin_one77.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="307"  image="events/exclusive/cards/exclusive_series_card_ford_gt.png" 					xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="314"  image="events/exclusive/cards/exclusive_series_card_lotus_type125.png" 			xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="315"  image="events/exclusive/cards/exclusive_series_card_nissan_silvia_r3.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="340"  image="events/exclusive/cards/exclusive_series_card_mclaren_mp44.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="341"  image="events/exclusive/cards/exclusive_series_card_astonmartin_gte.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="352"  image="events/exclusive/cards/exclusive_series_card_ferarri_testarossa.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="353"  image="events/exclusive/cards/exclusive_series_card_lamborghini_huracan_performante.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="356"  image="events/exclusive/cards/exclusive_series_card_porsche_911gt1.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="357"  image="events/exclusive/cards/exclusive_series_card_ferrari_812superfast.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="400"  image="events/exclusive/cards/exclusive_series_card_mercedes_evo2.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="401"  image="events/exclusive/cards/exclusive_series_card_mercedes_c11.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="406"  image="events/exclusive/cards/exclusive_series_card_pagani_huayrabc.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="407"  image="events/exclusive/cards/exclusive_series_card_porsche_936.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="436"  image="events/exclusive/cards/exclusive_series_card_bmw_m1_1981.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="435"  image="events/exclusive/cards/exclusive_series_card_porsche_911_gt2_rs.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="457"  image="events/exclusive/cards/exclusive_series_card_ferrari_fxx-k_evo.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="458"  image="events/exclusive/cards/exclusive_series_card_nissan_370z_nismo_z34.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="474"  image="events/exclusive/cards/exclusive_series_card_nissan_240z_r3.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="475"  image="events/exclusive/cards/exclusive_series_card_nissan_r35_nismo_r3.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="485"  image="events/exclusive/cards/exclusive_series_card_hennessey_vemon.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="486"  image="events/exclusive/cards/exclusive_series_card_mercedes_clklm.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="501"  image="events/exclusive/cards/exclusive_series_card_dodge_hellcat.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="502"  image="events/exclusive/cards/exclusive_series_card_lamborghini_centenario.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="517"  image="events/exclusive/cards/exclusive_series_card_jaguar_cx75.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="518"  image="events/exclusive/cards/exclusive_series_card_honda_nsxr.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="528"  image="events/exclusive/cards/exclusive_series_card_bugatti_chiron_sport.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="539"  image="events/exclusive/cards/exclusive_series_card_bugatti_veyron_gsv.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="552"  image="events/exclusive/cards/exclusive_series_card_renault_rs01.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="551"  image="events/exclusive/cards/exclusive_series_card_porsche_919_evo.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="568"  image="events/exclusive/cards/exclusive_series_card_lamborghini_veneno.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="569"  image="events/exclusive/cards/exclusive_series_card_ferrari_enzo.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="583"  image="events/exclusive/cards/exclusive_series_card_mclaren_650s_gt3.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="587"  image="events/exclusive/cards/exclusive_series_card_porsche_911_gt2_rs_clubsport.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="614"  image="events/exclusive/cards/exclusive_series_card_pagani_zondar.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="615"  image="events/exclusive/cards/exclusive_series_card_ferrari_f8_tributo.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="652"  image="events/exclusive/cards/exclusive_series_card_jaguar_xj220.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="648"  image="events/exclusive/cards/exclusive_series_card_lamborghini_aventador_svj.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="661"  image="events/exclusive/cards/exclusive_series_card_agera_rs.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+	<Stream id="662"  image="events/exclusive/cards/exclusive_series_card_astonmartin_vulcan.png" 		xml="exclusive_series/exclusive_series_card_item.xml" />
+
+
+	<!-- MOTORSPORTS SERIES -->
+	<Stream id="625" image="events/motorsport/formula_1/season_group_2019_formula1_card.png" />
+	<Stream id="636" image="events/motorsport/formula_1/safety_car_series_card.png" />
+	
+	<!-- F1: Exclusive Series -->
+	<Stream id="634" image="events/motorsport/formula_1/invitational_series/mclaren_mcl34.png" />
+	<Stream id="633" image="events/motorsport/formula_1/invitational_series/alfa_romeo.png" />
+	<Stream id="631" image="events/motorsport/formula_1/invitational_series/amg_f1_w10_eqpower.png" />
+	<Stream id="632" image="events/motorsport/formula_1/invitational_series/haas_vf-19.png" />
+	<Stream id="645" image="events/motorsport/formula_1/invitational_series/racing_point.png" />
+	<Stream id="629" image="events/motorsport/formula_1/invitational_series/red_bull.png" />
+	<Stream id="628" image="events/motorsport/formula_1/invitational_series/renault.png" />
+	<Stream id="647" image="events/motorsport/formula_1/invitational_series/scuderia_ferrari.png" />
+	<Stream id="630" image="events/motorsport/formula_1/invitational_series/toro_rosso.png" />
+	<Stream id="646" image="events/motorsport/formula_1/invitational_series/williams_fw42.png" />
+	
+	
+	<!-- NASCAR -->
+	<Stream id="138" image="events/map/cards/motorsports/nascar/motorsports_nascar_academy_series_card_unlock.png" 						 xml="exclusive_series/exclusive_series_quest_card.xml" />
+	<Stream id="320" image="events/map/cards/motorsports/nascar/motorsports_nascar_talent_tour_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_talent_tour_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="324" image="events/map/cards/motorsports/nascar/motorsports_nascar_season_2018_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_2018_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="323" image="events/map/cards/motorsports/nascar/motorsports_nascar_season_2017_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_2017_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="322" image="events/map/cards/motorsports/nascar/motorsports_nascar_season_2016_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_2016_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="321" image="events/map/cards/motorsports/nascar/motorsports_nascar_season_2015_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_2015_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="476" image="events/map/cards/motorsports/nascar/motorsports_nascar_exhibition_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="477" image="events/map/cards/motorsports/nascar/motorsports_nascar_2019_season_series_card_unlock.png" image_vertical="events/motorsport/nascar/motorsports_nascar_2019_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	
+	
+	<!-- FORMULA E -->
+	<Stream id="318" image="events/map/cards/motorsports/formula_e/motorsports_formula_e_season_2016-17_series_card_unlock.png" image_vertical="events/motorsport/formula_e/motorsports_formula_e_2016-17_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="358" image="events/map/cards/motorsports/formula_e/motorsports_formula_e_season_4_series_card_unlock.png" image_vertical="events/motorsport/formula_e/motorsports_formula_e_season_4_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="359" image="events/map/cards/motorsports/formula_e/motorsports_formula_e_season_5_series_card_unlock.png" image_vertical="events/motorsport/formula_e/motorsports_formula_e_season_5_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="360" image="events/map/cards/motorsports/formula_e/motorsports_formula_e_exhibition_series_card_unlock.png" image_vertical="events/motorsport/formula_e/motorsports_formula_e_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" /> <!-- exhibition -->
+	
+	
+	<!-- Endurance GT -->
+	<Stream id="342" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_1998_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_1998_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="412" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_2012_2015_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_2012_2015_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="411" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_2016_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_2016_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="343" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_2017_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_2017_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="344" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_2018_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_2018_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="376" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_intro_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_intro_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="536" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_2019_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_2019_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="596" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_1989_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_1989_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="597" image="events/map/cards/motorsports/endurance_gt/motorsports_endurance_gt_1962_series_card_unlock.png" image_vertical="events/motorsport/endurance_gt/motorsports_endurance_gt_1962_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+
+
+	<!-- Endurance Prototypes -->
+	<Stream id="345" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_1970_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_1970_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="361" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_1988_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_1988_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="362" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_1991_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_1991_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="365" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_2014_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_2014_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="377" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_intro_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_intro_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />	
+	<Stream id="380" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_1977_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_1977_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />	
+	<Stream id="535" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_1984_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_1984_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="381" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_2015_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_2015_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="580" image="events/map/cards/motorsports/endurance_prototypes/motorsports_endurance_prototypes_1979_series_card_unlock.png" image_vertical="events/motorsport/endurance_prototypes/motorsports_endurance_prototypes_1979_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+
+
+	<!-- SUPERCARS -->
+	<Stream id="402" image="events/map/cards/motorsports/supercars/motorsports_supercars_2018_series_card_unlock.png" image_vertical="events/motorsport/supercars/motorsports_supercars_2018_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="403" image="events/map/cards/motorsports/supercars/motorsports_supercars_2017_series_card_unlock.png" image_vertical="events/motorsport/supercars/motorsports_supercars_2017_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="404" image="events/map/cards/motorsports/supercars/motorsports_supercars_2016_series_card_unlock.png" image_vertical="events/motorsport/supercars/motorsports_supercars_2016_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="405" image="events/map/cards/motorsports/supercars/motorsports_supercars_exhibition_series_card_unlock.png" image_vertical="events/motorsport/supercars/motorsports_supercars_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" /> <!-- exhibition -->
+
+
+	<!-- EUROTRACK MASTERS -->
+	<Stream id="414" image="events/map/cards/motorsports/euro_track_masters/motorsports_euro_track_masters_2016_2017_series_card_unlock.png" image_vertical="events/motorsport/euro_track_masters/motorsports_euro_track_masters_2016_2017_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="421" image="events/map/cards/motorsports/euro_track_masters/motorsports_euro_track_masters_exhibition_series_card_unlock.png" image_vertical="events/motorsport/euro_track_masters/motorsports_euro_track_masters_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+
+
+	<!-- IMSA GTD -->
+	<Stream id="484" image="events/map/cards/motorsports/imsa/motorsports_imsa_2018_season_series_card_unlock.png" image_vertical="events/motorsport/imsa/motorsports_imsa_2018_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="479" image="events/map/cards/motorsports/imsa/motorsports_imsa_exhibition_series_card_unlock.png" image_vertical="events/motorsport/imsa/motorsports_imsa_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+
+
+	<!-- IMSA DPi -->
+	<Stream id="504" image="events/map/cards/motorsports/imsa_dpi/motorsports_imsa_dpi_exhibition_series_card_unlock.png" image_vertical="events/motorsport/imsa_dpi/motorsports_imsa_dpi_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="505" image="events/map/cards/motorsports/imsa_dpi/motorsports_imsa_dpi_2018_season_series_card_unlock.png" image_vertical="events/motorsport/imsa_dpi/motorsports_imsa_dpi_2018_season_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+
+
+	<!-- GT4 -->
+	<Stream id="555" image="events/map/cards/motorsports/gt4/motorsports_gt4_exhibition_series_card_unlock.png" image_vertical="events/motorsport/gt4/motorsports_gt4_exhibition_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+	<Stream id="554" image="events/map/cards/motorsports/gt4/motorsports_gt4_2019_series_card_unlock.png" image_vertical="events/motorsport/gt4/motorsports_gt4_2019_series_card.png" xml="motorsports/nascar/motorsports_nascar_series_card.xml" />
+
+
+
+</Streams>

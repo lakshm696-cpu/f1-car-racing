@@ -1,0 +1,323 @@
+<?xml version="1.0"?>
+
+<!---------------------------------------------------------------------------------------------------------------------------->
+<!----------------------------------------------------- TRANSITIONS ---------------------------------------------------------->
+<!---------------------------------------------------------------------------------------------------------------------------->
+<Cutscenes>
+<!-- INDIANAPOLIS TRACK SCENE -->
+<!-- INTRO WHEN GAME IS STARTED, FIRST TIME ONLY -->
+	<Cutscene name="GameIntro" to="Loop_MapScreen" banim="Tracks/Menu/processed/menu_intro.banim">
+		<KeyFrame start="0" end="190"/>
+	</Cutscene>
+
+<!-- INTRO SCREEN -->
+	<Cutscene name="IntroScreen" to="Loop_IntroScreen" banim="Tracks/Menu/processed/menu_intro.banim">
+		<KeyFrame start="0" end="20"/>
+	</Cutscene>
+
+<!-- INTRO BACK TO MAP -->	
+	<Cutscene name="GameIntro2" to="Loop_MapScreen" banim="Tracks/Menu/processed/menu_intro.banim">
+		<KeyFrame start="21" end="190"/>
+	</Cutscene>
+	
+<!-- MAP MENU TO EVENTS "close ups of the car" -->
+	<Cutscene name="EventsScreen" to="Loop_Events" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="40"/>
+	</Cutscene>
+	
+<!-- EVENTS TO SELECT CAR "side view of all cars, camera pans down" -->
+	<Cutscene name="SelectCarScreen" to="Loop_CarSelect" banim="Tracks/Menu/processed/menu_carselect_transition.banim">
+		<KeyFrame start="0" end="90"/>
+	</Cutscene>
+	
+<!-- EVENTS TO SELECT CAR "side view of all cars, camera pans down" -->
+	<Cutscene name="SelectCarScreenTimetrial" to="Loop_CarSelectTimetrial" banim="Tracks/Menu/processed/menu_carselect_timetrial_transition.banim">
+		<KeyFrame start="0" end="90"/>
+	</Cutscene>
+	
+<!-- EVENTS TO SELECT CAR "side view of all cars, camera pans down" -->
+	<Cutscene name="SelectCarScreenManufacturerDemo" to="Loop_CarSelectPorsche" banim="Tracks/Menu/processed/menu-carselect_porsche.banim">
+		<KeyFrame start="0" end="90"/>
+	</Cutscene>
+	
+<!-- PURCHASED CAR ON TRACK "2 panning closeupds, to birds eye view" -->
+	<Cutscene name="NewCarPurchasedScreen" to="Loop_NewCarPurchasedScreen" banim="Tracks/Menu/processed/menu_carpurchased.banim">
+		<KeyFrame start="0" end="90"/>
+		<KeyFrame start="91" end="180"/>
+		<KeyFrame start="181" end="220"/>
+	</Cutscene>
+
+<!-- NEW ARRIVAL "SIDE VIEW OF CAR UNDER CLOTH" -->
+	<Cutscene name="NewArrivalPhase1" to="NewArrivalPhase1Sound" banim="Tracks/Menu/processed/menu_caravailable.banim">
+		<KeyFrame start="0" end="75"/>
+	</Cutscene>
+
+	<Cutscene name="NewArrivalPhase1Sound" to="NewArrivalPhase2" banim="Tracks/Menu/processed/menu_caravailable.banim">
+		<KeyFrame start="75" end="90"/>
+	</Cutscene>
+	
+<!-- NEW ARRIVAL "CLOTH REMOVED" -->
+	<Cutscene name="NewArrivalPhase2" to="NewArrivalPhase3" banim="Tracks/Menu/processed/menu_caravailable.banim">
+		<KeyFrame start="91" end="130"/>
+		<KeyFrame start="131" end="160"/>
+	</Cutscene>
+
+	<Cutscene name="NewArrivalPhase3" to="NewArrivalPhase4" banim="Tracks/Menu/processed/menu_caravailable.banim">
+		<KeyFrame start="161" end="220"/>
+	</Cutscene>
+	
+	<Cutscene name="NewArrivalPhase4" to="Loop_NewArrival" banim="Tracks/Menu/processed/menu_caravailable.banim">
+		<KeyFrame start="221" end="300"/>
+	</Cutscene>
+	
+<!-- NEW CAR UNLOCK "top down, mix of close ups" -->                               
+	<Cutscene name="MenuNewCarUnlock" to="Loop_MenuNewCarUnlockIdle" banim="Tracks/Menu/processed/menu_carunlock.banim">
+		<KeyFrame start="0" end="90"/>
+		<KeyFrame start="400" end="480"/>
+		<KeyFrame start="152" end="251"/>
+		<KeyFrame start="481" end="560"/>
+		<KeyFrame start="281" end="359"/>                     
+	</Cutscene>
+	
+<!-- AWARDS -->
+<!-- AWARDS COUNT UP/CAMERA SHAKE -->
+	<Cutscene name="AwardsScreen" to="Loop_AwardsScreen" banim="Tracks/Menu/processed/menu_awards.banim">
+		<KeyFrame start="200" end="210"/>
+	</Cutscene>
+	
+<!-- AWARDS BOOM SHAKE FOR BIG REWARD -->
+	<Cutscene name="AwardsScreen_CameraShake" to="Loop_AwardsScreen" banim="Tracks/Menu/processed/menu_awards.banim">
+		<KeyFrame start="210" end="220"/>
+	</Cutscene>
+	
+	
+<!-- GARAGE SCENE -->
+<!-- CAR INTRO TRANSITION CLOSE UP SHOTS-->
+	<Cutscene name="Loop_GarageIntro" to="Loop_GarageIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="40"/>
+	</Cutscene>
+
+<!-- MY CARS TRANSITION CLOSE UP SHOTS-->
+	<Cutscene name="Loop_GarageIntroMyCar" to="Loop_GarageCarMyCar" banim="Tracks/Menu/processed/garage_mycars.banim">
+		<KeyFrame start="0" end="90"/>
+	</Cutscene>
+
+<!-- BUY CARS TRANSITION CLOSE UP SHOTS-->
+	<Cutscene name="Loop_GarageIntroBuyCar" to="Loop_GarageCarBuyCar" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="40"/>
+	</Cutscene>
+	
+<!-- UPGRADES TRANSITION -->
+	<Cutscene name="UpgradeCar" to="Loop_UpgradeCarIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="40"/>
+	</Cutscene>
+	
+<!-- REPAIRS TRANSITION -->
+	<Cutscene name="RepairCar" to="Loop_RepairCarIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="40"/>
+	</Cutscene>
+
+<!-------------------  CUSTOMISE  TO BE DONE IN CODE, SMOOTH CAMERA TWEEN ------------------->
+	
+<!-- CUSTOMISATION LANDING TRANSITION -->
+	<Cutscene name="CustomisationLanding" to="Loop_CustomisationLandingIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="0"/>
+	</Cutscene>
+
+	<!-- PAINT CAR TRANSITION -->
+	<Cutscene name="PaintCar" to="Loop_PaintCarIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="0"/>
+	</Cutscene>
+		
+<!-- VINYLS TRANSITION -->
+	<Cutscene name="Vinyls" to="Loop_VinylsIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="0"/>
+	</Cutscene>
+	
+<!-- RIDE HEIGHT TRANSITION -->
+	<Cutscene name="RideHeight" to="Loop_RideHeightIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="40" end="0"/>
+	</Cutscene>
+	
+<!-- WHEELS TRANSITION -->
+	<Cutscene name="Wheels" to="Loop_WheelsIdle" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="0"/>
+	</Cutscene>
+	
+	
+<!-- TSM INFO TRANSITION -->
+	<Cutscene name="TSMInfo" to="Loop_TSM" banim="Tracks/Menu/processed/menu_transition.banim">
+		<KeyFrame start="0" end="40"/>
+	</Cutscene>		
+<!-------------------  CUSTOMISE  TO BE DONE IN CODE, SMOOTH CAMERA TWEEN ------------------->
+
+</Cutscenes>
+
+<!---------------------------------------------------------------------------------------------------------------------------->
+<!----------------------------------------------------- LOOPS ---------------------------------------------------------------->
+<!---------------------------------------------------------------------------------------------------------------------------->
+
+<LoopingCutscenes>
+<!-- INDIANAPOLIS TRACK SCENE -->
+<!-- EVENTS SELECT FROM CARDS MENU -->
+	<Loop name="Loop_Events" banim="Tracks/Menu/processed/menu_events.banim">
+		<KeyFrame start="0" end="600"/>
+	</Loop>
+
+<!-- CAR SELECT FOR EVENT, 20 CARS IN A ROW -->
+	<Loop name="Loop_CarSelectTimetrial" banim="Tracks/Menu/processed/menu_carselect_timetrial.banim">
+		<KeyFrame start="0" end="1200"/>
+	</Loop>
+	
+<!-- CAR SELECT FOR EVENT, 36 CARS IN A ROW -->
+	<Loop name="Loop_CarSelectPorsche" banim="Tracks/Menu/processed/menu-carselect_porsche.banim">
+		<KeyFrame start="0" end="1200"/>
+	</Loop>
+	
+<!-- CAR SELECT FOR EVENT, 4 CARS IN A ROW -->
+	<Loop name="Loop_CarSelect" banim="Tracks/Menu/processed/menu_carselect.banim">
+		<KeyFrame start="0" end="1200"/>
+	</Loop>
+	
+<!-- CAR PURCHASED ON TRACK "FRONT ON VIEW" -->
+	<Loop name="Loop_NewCarPurchasedScreen" banim="Tracks/Menu/processed/menu_carpurchased.banim">
+		<KeyFrame start="221" end="640"/>
+	</Loop>
+	
+<!-- AWARDS -->
+	<Loop name="Loop_AwardsScreen" 	banim="Tracks/Menu/processed/menu_awards.banim">
+		<KeyFrame start="0" end="200"/>
+	</Loop>
+	
+<!-- MAP MENU -->
+	<Cutscene name="Loop_MapScreen" banim="Tracks/Menu/processed/menu_main_background.banim">
+		<KeyFrame start="190" end="190"/>
+	</Cutscene>
+
+<!-- INTRO SCREEN -->
+	<Loop name="Loop_IntroScreen" banim="Tracks/Menu/processed/menu_intro.banim">
+		<KeyFrame start="20" end="20"/>
+	</Loop>
+	
+<!------------------------- CARS ---------------------------->
+<!------ CHANGE CAR AND BUY CAR, CAR DRIVES IN AND OUT ------>
+
+<!-- CHANGE CAR IDLE "car parked, shown during car select" -->
+	<Loop name="Loop_GarageIdle" 	banim="Tracks/Menu/processed/garage_drive_inout.banim">
+		<KeyFrame start="187" end="190"/>
+	</Loop>
+		
+<!-- DRIVE IN "smooth drive in and park" -->
+	<Loop name="Loop_GarageCarDriveIn" 	banim="Tracks/Menu/processed/garage_drive_inout.banim">
+		<KeyFrame start="0" end="120"/>
+	</Loop>
+	
+<!-- DRIVE OUT "fast drive out of shot" -->
+	<Loop name="Loop_GarageCarDriveOut" banim="Tracks/Menu/processed/garage_drive_inout.banim">
+		<KeyFrame start="0" end="80"/>
+	</Loop>	
+
+	<!-- UPGRADE CAR IDLE -->
+	<Loop name="Loop_UpgradeCarIdle" 	banim="Tracks/Menu/processed/garage_upgrades.banim">
+		<KeyFrame start="0" end="300"/>
+	</Loop>
+	
+<!-- REPAIR CAR IDLE -->
+	<Loop name="Loop_RepairCarIdle" 	banim="Tracks/Menu/processed/garage_repairs.banim">
+		<KeyFrame start="0" end="300"/>
+	</Loop>	
+	
+<!----------------- LOOPS CUSTOMISE  ---------------->
+	
+<!-- CUSTOMISATION LANDING IDLE -->
+	<Loop name="Loop_CustomisationLandingIdle" 	banim="Tracks/Menu/processed/customise_paint.banim">
+		<KeyFrame start="0" end="599"/>
+	</Loop>	
+
+<!-- PAINT CAR IDLE -->
+	<Loop name="Loop_PaintCarIdle" 	banim="Tracks/Menu/processed/customise_paint.banim">
+		<KeyFrame start="0" end="599"/>
+	</Loop>	
+	
+<!-- VINYL IDLE -->
+	<Loop name="Loop_VinylIdle" 	banim="Tracks/Menu/processed/customise_paint.banim">
+		<KeyFrame start="0" end="599"/>
+	</Loop>	
+	
+<!-- RIDE HEIGHT IDLE -->
+	<Loop name="Loop_RideHeightIdle" 	banim="Tracks/Menu/processed/customise_rideheight.banim">
+		<KeyFrame start="0" end="599"/>
+	</Loop>	
+		
+<!-- WHEELS IDLE -->
+	<Loop name="Loop_WheelsIdle" 	banim="Tracks/Menu/processed/customise_rims.banim">
+		<KeyFrame start="0" end="599"/>
+	</Loop>	
+	
+<!----------------- NEW CAR  ---------------->
+	
+<!-- NEW ARRIVAL "low front corner idle" -->
+	<Loop name="Loop_NewArrival" 	banim="Tracks/Menu/processed/menu_caravailable.banim">
+		<KeyFrame start="301" end="540"/>
+	</Loop>
+
+<!-- NEW CAR UNLOCK "front on idle" -->             
+	<Loop name="Loop_MenuNewCarUnlockIdle"	banim="Tracks/Menu/processed/menu_carunlock.banim">
+		<KeyFrame start="570" end="739"/>     
+	</Loop>
+	
+<!-- My Cars "a mix of near shots and wide shots to show the collection in the garage" -->	
+	<Loop name="Loop_GarageCarMyCar" 	banim="Tracks/Menu/processed/garage_mycars.banim">
+		<KeyFrame start="91" end="180"/>
+		<KeyFrame start="181" end="270"/>
+		<KeyFrame start="271" end="460"/>
+	</Loop>
+
+<!-- Buy New Car "panning closeups of the car" -->	
+	<Loop name="Loop_GarageCarBuyCar" 	banim="Tracks/Menu/processed/garage_buycar.banim">
+		<KeyFrame start="1401" end="1610"/>
+		<KeyFrame start="141" end="280"/>
+		<KeyFrame start="281" end="420"/>
+		<KeyFrame start="421" end="600"/>
+		<KeyFrame start="601" end="760"/>
+		<KeyFrame start="0" end="140"/>
+		<KeyFrame start="761" end="880"/>
+		<KeyFrame start="881" end="980"/>
+		<KeyFrame start="981" end="1120"/>
+		<KeyFrame start="1121" end="1260"/>
+		<KeyFrame start="1261" end="1400"/>
+	</Loop>
+
+<!-- TSM INFO LOOP -->
+	<Loop name="Loop_TSM" banim="Tracks/Menu/processed/menu_tsm.banim">
+		<KeyFrame start="0" end="300"/>
+	</Loop>
+	
+</LoopingCutscenes>
+
+<OrbitCamPositions>
+	<!-- NOTES: Currently only "car" and "car_body" are able to do "elongated" orbits properly. -->
+	<!-- space
+	+ "world" offset is in world space.
+	+ "car" offset is relative to the car's position on the road.
+	+ "car_body" offset is relative to the car body, as if attached by a rigid boom. Ride adjustments that tilt the car tilt the camera as well.
+	-->
+	<!-- orbitPath
+	+ "circular" orbits in a circle
+	+ "elongated" accounts for the vehicle's length and follows a rounded oblong path.
+	-->
+	<Position name="Orbit_MyCars" pitch="0.0" yaw="-150.0" zoom="250.0" fov="30.0" space="car" x="0.0" y="25.0" z="0.0" orbitPath="elongated"/>
+	<Position name="Orbit_Photo" pitch="0.0" yaw="-150.0" zoom="250.0" fov="30.0" space="car" x="0.0" y="25.0" z="0.0" orbitPath="elongated"/>
+	<Position name="Orbit_Tango" pitch="0.0" yaw="-150.0" zoom="110.0" fov="60.0" space="car" x="0.0" y="45.0" z="0.0" orbitPath=""/> 
+	<!--<Position name="Orbit_CustomisationLanding" pitch="-2.5" yaw="-148.0" zoom="255.0" fov="25.0" space="car" x="0.0" y="14.0" z="0.0" orbitPath="elongated"/>-->
+	<Position name="Orbit_CustomisationLanding" pitch="0" yaw="-148.0" zoom="255.0" fov="25.0" space="car" x="0.0" y="17" z="0.0" orbitPath="elongated"/>
+	<!--<Position name="Orbit_CustomisationLanding" pitch="-10.0" yaw="-130.0" zoom="250.0" fov="30.0" space="car" x="0.0" y="22.0" z="0.0" orbitPath="elongated"/>-->
+	<!--<Position name="Orbit_PaintCar" pitch="-10.0" yaw="-130.0" zoom="250.0" fov="30.0" space="car" x="0.0" y="22.0" z="0.0" orbitPath="elongated"/>-->
+	<Position name="Orbit_PaintCar" pitch="-5.0" yaw="-140.0" zoom="200.0" fov="30.0" space="car" x="0.0" y="14.0" z="0.0" orbitPath="elongated"/>
+	<Position name="Orbit_Vinyls" pitch="0.0" yaw="-90.0" zoom="250.0" fov="30.0" space="car_body" x="0.0" y="22.0" z="0.0" orbitPath="circular"/>
+	<!--<Position name="Orbit_RideHeight" pitch="-2.0" yaw="-90.0" zoom="250.0" fov="30.0" space="car" x="0.0" y="22.0" z="0.0" orbitPath="elongated"/>-->
+	<Position name="Orbit_RideHeight" pitch="0.0" yaw="-90.0" zoom="200.0" fov="30.0" space="car" x="0.0" y="16.0" z="0" orbitPath="elongated"/>
+	<!--<Position name="Orbit_Wheels" pitch="-1.0" yaw="-137.0" zoom="210.0" fov="30.0" space="car" x="0.0" y="22.0" z="0.0" orbitPath="elongated"/>-->
+	<Position name="Orbit_Wheels" pitch="-1.0" yaw="-140.0" zoom="200.0" fov="30.0" space="car" x="0.0" y="16.0" z="0.0" orbitPath="elongated"/>
+	<Position name="Orbit_LibraryThumbnail" pitch="-20" yaw="-150.0" zoom="150.0" fov="25.0" space="car" x="0.0" y="17" z="8.0" orbitPath="elongated"/>
+</OrbitCamPositions>
