@@ -27,11 +27,13 @@ import {
   GameMode,
   GameScreen,
   GameSettings,
+  GraphicsQuality,
   HudTelemetry,
   PodiumCameraShot,
   PreRacePitStrategy,
   RacerStanding,
   RivalEncounter,
+  TextureQuality,
   TimeOfDayMode,
   TyreCompound,
   WeatherMode,
@@ -200,6 +202,84 @@ const INITIAL_HUD: HudTelemetry = {
   },
 };
 
+function detectHardwareProfile(): {
+  graphicsQuality: GraphicsQuality;
+  resolutionScale: number;
+  textureQuality: TextureQuality;
+  shadowQuality: 'off' | 'medium' | 'high' | 'ultra' | 'cinematic';
+  reflectionQuality: 'off' | 'medium' | 'high' | 'ultra' | 'cinematic';
+  rayTracingQuality: 'off' | 'high' | 'ultra' | 'cinematic';
+  particleDensity: 'low' | 'medium' | 'high' | 'ultra';
+  ps5GraphicsMode: 'performance' | 'rt_pro' | 'cinematic';
+} {
+  if (typeof window === 'undefined') {
+    return {
+      graphicsQuality: 'ultra_8k',
+      resolutionScale: 2.0,
+      textureQuality: 'cinematic',
+      shadowQuality: 'cinematic',
+      reflectionQuality: 'cinematic',
+      rayTracingQuality: 'cinematic',
+      particleDensity: 'ultra',
+      ps5GraphicsMode: 'cinematic',
+    };
+  }
+  let isSoftware = false;
+  let isMobileOrIntegrated = false;
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    if (gl) {
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const rendererStr = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      isSoftware = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(rendererStr);
+      isMobileOrIntegrated = /Intel|Mali|Adreno|PowerVR|Apple A\d|Vivante|VideoCore/i.test(rendererStr) && !/Iris|Arc|Xe/i.test(rendererStr);
+    }
+  } catch {
+    // fallback
+  }
+
+  const isMobileScreen = window.innerWidth < 768 || ('ontouchstart' in window && navigator.maxTouchPoints > 1 && window.innerWidth < 1024);
+
+  if (isSoftware) {
+    return {
+      graphicsQuality: 'low',
+      resolutionScale: 1.0,
+      textureQuality: 'medium',
+      shadowQuality: 'off',
+      reflectionQuality: 'off',
+      rayTracingQuality: 'off',
+      particleDensity: 'low',
+      ps5GraphicsMode: 'performance',
+    };
+  }
+
+  if (isMobileScreen || isMobileOrIntegrated) {
+    return {
+      graphicsQuality: 'high',
+      resolutionScale: 1.25,
+      textureQuality: 'high',
+      shadowQuality: 'high',
+      reflectionQuality: 'high',
+      rayTracingQuality: 'high',
+      particleDensity: 'medium',
+      ps5GraphicsMode: 'rt_pro',
+    };
+  }
+
+  return {
+    graphicsQuality: 'ultra_8k',
+    resolutionScale: 2.0,
+    textureQuality: 'cinematic',
+    shadowQuality: 'cinematic',
+    reflectionQuality: 'cinematic',
+    rayTracingQuality: 'cinematic',
+    particleDensity: 'ultra',
+    ps5GraphicsMode: 'cinematic',
+  };
+}
+
 export default function App() {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<RacingEngine | null>(null);
@@ -223,6 +303,7 @@ export default function App() {
   const [podiumShot, setPodiumShot] = useState<PodiumCameraShot>('auto');
   const [settings, setSettings] = useState<GameSettings>(() => {
     const initialEnv = getCircuitEnvironmentConfig(CIRCUIT_TRACKS[0]);
+    const hw = detectHardwareProfile();
     return {
       transmission: 'auto',
       steeringSensitivity: 1.0,
@@ -235,24 +316,24 @@ export default function App() {
       timeOfDay: initialEnv.defaultTimeOfDay,
       dynamicTimeOfDay: false,
       totalLaps: 3,
-    graphicsQuality: 'extreme',
-    resolutionScale: 2.0,
-    textureQuality: 'ultra',
-    shadowQuality: 'ultra',
-    reflectionQuality: 'ultra',
-    ambientOcclusion: 'ultra',
-    antiAliasing: 'high',
-    particleDensity: 'ultra',
-    motionBlurLevel: 'cinematic',
-    targetFps: 60,
-    motionBlur: true,
-    absAssist: true,
-    tcAssist: true,
-    ps5GraphicsMode: 'cinematic',
-    rayTracingQuality: 'ultra',
-    pssrUpscaling: true,
-    hdrMode: 'hdr10',
-    steeringAssist: false,
+      graphicsQuality: hw.graphicsQuality,
+      resolutionScale: hw.resolutionScale,
+      textureQuality: hw.textureQuality,
+      shadowQuality: hw.shadowQuality,
+      reflectionQuality: hw.reflectionQuality,
+      ambientOcclusion: 'ultra',
+      antiAliasing: 'high',
+      particleDensity: hw.particleDensity,
+      motionBlurLevel: 'cinematic',
+      targetFps: 60,
+      motionBlur: true,
+      absAssist: true,
+      tcAssist: true,
+      ps5GraphicsMode: hw.ps5GraphicsMode,
+      rayTracingQuality: hw.rayTracingQuality,
+      pssrUpscaling: true,
+      hdrMode: 'hdr10',
+      steeringAssist: false,
     brakingAssist: 'low',
     tractionControlMode: 'full',
     racingLine: 'corners',
@@ -520,7 +601,12 @@ export default function App() {
     setSelectedTrack(track);
     const envCfg = getCircuitEnvironmentConfig(track);
     const nextCmp: TyreCompound =
-      envCfg.defaultWeather === 'rain' || envCfg.defaultWeather === 'heavy_rain' ? 'wet' : 'medium';
+      envCfg.defaultWeather === 'rain' ||
+      envCfg.defaultWeather === 'heavy_rain' ||
+      envCfg.defaultWeather === 'snow' ||
+      envCfg.defaultWeather === 'blizzard'
+        ? 'wet'
+        : 'medium';
     setSettings((prev) => ({
       ...prev,
       weather: envCfg.defaultWeather,
@@ -566,6 +652,8 @@ export default function App() {
         timeOfDay === 'night' || timeOfDay === 'sunset'
           ? prev.weather === 'rain' ||
             prev.weather === 'heavy_rain' ||
+            prev.weather === 'snow' ||
+            prev.weather === 'blizzard' ||
             prev.weather === 'cloudy' ||
             prev.weather === 'fog' ||
             prev.weather === 'partly_cloudy'

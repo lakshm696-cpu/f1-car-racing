@@ -9,6 +9,7 @@ import {
   CloudRain,
   CloudSun,
   Moon,
+  Snowflake,
   Sun,
   Sunset,
 } from 'lucide-react';
@@ -54,6 +55,8 @@ const WEATHER_SHORT: Record<WeatherMode, string> = {
   rain: 'Rain',
   heavy_rain: 'Storm',
   fog: 'Foggy',
+  snow: 'Snow',
+  blizzard: 'Blizzard',
   night: 'Night',
 };
 
@@ -65,12 +68,15 @@ const WEATHER_COLOR: Record<WeatherMode, string> = {
   rain: '#38BDF8',
   heavy_rain: '#818CF8',
   fog: '#CBD5E1',
+  snow: '#E0F2FE',
+  blizzard: '#93C5FD',
   night: '#60A5FA',
 };
 
 const WeatherMiniIcon: React.FC<{ mode: WeatherMode; className?: string }> = ({ mode, className }) => {
   if (mode === 'heavy_rain') return <CloudLightning className={className} />;
   if (mode === 'rain') return <CloudRain className={className} />;
+  if (mode === 'snow' || mode === 'blizzard') return <Snowflake className={className} />;
   if (mode === 'fog') return <CloudFog className={className} />;
   if (mode === 'partly_cloudy') return <CloudSun className={className} />;
   if (mode === 'cloudy') return <Cloud className={className} />;

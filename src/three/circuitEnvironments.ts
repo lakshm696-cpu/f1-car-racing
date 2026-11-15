@@ -1311,6 +1311,40 @@ export function getWeatherAtmosphereProfile(weather: WeatherMode): WeatherAtmosp
         rainAudio: 0.12,
         wetnessTarget: 1.0,
       };
+    case 'snow':
+      return {
+        cloudCoverAdd: 0.50,
+        cloudOverride: 0.90,
+        fogDensityMult: 2.8,
+        fogOverrideHex: 0xd8e2ec,
+        sunDim: 0.65,
+        hemiDim: 1.15,
+        rimDim: 0.95,
+        reflectionMult: 1.25,
+        exposureMult: 1.08,
+        rainFactor: 0.4,
+        rainOpacity: 0.55,
+        rainSize: 0.95,
+        rainAudio: 0.04,
+        wetnessTarget: 0.85,
+      };
+    case 'blizzard':
+      return {
+        cloudCoverAdd: 0.65,
+        cloudOverride: 1.0,
+        fogDensityMult: 4.8,
+        fogOverrideHex: 0xc4d2e2,
+        sunDim: 0.28,
+        hemiDim: 0.92,
+        rimDim: 0.85,
+        reflectionMult: 1.35,
+        exposureMult: 1.12,
+        rainFactor: 0.9,
+        rainOpacity: 0.88,
+        rainSize: 1.2,
+        rainAudio: 0.14,
+        wetnessTarget: 1.0,
+      };
     case 'sunset':
     case 'night':
     case 'day':

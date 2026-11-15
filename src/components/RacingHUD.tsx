@@ -12,6 +12,7 @@ import {
   Gamepad2,
   Moon,
   Pause,
+  Snowflake,
   Sun,
   Sunset,
   Thermometer,
@@ -29,6 +30,7 @@ import {
   WeatherMode,
 } from '../types/racing';
 import { MiniMap } from './MiniMap';
+import { MarshalingFlagOverlay } from './MarshalingFlagOverlay';
 import { PitBoard } from './PitBoard';
 import { TrackLog } from './TrackLog';
 import {
@@ -92,6 +94,8 @@ const WEATHER_LABELS: Record<WeatherMode, string> = {
   rain: 'RAIN',
   heavy_rain: 'STORM',
   fog: 'FOGGY',
+  snow: 'SNOW',
+  blizzard: 'BLIZZARD',
   night: 'NIGHT',
 };
 
@@ -105,6 +109,7 @@ const COMPOUND_OPTIONS: { id: TyreCompound; short: string; color: string }[] = [
 const WeatherIcon: React.FC<{ mode: WeatherMode; className?: string }> = ({ mode, className }) => {
   if (mode === 'heavy_rain') return <CloudLightning className={className} />;
   if (mode === 'rain') return <CloudRain className={className} />;
+  if (mode === 'snow' || mode === 'blizzard') return <Snowflake className={className} />;
   if (mode === 'fog') return <CloudFog className={className} />;
   if (mode === 'partly_cloudy') return <CloudSun className={className} />;
   if (mode === 'cloudy') return <Cloud className={className} />;
@@ -794,39 +799,13 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
             </div>
           )}
 
-          {hud.trackFlag.flag !== 'none' && !hud.wrongWay && (
-            <div
-              role="status"
-              aria-live="polite"
-              className={`rounded-xl border px-3.5 py-1.5 flex items-center gap-2.5 shadow-lg animate-hud-banner-pop ${
-                hud.trackFlag.flag === 'yellow'
-                  ? 'border-yellow-400/80 text-yellow-300'
-                  : hud.trackFlag.flag === 'surface'
-                    ? 'border-orange-400/85 text-amber-200'
-                    : 'border-sky-400/80 text-sky-300'
-              }`}
-              style={{
-                backgroundColor:
-                  hud.trackFlag.flag === 'yellow'
-                    ? 'rgba(38, 28, 6, 0.92)'
-                    : hud.trackFlag.flag === 'surface'
-                      ? 'rgba(42, 18, 8, 0.94)'
-                      : 'rgba(8, 24, 42, 0.92)',
-              }}
-            >
-              <Flag className="w-4 h-4 fill-current shrink-0" />
-              <div className="flex items-center gap-2 text-xs font-display font-bold uppercase">
-                <span>
-                  {hud.trackFlag.flag === 'yellow'
-                    ? 'YELLOW FLAG'
-                    : hud.trackFlag.flag === 'surface'
-                      ? 'SURFACE HAZARD'
-                      : 'BLUE FLAG'}
-                </span>
-                <span className="text-[10px] font-sans text-slate-200">{hud.trackFlag.reason}</span>
-              </div>
-            </div>
-          )}
+          <MarshalingFlagOverlay
+            trackFlag={hud.trackFlag}
+            currentSector={hud.currentSector}
+            lap={hud.lap}
+            totalLaps={hud.totalLaps}
+            wrongWay={hud.wrongWay}
+          />
 
           {hud.bannerMessage && !hud.wrongWay && (
             <div
@@ -839,20 +818,19 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
           )}
         </div>
 
-        {/* TOP-RIGHT: Authentic F1 25 S1/S2/S3 Sector Bar + Position + Current/Best Lap Box + Track Log + Utility Buttons */}
+         {/* TOP-RIGHT: Authentic F1 25 S1/S2/S3 Sector Bar + Position + Current/Best Lap Box + Track Log + Utility Buttons */}
         <div
-          className={`flex items-start gap-2 ${
+          className={`flex items-start gap-2.5 ${
             isExiting ? 'animate-hud-exit-tr' : 'animate-hud-enter-tr [animation-delay:60ms]'
           }`}
         >
-          <div className="flex flex-col items-end gap-2">
-            {/* F1 25 Top-Right Timing & Sector Box (from Screenshots 5 & 6) */}
+          <div className="flex flex-col items-end gap-2.5">
+            {/* F1 25 Top-Right Timing & Sector Box */}
             <div
-              className="rounded-lg overflow-hidden border border-white/15 min-w-[210px] sm:min-w-[234px] shadow-2xl"
-              style={{ backgroundColor: 'rgba(11, 15, 23, 0.92)' }}
+              className="rounded-xl overflow-hidden border border-white/20 min-w-[220px] sm:min-w-[246px] shadow-2xl f1-osd-panel"
             >
               {/* Top S1 | S2 | S3 Bar */}
-              <div className="grid grid-cols-3 border-b border-white/15 bg-black/50 text-[10px] font-mono-telemetry font-bold">
+              <div className="grid grid-cols-3 border-b border-white/20 bg-black/70 text-[10px] font-mono-telemetry font-extrabold tracking-wider">
                 {[1, 2, 3].map((secNum) => {
                   const sGrip = hud.sectorGripPct[secNum - 1] ?? 100;
                   const isCompleted = hud.currentSector > secNum;
@@ -860,64 +838,71 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                   return (
                     <div
                       key={secNum}
-                      className={`px-2 py-0.5 flex items-center justify-between border-r last:border-r-0 border-white/10 ${
+                      className={`px-2 py-1 flex items-center justify-between border-r last:border-r-0 border-white/15 transition-all ${
                         isCompleted
-                          ? 'bg-emerald-500/85 text-slate-950'
+                          ? 'bg-emerald-500 text-slate-950 font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]'
                           : isActive
-                            ? 'bg-emerald-500/30 text-emerald-300'
-                            : 'text-slate-400'
+                            ? 'bg-emerald-500/35 text-emerald-300 font-black border-l-2 border-l-emerald-400'
+                            : 'text-slate-400 bg-black/40'
                       }`}
                     >
-                      <span>S{secNum}</span>
-                      <span className="text-[9px]">{sGrip}%</span>
+                      <span className="tracking-widest">S{secNum}</span>
+                      <span className="text-[9px] tabular-nums">{sGrip}%</span>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Middle Row: POS / TOTAL + Current Lap Time */}
+              {/* Middle Row: POS / TOTAL + Current Lap Time with F1 Red Accent */}
               <div
-                className="px-3 py-1.5 flex items-baseline justify-between gap-4 border-b border-blue-500/40"
+                className="px-3.5 py-2 flex items-baseline justify-between gap-4 border-b border-red-500/50"
                 style={{
                   background:
-                    'linear-gradient(90deg, rgba(14, 22, 42, 0.95) 0%, rgba(20, 40, 92, 0.85) 100%)',
+                    'linear-gradient(90deg, rgba(16, 22, 36, 0.98) 0%, rgba(30, 18, 22, 0.95) 100%)',
                 }}
               >
-                <div className="font-display font-bold text-sm sm:text-base text-white tabular-nums">
-                  {hud.position}
-                  <span className="text-xs text-slate-400 font-normal">/{hud.totalRacers}</span>
+                <div className="flex items-center gap-1.5 font-display font-black text-base sm:text-lg text-white tabular-nums tracking-wide">
+                  <span className="text-red-500 text-xs italic font-black">POS</span>
+                  <span>{hud.position}</span>
+                  <span className="text-xs text-slate-400 font-medium">/{hud.totalRacers}</span>
                 </div>
-                <div className="font-mono-telemetry font-bold text-base sm:text-lg text-white tabular-nums tracking-tight">
+                <div className="font-mono-telemetry font-black text-lg sm:text-xl text-white tabular-nums tracking-tighter drop-shadow-[0_0_10px_rgba(255,255,255,0.25)]">
                   {formatLapTime(displayedLapMs)}
                 </div>
               </div>
 
-              {/* Bottom Row: BEST Lap + Delta */}
-              <div className="px-3 py-1 flex items-center justify-between text-xs font-mono-telemetry bg-black/55 border-b border-white/10">
-                <span className="font-display font-bold text-[11px] text-slate-300 tracking-wider">
-                  BEST
+              {/* Bottom Row: BEST Lap + Delta Badge */}
+              <div className="px-3.5 py-1.5 flex items-center justify-between text-xs font-mono-telemetry bg-black/80 border-b border-white/15">
+                <span className="font-display font-black text-[11px] text-slate-300 tracking-wider">
+                  BEST LAP
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 text-[10px] font-bold tabular-nums">
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono-telemetry font-black tabular-nums shadow-sm ${
+                      (hud.deltaMs ?? -214) <= 0
+                        ? 'bg-emerald-500/25 border border-emerald-400/70 text-emerald-300'
+                        : 'bg-rose-500/25 border border-rose-400/70 text-rose-300'
+                    }`}
+                  >
                     {hud.deltaMs !== null
                       ? `${hud.deltaMs <= 0 ? '' : '+'}${(hud.deltaMs / 1000).toFixed(3)}s`
                       : '-0.214s'}
                   </span>
-                  <span className="text-white font-bold tabular-nums">
+                  <span className="text-white font-extrabold tabular-nums">
                     {formatLapTime(displayedBestMs)}
                   </span>
                 </div>
               </div>
 
               {/* Asphalt Track Temp & Active Sector Grip Telemetry Strip */}
-              <div className="px-3 py-1 flex items-center justify-between text-[9px] font-mono-telemetry tabular-nums bg-black/75 text-slate-300">
+              <div className="px-3.5 py-1 flex items-center justify-between text-[9px] font-mono-telemetry tabular-nums bg-black/90 text-slate-300 border-t border-white/10">
                 <span>
                   TRK TEMP:{' '}
-                  <strong className="text-amber-300">{hud.trackTemperature ?? 34}°C</strong>
+                  <strong className="text-amber-400 font-bold">{hud.trackTemperature ?? 34}°C</strong>
                 </span>
                 <span>
                   S{hud.currentSector} GRIP:{' '}
-                  <strong className="text-emerald-300">
+                  <strong className="text-emerald-400 font-bold">
                     {hud.sectorGripPct[hud.currentSector - 1] ?? hud.surfaceGripPct}%
                   </strong>
                 </span>
@@ -939,76 +924,79 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
             )}
           </div>
 
-          {/* Interactive Utility Buttons */}
-          <div className="pointer-events-auto flex flex-col gap-1">
+          {/* F1 25 Cockpit Switchgear Utility Buttons (Angled carbon, LED pips, Hotkey badges) */}
+          <div className="pointer-events-auto flex flex-col gap-1.5">
             <button
               type="button"
               onClick={onPause}
-              title="Pause / PS5 F1 25 Settings (Esc)"
-              className="w-9 h-8 rounded-lg border border-white/15 flex items-center justify-center text-slate-200 hover:text-white hover:border-white/35 transition-colors cursor-pointer"
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
+              title="Pause / Settings (Esc)"
+              className="w-10 h-9 rounded-xl border border-white/20 f1-cockpit-switch flex flex-col items-center justify-center text-slate-200 hover:text-white hover:border-red-500 hover:shadow-[0_0_14px_rgba(239,68,68,0.55)] cursor-pointer group"
             >
-              <Pause className="w-3.5 h-3.5" />
+              <Pause className="w-3.5 h-3.5 text-red-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[6px] font-mono-telemetry font-bold text-slate-400 tracking-tighter">ESC</span>
             </button>
             <button
               type="button"
               onClick={onCycleCamera}
               title={`Cycle Camera (C) — ${CAMERA_LABELS[hud.cameraMode]}`}
-              className="w-9 h-8 rounded-lg border border-white/15 flex flex-col items-center justify-center text-slate-200 hover:text-white hover:border-white/35 transition-colors cursor-pointer"
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
+              className="w-10 h-9 rounded-xl border border-white/20 f1-cockpit-switch flex flex-col items-center justify-center text-slate-200 hover:text-white hover:border-cyan-400 hover:shadow-[0_0_14px_rgba(6,182,212,0.55)] cursor-pointer group"
             >
-              <Camera className="w-3 h-3" />
-              <span className="text-[6px] font-bold tracking-tight">
-                {CAMERA_LABELS[hud.cameraMode]}
+              <Camera className="w-3 h-3 text-cyan-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[6px] font-mono-telemetry font-bold text-cyan-300 tracking-tighter">
+                {CAMERA_LABELS[hud.cameraMode].slice(0, 3)}
               </span>
             </button>
             <button
               type="button"
               onClick={() => setShowTrackLog((v) => !v)}
               title="Toggle Track Log Grip & Weather Chart"
-              className={`w-9 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+              className={`w-10 h-9 rounded-xl border f1-cockpit-switch flex flex-col items-center justify-center cursor-pointer transition-all group ${
                 showTrackLog
-                  ? 'border-emerald-400/60 text-emerald-300'
-                  : 'border-white/15 text-slate-400 hover:text-white'
+                  ? 'border-emerald-400 text-emerald-300 shadow-[0_0_16px_rgba(16,185,129,0.6)]'
+                  : 'border-white/20 text-slate-300 hover:text-white hover:border-emerald-400/70 hover:shadow-[0_0_12px_rgba(16,185,129,0.4)]'
               }`}
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
             >
-              <Activity className="w-3.5 h-3.5" />
+              <Activity className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[6px] font-mono-telemetry font-bold text-emerald-300 tracking-tighter">LOG</span>
             </button>
             <button
               type="button"
               onClick={() => setShowMirrorLocal((m) => !m)}
               title="Toggle Virtual Rear-View Mirror"
-              className={`w-9 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+              className={`w-10 h-9 rounded-xl border f1-cockpit-switch flex flex-col items-center justify-center cursor-pointer transition-all group ${
                 virtualMirror && showMirrorLocal
-                  ? 'border-fuchsia-400/60 text-fuchsia-300'
-                  : 'border-white/15 text-slate-400 hover:text-white'
+                  ? 'border-fuchsia-400 text-fuchsia-300 shadow-[0_0_16px_rgba(217,70,239,0.6)]'
+                  : 'border-white/20 text-slate-300 hover:text-white hover:border-fuchsia-400/70 hover:shadow-[0_0_12px_rgba(217,70,239,0.4)]'
               }`}
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
             >
-              <Eye className="w-3.5 h-3.5" />
+              <Eye className="w-3.5 h-3.5 text-fuchsia-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[6px] font-mono-telemetry font-bold text-fuchsia-300 tracking-tighter">MIR</span>
             </button>
             <button
               type="button"
               onClick={onToggleMute}
               title={muted ? 'Unmute Audio' : 'Mute Audio'}
-              className="w-9 h-8 rounded-lg border border-white/15 flex items-center justify-center text-slate-200 hover:text-white hover:border-white/35 transition-colors cursor-pointer"
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
+              className="w-10 h-9 rounded-xl border border-white/20 f1-cockpit-switch flex flex-col items-center justify-center text-slate-200 hover:text-white hover:border-amber-400 hover:shadow-[0_0_14px_rgba(245,158,11,0.55)] cursor-pointer group"
             >
-              {muted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5" />}
+              {muted ? (
+                <VolumeX className="w-3.5 h-3.5 text-red-400 group-hover:scale-110 transition-transform" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+              )}
+              <span className="text-[6px] font-mono-telemetry font-bold text-amber-300 tracking-tighter">VOL</span>
             </button>
             <button
               type="button"
               onClick={onToggleTouchControls}
               title="Toggle Touch Controls"
-              className={`w-9 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+              className={`w-10 h-9 rounded-xl border f1-cockpit-switch flex flex-col items-center justify-center cursor-pointer transition-all group ${
                 touchControls
-                  ? 'border-amber-400/70 text-amber-300'
-                  : 'border-white/15 text-slate-300 hover:text-white'
+                  ? 'border-orange-400 text-orange-300 shadow-[0_0_16px_rgba(249,115,22,0.6)]'
+                  : 'border-white/20 text-slate-300 hover:text-white hover:border-orange-400/70 hover:shadow-[0_0_12px_rgba(249,115,22,0.4)]'
               }`}
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
             >
-              <Gamepad2 className="w-3.5 h-3.5" />
+              <Gamepad2 className="w-3.5 h-3.5 text-orange-400 group-hover:scale-110 transition-transform" />
+              <span className="text-[6px] font-mono-telemetry font-bold text-orange-300 tracking-tighter">CTRL</span>
             </button>
           </div>
         </div>
@@ -1386,13 +1374,25 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                   {gearLabel}
                 </div>
 
-                {/* HARVESTING / OVERTAKE ERS MODE Status Text */}
+                {/* HARVESTING / OVERTAKE ERS MODE + 2026 ACTIVE AERO / SLIPSTREAM Status Text */}
                 <div
                   className={`mt-1 text-[9px] font-mono-telemetry font-bold tracking-widest uppercase ${
-                    hud.drsActive ? 'text-lime-400' : 'text-slate-300'
+                    hud.drsActive
+                      ? 'text-lime-400'
+                      : (hud.slipstreamPct ?? 0) >= 12
+                        ? 'text-cyan-300'
+                        : (hud.dirtyAirPct ?? 0) >= 18
+                          ? 'text-amber-300'
+                          : 'text-slate-300'
                   }`}
                 >
-                  {hud.drsActive ? 'OVERTAKE ERS MODE' : 'HARVESTING'}
+                  {hud.drsActive
+                    ? 'X-MODE · OVERTAKE ERS'
+                    : (hud.slipstreamPct ?? 0) >= 12
+                      ? `SLIPSTREAM TOW +${hud.slipstreamPct}%`
+                      : (hud.dirtyAirPct ?? 0) >= 18
+                        ? `DIRTY AIR WAKE ${hud.dirtyAirPct}%`
+                        : 'Z-MODE · HARVESTING'}
                 </div>
 
                 {/* [L1 / SPACE] DRS / OVERTAKE Pill */}
@@ -1402,12 +1402,18 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                       ? 'bg-emerald-950/90 border-emerald-400/80'
                       : hud.drsAvailable
                         ? 'bg-emerald-950/60 border-emerald-400/50'
-                        : 'bg-black/80 border-white/25'
+                        : (hud.slipstreamPct ?? 0) >= 12
+                          ? 'bg-cyan-950/75 border-cyan-400/60'
+                          : 'bg-black/80 border-white/25'
                   }`}
                 >
                   <span
                     className={`px-1 py-0.2 rounded font-display font-black text-[8px] ${
-                      hud.drsActive ? 'bg-emerald-400 text-slate-950' : 'bg-white text-slate-950'
+                      hud.drsActive
+                        ? 'bg-emerald-400 text-slate-950'
+                        : (hud.slipstreamPct ?? 0) >= 12
+                          ? 'bg-cyan-400 text-slate-950'
+                          : 'bg-white text-slate-950'
                     }`}
                   >
                     L1 / SPACE
@@ -1418,10 +1424,18 @@ export const RacingHUD: React.FC<RacingHUDProps> = ({
                         ? 'text-emerald-300'
                         : hud.drsAvailable
                           ? 'text-emerald-200'
-                          : 'text-white'
+                          : (hud.slipstreamPct ?? 0) >= 12
+                            ? 'text-cyan-200'
+                            : 'text-white'
                     }`}
                   >
-                    {hud.drsActive ? 'DRS + ERS ON' : hud.drsAvailable ? 'DRS READY' : 'OVERTAKE'}
+                    {hud.drsActive
+                      ? 'DRS + X-MODE ON'
+                      : hud.drsAvailable
+                        ? 'DRS READY'
+                        : (hud.slipstreamPct ?? 0) >= 12
+                          ? 'AERO DRAFTING'
+                          : 'OVERTAKE'}
                   </span>
                 </div>
               </div>

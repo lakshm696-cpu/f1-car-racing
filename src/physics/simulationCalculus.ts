@@ -93,7 +93,7 @@ const PIT_STOP_TRANSIT_LOSS = 20.5; // Average F1 pit lane delta in seconds
 export const BASE_FUEL_BURN_PER_LAP_PCT = 14.5; // ~14.5% per race lap (so >6 laps requires fuel planning or 1-stop refuel)
 
 export function getCompoundWearPerLap(compound: TyreCompound, weather: WeatherMode | 'wet' = 'day'): number {
-  const isWetWeather = weather === 'rain' || weather === 'heavy_rain' || weather === 'wet';
+  const isWetWeather = weather === 'rain' || weather === 'heavy_rain' || weather === 'wet' || weather === 'snow' || weather === 'blizzard';
   if (compound === 'soft') return isWetWeather ? 26 : 18.5;
   if (compound === 'medium') return isWetWeather ? 23 : 12.2;
   if (compound === 'hard') return isWetWeather ? 20 : 8.1;
@@ -106,7 +106,7 @@ export function buildDefaultPitStrategy(
   preferredStartingCompound?: TyreCompound
 ): PreRacePitStrategy {
   const laps = Math.max(1, Math.round(totalLaps));
-  const isWet = weather === 'rain' || weather === 'heavy_rain';
+  const isWet = weather === 'rain' || weather === 'heavy_rain' || weather === 'snow' || weather === 'blizzard';
   const startCmp: TyreCompound = isWet
     ? 'wet'
     : preferredStartingCompound && preferredStartingCompound !== 'wet'
@@ -633,6 +633,8 @@ export function calculateTrackTemperatureC(
     rain: 19,
     heavy_rain: 16,
     fog: 20,
+    snow: 2,
+    blizzard: -4,
     night: 22,
   };
 

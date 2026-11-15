@@ -74,13 +74,16 @@ export function buildCircuitEnvironment(
       ? 0.6
       : quality === 'high'
         ? 0.85
-        : quality === 'extreme' || quality === 'cinematic'
-          ? 1.4
-          : 1.0;
+        : quality === 'ultra_8k'
+          ? 1.65
+          : quality === 'extreme' || quality === 'cinematic'
+            ? 1.4
+            : 1.0;
 
   const isNight = effTod === 'night' || weather === 'night';
   const isSunset = effTod === 'sunset' || effTod === 'golden_hour' || weather === 'sunset';
   const isRain = weather === 'rain' || weather === 'heavy_rain';
+  const isSnowWeather = weather === 'snow' || weather === 'blizzard';
   const isCloudy = weather === 'cloudy' || weather === 'partly_cloudy' || weather === 'fog';
 
   const centerOffset = new THREE.Vector3(110, 0, 0);
@@ -153,6 +156,8 @@ export function buildCircuitEnvironment(
     uCenter: { value: centerOffset.clone() },
   };
 
+  const grassTimeUniform = { value: 0 };
+
   const skyGeo = new THREE.SphereGeometry(890, 48, 32);
   const skyMat = new THREE.ShaderMaterial({
     uniforms: skyUniforms,
@@ -223,20 +228,72 @@ export function buildCircuitEnvironment(
         skyCol = mix(skyCol, stormCol, uRainFactor * 0.65);
         skyCol += vec3(0.65, 0.78, 1.0) * uLightning * (0.28 + 0.58 * (1.0 - elev));
 
-        // Night starfield + subtle diagonal Milky Way band + urban horizon dome
-        if (uNightFactor > 0.05 && elev > 0.03) {
-          float mwBand = exp(-pow((dir.x * 0.65 + dir.z * 0.45 - dir.y * 0.55) * 3.8, 2.0));
-          skyCol += vec3(0.06, 0.09, 0.16) * mwBand * uNightFactor * (1.0 - uCloudCover * 0.8);
+        // 16K Dynamic Night Skybox: Procedural 3D Moon with Maria & Ray Craters, deep Cosmic Milky Way with H-Alpha & O-III Nebulae, & Stellar Clusters
+        if (uNightFactor > 0.05 && elev > -0.05) {
+          // 1. Procedural 3D Moon with basaltic maria, Tycho ray crater ejecta, & cold Mie forward halo
+          vec3 moonDir = normalize(vec3(-sunDir.x, max(0.24, -sunDir.y * 0.78 + 0.16), -sunDir.z));
+          float moonCos = dot(dir, moonDir);
+          float moonHalo = pow(max(0.0, moonCos), 18.0) * 0.22 + pow(max(0.0, moonCos), 110.0) * 0.62;
+          skyCol += vec3(0.68, 0.82, 1.0) * moonHalo * uNightFactor * (1.0 - uRainFactor * 0.8) * (1.0 - uCloudCover * 0.5);
 
-          vec2 starUv = dir.xz / (elev + 0.28) * 145.0;
-          vec2 id = floor(starUv);
-          vec2 gv = fract(starUv) - 0.5;
-          float rnd = hash21(id);
-          if (rnd > 0.97) {
-            float twinkle = 0.55 + 0.45 * sin(uTime * (2.0 + rnd * 5.0) + rnd * 40.0);
-            float starDot = smoothstep(0.28, 0.02, length(gv));
-            skyCol += mix(vec3(0.85, 0.92, 1.0), vec3(1.0, 0.90, 0.78), fract(rnd * 37.0)) *
-              starDot * twinkle * uNightFactor * smoothstep(0.03, 0.25, elev) * (1.0 - uRainFactor);
+          if (moonCos > 0.9982) {
+            vec3 mUp = vec3(0.0, 1.0, 0.0);
+            vec3 mRight = normalize(cross(mUp, moonDir));
+            vec3 mActualUp = cross(moonDir, mRight);
+            vec3 rel = dir - moonDir;
+            vec2 moonUV = vec2(dot(rel, mRight), dot(rel, mActualUp)) * 490.0;
+            float distSq = dot(moonUV, moonUV);
+            if (distSq < 1.0) {
+              float r = sqrt(distSq);
+              float zS = sqrt(max(0.0, 1.0 - distSq));
+              vec2 sUv = moonUV * (1.0 + (1.0 - zS) * 0.28);
+              // Procedural lunar maria (Oceanus Procellarum, Mare Imbrium, Mare Tranquillitatis)
+              float mariaNoise = sin(sUv.x * 2.8 + 0.4) * cos(sUv.y * 2.4 - 0.3) * 0.45
+                               + sin(sUv.x * 6.5 - 1.2) * sin(sUv.y * 5.8 + 0.8) * 0.28
+                               + sin(sUv.x * 14.0) * cos(sUv.y * 12.0) * 0.12;
+              float maria = smoothstep(0.08, -0.22, mariaNoise);
+              // Tycho ray crater ejecta radiating spokes
+              vec2 tychoCenter = vec2(0.14, -0.46);
+              vec2 rayD = sUv - tychoCenter;
+              float rayAng = atan(rayD.y, rayD.x);
+              float raySpokes = pow(abs(sin(rayAng * 11.0 + 0.2)), 8.0) * exp(-length(rayD) * 1.8) * 0.52;
+              float limb = pow(zS, 0.42);
+              vec3 highlandCol = vec3(0.96, 0.95, 0.92);
+              vec3 mariaCol = vec3(0.44, 0.46, 0.50);
+              vec3 moonSurface = mix(highlandCol, mariaCol, maria * 0.58) + vec3(raySpokes);
+              moonSurface *= limb;
+              float moonAlpha = smoothstep(1.0, 0.94, r);
+              skyCol = mix(skyCol, moonSurface * 1.85, moonAlpha * uNightFactor * (1.0 - uRainFactor * 0.7));
+            }
+          }
+
+          // 2. Deep Cosmic Milky Way with H-Alpha (magenta) & O-III (cyan) Emission Nebulae
+          if (elev > 0.02) {
+            float mwCoord = (dir.x * 0.62 + dir.z * 0.48 - dir.y * 0.62);
+            float mwBand = exp(-pow(mwCoord * 3.6, 2.0));
+            float mwP = (dir.x * 0.48 - dir.z * 0.62 + dir.y * 0.35) * 8.0;
+            float coreBulge = exp(-length(vec2(mwCoord * 4.2, mwP - 1.2)) * 1.5) * 1.6;
+            float darkRift = exp(-pow((mwCoord + sin(mwP * 1.2) * 0.06) * 9.0, 2.0)) * 0.75;
+            float netMw = max(0.0, (mwBand * 1.2 + coreBulge) * (1.0 - darkRift));
+            vec3 hAlpha = vec3(0.24, 0.05, 0.16) * (sin(mwP * 2.2 + 0.5) * 0.5 + 0.5);
+            vec3 oIII = vec3(0.04, 0.18, 0.22) * (cos(mwP * 1.8 - 0.7) * 0.5 + 0.5);
+            vec3 starDustGlow = vec3(0.12, 0.15, 0.24);
+            skyCol += (starDustGlow * netMw + (hAlpha + oIII) * netMw * 1.4) * uNightFactor * (1.0 - uCloudCover * 0.75) * (1.0 - uRainFactor * 0.9);
+
+            // 3. High-Density Stellar Field with magnitude distribution & 4-point diffraction spikes
+            vec2 starUv = dir.xz / (elev + 0.28) * 145.0;
+            vec2 id = floor(starUv);
+            vec2 gv = fract(starUv) - 0.5;
+            float rnd = hash21(id);
+            if (rnd > 0.965) {
+              float twinkle = 0.6 + 0.4 * sin(uTime * (1.8 + rnd * 4.0) + rnd * 40.0);
+              float starDot = smoothstep(0.26, 0.015, length(gv));
+              float beacon = smoothstep(0.993, 1.0, rnd);
+              float crossSpike = (smoothstep(0.06, 0.0, abs(gv.x)) * smoothstep(0.45, 0.0, abs(gv.y))
+                                + smoothstep(0.06, 0.0, abs(gv.y)) * smoothstep(0.45, 0.0, abs(gv.x))) * beacon * 0.85;
+              vec3 starCol = mix(vec3(0.75, 0.88, 1.0), vec3(1.0, 0.82, 0.65), fract(rnd * 37.0));
+              skyCol += starCol * (starDot + crossSpike) * twinkle * uNightFactor * smoothstep(0.02, 0.22, elev) * (1.0 - uRainFactor);
+            }
           }
         }
         skyCol += uCityGlowColor * horizonBand * (0.26 * uNightFactor + 0.08 * uSunsetFactor);
@@ -253,7 +310,7 @@ export function buildCircuitEnvironment(
   // ============================================================================
   // 2. DUAL-LAYER VOLUMETRIC FBM CLOUD DECK DOME (Cumulus + High Cirrus)
   // ============================================================================
-  const cloudOctaves = isLow ? 2 : isMedium ? 4 : 6;
+  const cloudOctaves = isLow ? 2 : isMedium ? 4 : quality === 'ultra_8k' ? 7 : 6;
   const cloudUniforms = {
     uTime: { value: 0 },
     uSunDir: skyUniforms.uSunDir,
@@ -508,6 +565,103 @@ export function buildCircuitEnvironment(
     roughness: isDesert ? 0.96 : isRain ? 0.72 : 0.92,
     metalness: 0.02,
   });
+
+  groundMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uGroundTime = grassTimeUniform;
+    shader.uniforms.uGroundRain = skyUniforms.uRainFactor;
+    shader.uniforms.uGroundNight = skyUniforms.uNightFactor;
+    shader.uniforms.uGroundSunset = skyUniforms.uSunsetFactor;
+    shader.uniforms.uGroundIsSnow = { value: isSnowWeather ? 1.0 : 0.0 };
+
+    shader.vertexShader = `
+      varying vec3 vGroundWorldPos;
+      varying vec3 vGroundWorldNormal;
+      ${shader.vertexShader}
+    `;
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vGroundWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      vGroundWorldNormal = normalize(mat3(modelMatrix) * normal);`
+    );
+
+    shader.fragmentShader = `
+      varying vec3 vGroundWorldPos;
+      varying vec3 vGroundWorldNormal;
+      uniform float uGroundTime;
+      uniform float uGroundRain;
+      uniform float uGroundNight;
+      uniform float uGroundSunset;
+      uniform float uGroundIsSnow;
+      ${shader.fragmentShader}
+    `;
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+      vec3 gPos = vGroundWorldPos;
+
+      // 1. Macro soil moisture variation (0.018 - 0.052 frequency)
+      float macroMoist = sin(gPos.x * 0.018 + 1.2) * cos(gPos.z * 0.016 - 0.8) * 0.5 + 0.5;
+      macroMoist += sin(gPos.x * 0.052 - gPos.z * 0.048) * 0.25;
+      diffuseColor.rgb *= mix(0.88, 1.08, macroMoist);
+
+      // 2. Slope-adaptive sedimentary rock cliff strata on steep inclines
+      float gSlope = clamp(vGroundWorldNormal.y, 0.0, 1.0);
+      if (gSlope < 0.84) {
+        float strataBand = sin(gPos.y * 3.8 + gPos.x * 0.2) * 0.5 + 0.5;
+        strataBand += sin(gPos.y * 9.5) * 0.25;
+        vec3 rockDark = vec3(0.24, 0.22, 0.20);
+        vec3 rockLight = vec3(0.44, 0.40, 0.35);
+        vec3 rockCol = mix(rockDark, rockLight, strataBand);
+        float rockBlend = smoothstep(0.84, 0.58, gSlope);
+        diffuseColor.rgb = mix(diffuseColor.rgb, rockCol, rockBlend);
+      }
+
+      // 3. 16K micro turf blade stippling and sand quartz facet glints
+      float microGrain = fract(sin(dot(floor(gPos.xz * 64.0), vec2(127.1, 311.7))) * 43758.5453);
+      float microBlade = fract(sin(dot(floor(gPos.xz * 256.0), vec2(269.5, 183.3))) * 43758.5453);
+      diffuseColor.rgb += vec3((microGrain - 0.5) * 0.045 + (microBlade - 0.5) * 0.035);
+
+      // 4. Dynamic standing-water puddles in rain with animated ripples
+      if (uGroundRain > 0.05 && gSlope > 0.72) {
+        float puddleMask = sin(gPos.x * 0.08 + 2.1) * cos(gPos.z * 0.09 - 1.4) * 0.5 + 0.5;
+        puddleMask = smoothstep(0.56, 0.72, puddleMask) * clamp(uGroundRain * 1.5, 0.0, 1.0);
+        if (puddleMask > 0.01) {
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.44, puddleMask * 0.85);
+          vec2 pUv = gPos.xz * 1.8;
+          vec2 pCell = floor(pUv);
+          vec2 pFrac = fract(pUv) - 0.5;
+          float pSeed = fract(sin(dot(pCell, vec2(41.1, 89.3))) * 43758.5);
+          float pRippleAge = fract(uGroundTime * (1.8 + pSeed * 1.4) + pSeed);
+          float pRing = sin(length(pFrac) * 32.0 - pRippleAge * 18.0) * exp(-pRippleAge * 3.5);
+          diffuseColor.rgb += vec3(pRing * 0.055 * puddleMask);
+        }
+      }
+
+      // 5. Procedural snow and frost blanketing during winter/blizzard
+      if (uGroundIsSnow > 0.5 && gSlope > 0.52) {
+        float snowMask = smoothstep(0.52, 0.82, gSlope);
+        float snowSparkle = pow(microBlade, 12.0) * 0.35;
+        vec3 freshSnow = vec3(0.92, 0.95, 0.99) + vec3(snowSparkle);
+        diffuseColor.rgb = mix(diffuseColor.rgb, freshSnow, snowMask * 0.88);
+      }`
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <roughnessmap_fragment>',
+      `#include <roughnessmap_fragment>
+      if (uGroundRain > 0.05 && vGroundWorldNormal.y > 0.72) {
+        float pMask = sin(vGroundWorldPos.x * 0.08 + 2.1) * cos(vGroundWorldPos.z * 0.09 - 1.4) * 0.5 + 0.5;
+        pMask = smoothstep(0.56, 0.72, pMask) * clamp(uGroundRain * 1.5, 0.0, 1.0);
+        roughnessFactor = mix(roughnessFactor, 0.04, pMask * 0.95);
+      }
+      if (uGroundIsSnow > 0.5 && vGroundWorldNormal.y > 0.52) {
+        roughnessFactor = mix(roughnessFactor, 0.82, smoothstep(0.52, 0.82, vGroundWorldNormal.y));
+      }`
+    );
+  };
+
   const terrainMesh = new THREE.Mesh(terrainGeo, groundMat);
   terrainMesh.receiveShadow = true;
   group.add(terrainMesh);
@@ -550,9 +704,18 @@ export function buildCircuitEnvironment(
       const yVal = -6 + fracY * (crest + 6);
       rPos.setY(i, yVal);
 
+      // Geological rock strata, drainage erosion gullies, and talus scree aprons
+      const gulley = Math.pow(Math.abs(Math.sin(angle * 48.0 + radius * 0.02)), 3.0) * 0.16;
+      const strata = (Math.sin(yVal * 1.6 + angle * 3.5) * 0.07 + Math.cos(yVal * 3.8 - angle * 2.0) * 0.04) * (1.0 - fracY * 0.4);
+
       tmpCol.lerpColors(lowCol, peakCol, Math.pow(fracY, 0.85));
-      if (snowCap && fracY > 0.72) {
-        tmpCol.lerp(snowCol, THREE.MathUtils.smoothstep(fracY, 0.72, 0.96));
+      tmpCol.r = Math.max(0.01, tmpCol.r * (1.0 - gulley) + strata);
+      tmpCol.g = Math.max(0.01, tmpCol.g * (1.0 - gulley) + strata);
+      tmpCol.b = Math.max(0.01, tmpCol.b * (1.0 - gulley * 0.8) + strata);
+
+      if (snowCap && fracY > 0.70) {
+        const snowAmt = THREE.MathUtils.smoothstep(fracY, 0.70, 0.94);
+        tmpCol.lerp(snowCol, snowAmt);
       }
       colors[i * 3] = tmpCol.r;
       colors[i * 3 + 1] = tmpCol.g;
@@ -726,6 +889,70 @@ export function buildCircuitEnvironment(
       roughness: 0.84,
       metalness: 0.02,
     });
+    canopyMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uGrassTime = grassTimeUniform;
+      shader.uniforms.uSunDir = skyUniforms.uSunDir;
+      shader.uniforms.uRainFactor = skyUniforms.uRainFactor;
+      shader.uniforms.uNightFactor = skyUniforms.uNightFactor;
+
+      shader.vertexShader = `
+        varying vec3 vCanopyWorldPos;
+        varying vec3 vCanopyNormal;
+        uniform float uGrassTime;
+        ${shader.vertexShader}
+      `;
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vCanopyWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vCanopyNormal = normalize(mat3(modelMatrix) * normal);
+
+        // 3-Tier Biomechanical Wind Sway
+        float trunkSway = smoothstep(1.5, 9.0, position.y);
+        // Tier 1: Primary trunk sway
+        transformed.x += sin(uGrassTime * 0.85 + vCanopyWorldPos.x * 0.04) * 0.12 * trunkSway;
+        transformed.z += cos(uGrassTime * 0.72 + vCanopyWorldPos.z * 0.04) * 0.09 * trunkSway;
+
+        // Tier 2: Mid-frequency bough cluster oscillation
+        transformed.x += sin(uGrassTime * 1.9 + position.y * 1.4) * 0.05 * trunkSway;
+        transformed.z += cos(uGrassTime * 1.6 + position.x * 1.2) * 0.04 * trunkSway;
+
+        // Tier 3: High-frequency leaf flutter
+        transformed.y += sin(uGrassTime * 4.6 + dot(position, vec3(8.0, 12.0, 6.0))) * 0.022 * trunkSway;`
+      );
+
+      shader.fragmentShader = `
+        varying vec3 vCanopyWorldPos;
+        varying vec3 vCanopyNormal;
+        uniform vec3 uSunDir;
+        uniform float uRainFactor;
+        uniform float uNightFactor;
+        ${shader.fragmentShader}
+      `;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        // Subsurface Scattering (SSS) chloroplast backlighting translucency
+        float backDot = max(0.0, dot(-vCanopyNormal, normalize(uSunDir)));
+        vec3 sssGlow = vec3(0.44, 0.72, 0.18) * pow(backDot, 2.2) * 0.52 * (1.0 - uNightFactor);
+        diffuseColor.rgb += sssGlow;
+
+        // 16K Leaf cellular cuticle & fine vein pattern
+        vec3 leafCoord = vCanopyWorldPos * 68.0;
+        float veinNoise = sin(leafCoord.x * 3.2 + leafCoord.y * 2.1) * sin(leafCoord.z * 2.8) * 0.5 + 0.5;
+        float leafHash = fract(sin(dot(floor(vCanopyWorldPos * 180.0), vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+        diffuseColor.rgb += vec3((veinNoise - 0.5) * 0.05 + (leafHash - 0.5) * 0.04);
+
+        ${isSnowWeather ? 'if (vCanopyNormal.y > 0.38) { float sCov = smoothstep(0.38, 0.82, vCanopyNormal.y); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.94, 0.97, 1.0), sCov * 0.88); }' : ''}`
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        if (uRainFactor > 0.08) {
+          roughnessFactor = mix(roughnessFactor, 0.28, clamp(uRainFactor * 1.2, 0.0, 0.75));
+        }`
+      );
+    };
     disposables.push(trunkMat, canopyMat);
 
     const trunkGeo = isPalmBiome
@@ -991,7 +1218,6 @@ export function buildCircuitEnvironment(
   // ============================================================================
   // 5b. WIND-SWAYED TRACKSIDE GRASS TUFTS (instanced crossed blades, 1 draw call)
   // ============================================================================
-  const grassTimeUniform = { value: 0 };
   if (!isDesert && !isLow) {
     const tuftCount = Math.floor((isMedium ? 1800 : 4200) * foliageMult);
     const bladeGeo = (() => {

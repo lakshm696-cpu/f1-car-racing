@@ -1,6 +1,6 @@
 {
   "name": "Ultimate Formula Racing 2026",
-  "description": "High-octane 3D Formula Racing game featuring realistic physics, AI opponents, garage customization, and Unity 6 LTS C# architecture.",
+  "description": "High-octane 3D Formula Racing game featuring progressive track rubbering-in, surface deformation particles, multi-octave procedural normal maps, 4-wheel tyre deformation, real-time ray-traced reflections, dynamic weather, and 24-hour day-night cycles with adaptive global illumination.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

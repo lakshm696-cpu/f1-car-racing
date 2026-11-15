@@ -70,7 +70,10 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     .sort((a, b) => Math.abs(a.gapToPlayerSeconds) - Math.abs(b.gapToPlayerSeconds));
 
   const nearestClose = closeOpponents[0] ?? null;
-  const isYellowFlag = trackFlag?.flag === 'yellow';
+  const isYellowFlag = trackFlag?.flag === 'yellow' || trackFlag?.flag === 'red';
+  const isRedFlag = trackFlag?.flag === 'red';
+  const isBlueFlag = trackFlag?.flag === 'blue';
+  const isCheckeredFlag = trackFlag?.flag === 'checkered';
 
   return (
     <div
@@ -104,10 +107,23 @@ export const MiniMap: React.FC<MiniMapProps> = ({
             <span>GRIP</span>
           </button>
 
-          {isYellowFlag ? (
+          {isRedFlag ? (
+            <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-red-500/30 text-red-300 border border-red-400/70 flex items-center gap-1 whitespace-nowrap shrink-0 animate-pulse">
+              <AlertTriangle className="w-3 h-3 text-red-400" />
+              RED S{currentSector}
+            </span>
+          ) : isYellowFlag ? (
             <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-500/25 text-amber-300 border border-amber-400/50 flex items-center gap-1 whitespace-nowrap shrink-0">
               <AlertTriangle className="w-3 h-3 text-amber-400" />
               YELLOW S{currentSector}
+            </span>
+          ) : isBlueFlag ? (
+            <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-sky-500/25 text-sky-300 border border-sky-400/60 flex items-center gap-1 whitespace-nowrap shrink-0">
+              BLUE FLAG
+            </span>
+          ) : isCheckeredFlag ? (
+            <span className="font-mono-telemetry px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-white/20 text-white border border-white/60 flex items-center gap-1 whitespace-nowrap shrink-0">
+              CHECKERED
             </span>
           ) : nearestClose ? (
             <span

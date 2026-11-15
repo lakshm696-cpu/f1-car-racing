@@ -159,28 +159,31 @@ export function buildCircuitTrack(
   group.add(rightGravel);
 
   // 3. High-Fidelity Asphalt Road Ribbon (+ Wet Rain Shimmer / Progressive Racing Line Darkening / Off-Line Marbles)
+  const isSnow = weather === 'snow' || weather === 'blizzard';
   const rainUniform = { value: 0 };
-  const wetnessUniform = { value: isRain ? (weather === 'heavy_rain' ? 1.0 : 0.78) : 0.0 };
+  const wetnessUniform = { value: isRain || isSnow ? (weather === 'heavy_rain' || weather === 'blizzard' ? 1.0 : 0.78) : 0.0 };
+  const snowUniform = { value: isSnow ? (weather === 'blizzard' ? 1.0 : 0.75) : 0.0 };
   const rubberLevelUniform = { value: 0.0 };
   const sectorRubberUniform = { value: new THREE.Vector3(0, 0, 0) };
   const roadMat = new THREE.MeshPhysicalMaterial({
     map: textures.asphaltMap,
     normalMap: textures.asphaltNormalMap,
-    normalScale: new THREE.Vector2(0.56, 0.56),
+    normalScale: new THREE.Vector2(0.74, 0.74),
     roughnessMap: textures.asphaltRoughnessMap,
-    color: isRain ? (weather === 'heavy_rain' ? 0x12161e : 0x181c24) : 0xffffff,
-    roughness: isRain ? (weather === 'heavy_rain' ? 0.12 : 0.17) : isSunset ? 0.40 : 0.78,
-    metalness: isRain ? 0.38 : isSunset ? 0.18 : 0.08,
-    clearcoat: isRain ? 0.98 : isSunset ? 0.34 : 0.10,
-    clearcoatRoughness: isRain ? 0.04 : isSunset ? 0.20 : 0.38,
-    ior: 1.5,
+    color: isRain ? (weather === 'heavy_rain' ? 0x10141c : 0x161a22) : 0xffffff,
+    roughness: isRain ? (weather === 'heavy_rain' ? 0.09 : 0.14) : isSunset ? 0.36 : 0.72,
+    metalness: isRain ? 0.44 : isSunset ? 0.22 : 0.10,
+    clearcoat: isRain ? 1.0 : isSunset ? 0.42 : 0.16,
+    clearcoatRoughness: isRain ? 0.025 : isSunset ? 0.16 : 0.30,
+    ior: 1.52,
     specularIntensity: 1.0,
-    envMapIntensity: isRain ? 2.65 : isSunset ? 1.82 : 1.24,
+    envMapIntensity: isRain ? 3.15 : isSunset ? 2.18 : 1.54,
   });
 
   roadMat.onBeforeCompile = (shader) => {
     shader.uniforms.uRainTime = rainUniform;
     shader.uniforms.uWetnessLevel = wetnessUniform;
+    shader.uniforms.uSnowLevel = snowUniform;
     shader.uniforms.uRubberLevel = rubberLevelUniform;
     shader.uniforms.uSectorRubber = sectorRubberUniform;
     shader.vertexShader =
@@ -195,16 +198,36 @@ export function buildCircuitTrack(
       vTrackProgressT = aTrackProgressT;`
     );
     shader.fragmentShader =
-      'uniform float uRainTime;\nuniform float uWetnessLevel;\nuniform float uRubberLevel;\nuniform vec3 uSectorRubber;\nvarying vec3 vTrackWorldPos;\nvarying vec2 vRoadUv;\nvarying float vIdealLineU;\nvarying float vTrackProgressT;\n' +
+      'uniform float uRainTime;\nuniform float uWetnessLevel;\nuniform float uSnowLevel;\nuniform float uRubberLevel;\nuniform vec3 uSectorRubber;\nvarying vec3 vTrackWorldPos;\nvarying vec2 vRoadUv;\nvarying float vIdealLineU;\nvarying float vTrackProgressT;\n' +
       shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <color_fragment>',
       `#include <color_fragment>
       {
-        // Mineral quartz aggregate micro-specular sparkle in tarmac
-        float aggHash = fract(sin(dot(floor(vTrackWorldPos.xz * 48.0), vec2(127.1, 311.7))) * 43758.5453);
-        float aggSparkle = step(0.92, aggHash) * (0.045 + 0.035 * sin(vTrackWorldPos.x * 19.0 + vTrackWorldPos.z * 23.0));
-        diffuseColor.rgb += vec3(aggSparkle) * (1.0 - uWetnessLevel * 0.5);
+        // 16K Procedural Multi-Octave Aggregate & Quartz Grain Detail
+        vec2 p16k = vTrackWorldPos.xz * 38.0;
+        float oct1 = sin(p16k.x * 1.0 + p16k.y * 1.2) * 0.5 + 0.5;
+        float oct2 = sin(p16k.x * 2.8 - p16k.y * 2.4) * 0.5 + 0.5;
+        float oct3 = sin(p16k.x * 7.4 + p16k.y * 6.8) * 0.5 + 0.5;
+        float oct4 = fract(sin(dot(floor(vTrackWorldPos.xz * 280.0), vec2(43.12, 89.41))) * 43758.5453);
+        float microAgg16k = (oct1 * 0.45 + oct2 * 0.30 + oct3 * 0.18 + oct4 * 0.07) - 0.5;
+        diffuseColor.rgb += vec3(microAgg16k * 0.045);
+
+        // Dual-scale mineral quartz aggregate micro-specular sparkle in tarmac
+        float aggHash = fract(sin(dot(floor(vTrackWorldPos.xz * 54.0), vec2(127.1, 311.7))) * 43758.5453);
+        float aggFineHash = fract(sin(dot(floor(vTrackWorldPos.xz * 128.0), vec2(269.5, 183.3))) * 43758.5453);
+        float aggSparkle = step(0.90, aggHash) * (0.052 + 0.040 * sin(vTrackWorldPos.x * 21.0 + vTrackWorldPos.z * 25.0))
+                         + step(0.94, aggFineHash) * 0.038;
+        diffuseColor.rgb += vec3(aggSparkle) * (1.0 - uWetnessLevel * 0.45);
+
+        // Volumetric Snow & Crystalline Frost Accumulation
+        if (uSnowLevel > 0.02) {
+          float dLineS = abs(vRoadUv.x - vIdealLineU);
+          float snowMask = smoothstep(0.12, 0.42, dLineS) * uSnowLevel;
+          float frostSparkle = fract(sin(dot(floor(vTrackWorldPos.xz * 92.0), vec2(19.3, 71.7))) * 43758.5453);
+          vec3 snowColor = vec3(0.92, 0.95, 0.99) + vec3(frostSparkle * 0.07);
+          diffuseColor.rgb = mix(diffuseColor.rgb, snowColor, snowMask * 0.88);
+        }
 
         float secPos = vTrackProgressT * 3.0;
         float secRub = secPos < 1.0
@@ -222,7 +245,7 @@ export function buildCircuitTrack(
           float longStreaks = 0.80 + 0.20 * sin(vRoadUv.y * 64.0 + sin(vRoadUv.x * 38.0) * 2.2) * cos(vRoadUv.y * 21.0);
           float rubberGrooveMask = clamp((centerCorridor * 0.50 + wheelGrooves * 0.62) * longStreaks, 0.0, 1.0);
           // Progressive darkening of the apex-hugging racing line as polymer lays down
-          diffuseColor.rgb *= (1.0 - rubberGrooveMask * effRubber * 0.48);
+          diffuseColor.rgb *= (1.0 - rubberGrooveMask * effRubber * 0.52);
 
           // Off-line dusty surface & shed vulcanized tyre rubber marbles ('clag')
           float offLineZone = smoothstep(0.16, 0.34, dLine);
@@ -230,11 +253,86 @@ export function buildCircuitTrack(
             float mCell = fract(sin(dot(floor(vRoadUv * vec2(170.0, 880.0)), vec2(12.9898, 78.233))) * 43758.5453);
             float marbleClag = step(0.935 - effRubber * 0.085, mCell) * offLineZone * effRubber;
             diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.05, 1.03), offLineZone * effRubber * 0.16);
-            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.035, 0.045), marbleClag * 0.72);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.025, 0.030, 0.040), marbleClag * 0.76);
           }
+        }
+
+        if (uWetnessLevel > 0.05) {
+          float pA = sin(vTrackWorldPos.x * 0.14) * cos(vTrackWorldPos.z * 0.14);
+          float pB = sin((vTrackWorldPos.x + vTrackWorldPos.z) * 0.085) * 0.55 + cos((vTrackWorldPos.x - vTrackWorldPos.z) * 0.21) * 0.35;
+          float pMask = smoothstep(0.08, 0.58, pA + pB) * uWetnessLevel;
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.075, 0.115), pMask * 0.36);
         }
       }`
     );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+      {
+        // Multi-Octave Fine Surface Normal Perturbation (Basalt chips, quartz facets & aggregate)
+        vec2 nCoord = vTrackWorldPos.xz;
+        float d1x = sin(nCoord.x * 32.0 + nCoord.y * 22.0) * 0.12;
+        float d1z = cos(nCoord.y * 32.0 - nCoord.x * 22.0) * 0.12;
+        float d2x = sin(nCoord.x * 96.0 - nCoord.y * 84.0) * 0.08;
+        float d2z = cos(nCoord.y * 96.0 + nCoord.x * 84.0) * 0.08;
+        float d3x = sin(nCoord.x * 280.0 + nCoord.y * 260.0) * 0.05;
+        float d3z = cos(nCoord.y * 280.0 - nCoord.x * 260.0) * 0.05;
+        vec3 microNormPerturb = vec3(d1x + d2x + d3x, 0.0, d1z + d2z + d3z);
+        normal = normalize(normal + microNormPerturb);
+
+        // Progressive Racing Line Normal Alignment & Polish
+        float secPosN = vTrackProgressT * 3.0;
+        float secRubN = secPosN < 1.0 ? uSectorRubber.x : (secPosN < 2.0 ? uSectorRubber.y : uSectorRubber.z);
+        float effRubN = clamp(max(uRubberLevel, secRubN), 0.0, 1.0);
+        if (effRubN > 0.005) {
+          float dLineN = abs(vRoadUv.x - vIdealLineU);
+          float grooveSheen = exp(-dLineN * dLineN * 140.0) * effRubN;
+          // Polish racing groove normals smooth for broadcast-grade specular glossiness
+          normal = normalize(mix(normal, vec3(0.0, 1.0, 0.0), grooveSheen * 0.38));
+
+          // Bumpy off-line tyre rubber clag marbles
+          float offLineZoneN = smoothstep(0.18, 0.36, dLineN);
+          if (offLineZoneN > 0.01) {
+            float clagHash = fract(sin(dot(floor(vRoadUv * vec2(170.0, 880.0)), vec2(12.98, 78.23))) * 43758.54);
+            if (clagHash > (0.935 - effRubN * 0.085)) {
+              vec2 clagOffset = fract(vRoadUv * vec2(170.0, 880.0)) - 0.5;
+              vec3 clagBump = vec3(clagOffset.x * 1.6, 0.0, clagOffset.y * 1.6);
+              normal = normalize(normal + clagBump * offLineZoneN * 0.55);
+            }
+          }
+        }
+
+        // Wet puddles flatten surface normals (mirror puddle reflections) with animated rain ripples
+        if (uWetnessLevel > 0.05) {
+          float pA = sin(vTrackWorldPos.x * 0.14) * cos(vTrackWorldPos.z * 0.14);
+          float pB = sin((vTrackWorldPos.x + vTrackWorldPos.z) * 0.085) * 0.55 + cos((vTrackWorldPos.x - vTrackWorldPos.z) * 0.21) * 0.35;
+          float pMask = smoothstep(0.08, 0.58, pA + pB) * uWetnessLevel;
+          normal = normalize(mix(normal, vec3(0.0, 1.0, 0.0), pMask * 0.65));
+
+          float ripA = sin(length(vTrackWorldPos.xz * 8.5) - uRainTime * 12.0);
+          float ripB = cos(length(vTrackWorldPos.xz * 14.0 + vec2(7.3, 11.2)) - uRainTime * 16.0);
+          vec3 ripNorm = vec3(ripA * 0.09, 0.0, ripB * 0.09);
+          normal = normalize(mix(normal, normal + ripNorm, uWetnessLevel * (0.06 + 0.18 * pMask)));
+        }
+      }`
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <clearcoat_fragment>',
+      `#include <clearcoat_fragment>
+      {
+        float secPosC = vTrackProgressT * 3.0;
+        float secRubC = secPosC < 1.0 ? uSectorRubber.x : (secPosC < 2.0 ? uSectorRubber.y : uSectorRubber.z);
+        float effRubC = clamp(max(uRubberLevel, secRubC), 0.0, 1.0);
+        if (effRubC > 0.005) {
+          float dLineC = abs(vRoadUv.x - vIdealLineU);
+          float grooveGlisten = exp(-dLineC * dLineC * 140.0) * effRubC;
+          clearcoat = clamp(clearcoat + grooveGlisten * 0.42, 0.0, 1.0);
+          clearcoatRoughness = clamp(clearcoatRoughness - grooveGlisten * 0.28, 0.04, 1.0);
+        }
+      }`
+    );
+
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <roughnessmap_fragment>',
       `#include <roughnessmap_fragment>
@@ -246,17 +344,17 @@ export function buildCircuitTrack(
           float dLineR = abs(vRoadUv.x - vIdealLineU);
           float groovePolish = exp(-dLineR * dLineR * 120.0) * effRubberR;
           float offLineRough = smoothstep(0.18, 0.36, dLineR) * effRubberR;
-          roughnessFactor = clamp(roughnessFactor - groovePolish * 0.30 + offLineRough * 0.12, 0.035, 1.0);
+          roughnessFactor = clamp(roughnessFactor - groovePolish * 0.34 + offLineRough * 0.12, 0.028, 1.0);
         }
       }
       if (uWetnessLevel > 0.05) {
         float puddleA = sin(vTrackWorldPos.x * 0.14) * cos(vTrackWorldPos.z * 0.14);
         float puddleB = sin((vTrackWorldPos.x + vTrackWorldPos.z) * 0.085) * 0.55 + cos((vTrackWorldPos.x - vTrackWorldPos.z) * 0.21) * 0.35;
-        float puddleMask = smoothstep(0.10, 0.62, puddleA + puddleB) * uWetnessLevel;
-        float rCellA = sin(vTrackWorldPos.x * 2.6 + uRainTime * 5.1) * cos(vTrackWorldPos.z * 2.6 - uRainTime * 4.4);
-        float rCellB = cos(vTrackWorldPos.x * 4.3 - uRainTime * 6.0) * sin(vTrackWorldPos.z * 4.3 + uRainTime * 5.5);
-        float rippleRing = smoothstep(0.54, 0.96, abs(rCellA * 0.62 + rCellB * 0.38)) * uWetnessLevel;
-        roughnessFactor = clamp(roughnessFactor - puddleMask * 0.42 - rippleRing * 0.22, 0.014, 1.0);
+        float puddleMask = smoothstep(0.08, 0.58, puddleA + puddleB) * uWetnessLevel;
+        float rCellA = sin(vTrackWorldPos.x * 2.8 + uRainTime * 5.4) * cos(vTrackWorldPos.z * 2.8 - uRainTime * 4.7);
+        float rCellB = cos(vTrackWorldPos.x * 4.6 - uRainTime * 6.3) * sin(vTrackWorldPos.z * 4.6 + uRainTime * 5.8);
+        float rippleRing = smoothstep(0.52, 0.95, abs(rCellA * 0.62 + rCellB * 0.38)) * uWetnessLevel;
+        roughnessFactor = clamp(roughnessFactor - puddleMask * 0.48 - rippleRing * 0.25, 0.008, 1.0);
       }`
     );
   };
@@ -397,7 +495,7 @@ export function buildCircuitTrack(
     group.add(board);
   }
 
-  // Electronic FIA LED Marshal Light Panels
+  // Electronic FIA Trackside Marshal Observation Posts & Digital Flag Panels
   const marshalMat = new THREE.MeshStandardMaterial({
     map: textures.marshalPanelMap,
     emissiveMap: textures.marshalPanelMap,
@@ -405,17 +503,72 @@ export function buildCircuitTrack(
     emissiveIntensity: isNight ? 1.85 : 1.05,
     roughness: 0.3,
   });
+  const marshalPostSteelMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.72, roughness: 0.35 });
+  const marshalTabardMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.55 });
+  const marshalHelmetMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.28 });
+  const extingMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.45, roughness: 0.3 });
+
   for (let i = 15; i < sampleCount; i += 30) {
     const f = samples[i];
     const mGroup = new THREE.Group();
-    mGroup.position.copy(f.point).addScaledVector(f.right, -(halfW + 2.6));
+    mGroup.position.copy(f.point).addScaledVector(f.right, -(halfW + 3.1));
     mGroup.rotation.y = Math.atan2(-f.tangent.x, -f.tangent.z);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.2, 8), postMat);
-    pole.position.y = 1.1;
+
+    // 1. Raised galvanized steel observation platform with 4 stanchion legs
+    const platDeck = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.12, 1.45), marshalPostSteelMat);
+    platDeck.position.y = 1.05;
+    mGroup.add(platDeck);
+
+    for (const sx of [-0.72, 0.72]) {
+      for (const sz of [-0.62, 0.62]) {
+        const mLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.05, 6), marshalPostSteelMat);
+        mLeg.position.set(sx, 0.525, sz);
+        mGroup.add(mLeg);
+      }
+    }
+
+    // Platform perimeter safety guardrail
+    const railGeo = new THREE.BoxGeometry(1.65, 0.04, 0.04);
+    const railFront = new THREE.Mesh(railGeo, marshalPostSteelMat);
+    railFront.position.set(0, 1.85, 0.68);
+    mGroup.add(railFront);
+    const railBack = new THREE.Mesh(railGeo, marshalPostSteelMat);
+    railBack.position.set(0, 1.85, -0.68);
+    mGroup.add(railBack);
+
+    // Weather shelter canopy roof
+    const mRoof = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.08, 1.65), marshalPostSteelMat);
+    mRoof.position.set(0, 2.7, 0);
+    mRoof.rotation.x = 0.08;
+    mGroup.add(mRoof);
+
+    // 2. High-vis FIA track marshal figurine on observation deck
+    const mBody = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.48, 0.22), marshalTabardMat);
+    mBody.position.set(0.18, 1.38, 0.1);
+    mGroup.add(mBody);
+    const mHead = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), marshalHelmetMat);
+    mHead.position.set(0.18, 1.72, 0.1);
+    mGroup.add(mHead);
+
+    // 3. Digital FIA LED Flag Panel
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.2, 8), postMat);
+    pole.position.set(-0.62, 1.85, 0.55);
     mGroup.add(pole);
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.15, 0.16), marshalMat);
-    panel.position.y = 2.4;
+
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.16), marshalMat);
+    panel.position.set(-0.62, 2.65, 0.55);
     mGroup.add(panel);
+
+    const panelBack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.16), marshalMat);
+    panelBack.position.set(-0.62, 2.65, 0.55);
+    panelBack.rotation.y = Math.PI;
+    mGroup.add(panelBack);
+
+    // 4. Ground safety fire extinguisher bottle
+    const exting = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.46, 8), extingMat);
+    exting.position.set(0.75, 0.23, 0.55);
+    mGroup.add(exting);
+
     group.add(mGroup);
   }
 
@@ -445,7 +598,9 @@ export function buildCircuitTrack(
     group.add(bridgeGroup);
   }
 
-  // Braking Distance Marker Boards before corners
+  // Braking Distance Marker Boards before corners (150m, 100m, 50m) with Dual Ground Anchors & Footing Plinths
+  const concreteFootingMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.88 });
+  const signBackMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.65, roughness: 0.35 });
   for (let i = 18; i < sampleCount - 12; i += 14) {
     if (samples[i].curvature > 0.14 && samples[i - 8].curvature < 0.08) {
       [6, 4, 2].forEach((offsetIdx, bIdx) => {
@@ -453,15 +608,34 @@ export function buildCircuitTrack(
         const bGroup = new THREE.Group();
         bGroup.position.copy(bf.point).addScaledVector(bf.right, halfW + 2.4);
         bGroup.rotation.y = Math.atan2(-bf.tangent.x, -bf.tangent.z);
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), postMat);
-        leg.position.y = 0.55;
-        bGroup.add(leg);
+
+        // Dual tubular steel support posts with diagonal rear strut
+        for (const sx of [-0.42, 0.42]) {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.2, 8), postMat);
+          leg.position.set(sx, 0.6, 0);
+          bGroup.add(leg);
+
+          const footing = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.24), concreteFootingMat);
+          footing.position.set(sx, 0.08, 0);
+          bGroup.add(footing);
+        }
+
+        const rearBrace = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 6), postMat);
+        rearBrace.position.set(0, 0.55, -0.35);
+        rearBrace.rotation.x = 0.55;
+        bGroup.add(rearBrace);
+
+        const signBack = new THREE.Mesh(new THREE.BoxGeometry(1.24, 1.02, 0.06), signBackMat);
+        signBack.position.set(0, 1.35, -0.02);
+        bGroup.add(signBack);
+
         const sign = new THREE.Mesh(
-          new THREE.BoxGeometry(1.1, 0.9, 0.12),
-          new THREE.MeshStandardMaterial({ map: textures.brakeBoardTextures[bIdx], roughness: 0.4 })
+          new THREE.BoxGeometry(1.15, 0.95, 0.06),
+          new THREE.MeshStandardMaterial({ map: textures.brakeBoardTextures[bIdx], roughness: 0.38 })
         );
-        sign.position.y = 1.25;
+        sign.position.set(0, 1.35, 0.02);
         bGroup.add(sign);
+
         group.add(bGroup);
       });
     }
@@ -672,28 +846,84 @@ export function buildCircuitTrack(
   gantryGroup.position.copy(startFrame.point);
   gantryGroup.rotation.y = startYaw;
 
-  const gantryMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.68, roughness: 0.3 });
+  const gantryMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.72, roughness: 0.28 });
+  const trussMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.78, roughness: 0.32 });
+  const yellowRailMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.42 });
+  const podMat = new THREE.MeshStandardMaterial({ color: 0x090b0f, metalness: 0.82, roughness: 0.25 });
+  const visorMat = new THREE.MeshStandardMaterial({ color: 0x05070a, roughness: 0.5 });
   const spanWidth = track.trackWidth + 3.2;
 
+  // 1. Dual Vertical Pylon Pillars with Diagonal Steel Lattice Struts & Plinths
   for (const s of [-1, 1]) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.65, 6.2, 0.65), gantryMat);
-    pillar.position.set(s * (spanWidth * 0.5), 3.1, 0);
+    const pillarX = s * (spanWidth * 0.5);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 6.4, 0.72), gantryMat);
+    pillar.position.set(pillarX, 3.2, 0);
     pillar.castShadow = true;
     gantryGroup.add(pillar);
+
+    // Diagonal corner gusset knee brace supporting horizontal span
+    const brace = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.8, 0.18), trussMat);
+    brace.position.set(pillarX - s * 0.65, 5.2, 0);
+    brace.rotation.z = s * 0.78;
+    gantryGroup.add(brace);
+
+    // Foundation concrete footing
+    const footing = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 1.2), concreteFootingMat);
+    footing.position.set(pillarX, 0.175, 0);
+    gantryGroup.add(footing);
   }
-  const bridge = new THREE.Mesh(new THREE.BoxGeometry(spanWidth + 0.65, 1.15, 0.85), gantryMat);
-  bridge.position.set(0, 5.8, 0);
+
+  // 2. Horizontal Space-Frame Bridge Span & Overhead Maintenance Catwalk
+  const bridge = new THREE.Mesh(new THREE.BoxGeometry(spanWidth + 0.72, 1.25, 0.95), gantryMat);
+  bridge.position.set(0, 5.9, 0);
   bridge.castShadow = true;
   gantryGroup.add(bridge);
 
+  // Tubular lattice diagonal struts along top face of bridge
+  const trussCount = Math.floor(spanWidth / 1.6);
+  for (let t = 0; t < trussCount; t++) {
+    const tx = -spanWidth * 0.45 + (t / Math.max(1, trussCount - 1)) * (spanWidth * 0.9);
+    const tStrut = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.45, 6), trussMat);
+    tStrut.position.set(tx, 6.7, 0);
+    tStrut.rotation.z = (t % 2 === 0 ? 1 : -1) * 0.65;
+    gantryGroup.add(tStrut);
+  }
+
+  // Maintenance Catwalk with safety handrails
+  const catwalk = new THREE.Mesh(new THREE.BoxGeometry(spanWidth, 0.08, 0.82), trussMat);
+  catwalk.position.set(0, 6.56, 0);
+  gantryGroup.add(catwalk);
+
+  for (const rz of [-0.4, 0.4]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(spanWidth, 0.04, 0.04), yellowRailMat);
+    rail.position.set(0, 7.35, rz);
+    gantryGroup.add(rail);
+  }
+
+  // 3. Official FIA 5-Column Cluster Pods (Dual Red Start Lights, Amber Hazard, Green Go)
   const startLights: THREE.MeshStandardMaterial[] = [];
+  const amberMat = new THREE.MeshStandardMaterial({
+    color: 0x3b2405,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 0,
+    roughness: 0.25,
+  });
+  const greenMat = new THREE.MeshStandardMaterial({
+    color: 0x052e16,
+    emissive: 0x10b981,
+    emissiveIntensity: 0,
+    roughness: 0.25,
+  });
+
   for (let i = 0; i < 5; i++) {
-    const podHousing = new THREE.Mesh(
-      new THREE.BoxGeometry(0.85, 0.85, 0.95),
-      new THREE.MeshStandardMaterial({ color: 0x090b0f, roughness: 0.5 })
-    );
-    podHousing.position.set((i - 2) * 1.35, 5.15, 0);
+    const px = (i - 2) * 1.45;
+    const podHousing = new THREE.Mesh(new THREE.BoxGeometry(0.82, 1.85, 0.68), podMat);
+    podHousing.position.set(px, 4.8, 0);
     gantryGroup.add(podHousing);
+
+    const mBracket = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.45, 0.2), trussMat);
+    mBracket.position.set(px, 5.85, 0);
+    gantryGroup.add(mBracket);
 
     const bulbMat = new THREE.MeshStandardMaterial({
       color: 0x2a0808,
@@ -702,11 +932,50 @@ export function buildCircuitTrack(
       roughness: 0.2,
     });
     startLights.push(bulbMat);
-    const bulb = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.98, 16), bulbMat);
-    bulb.rotation.x = Math.PI / 2;
-    bulb.position.set((i - 2) * 1.35, 5.15, 0);
-    gantryGroup.add(bulb);
+
+    // Pair of Red Starting Bulbs (upper and mid-upper)
+    for (const by of [5.25, 4.95]) {
+      const bulb = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.72, 14), bulbMat);
+      bulb.rotation.x = Math.PI / 2;
+      bulb.position.set(px, by, 0);
+      gantryGroup.add(bulb);
+
+      // Sun-hood visor shroud to prevent glare
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.04, 0.22), visorMat);
+      visor.position.set(px, by + 0.16, 0.36);
+      visor.rotation.x = 0.25;
+      gantryGroup.add(visor);
+    }
+
+    // Lower Amber Caution Bulb
+    const aBulb = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.72, 14), amberMat);
+    aBulb.rotation.x = Math.PI / 2;
+    aBulb.position.set(px, 4.55, 0);
+    gantryGroup.add(aBulb);
+
+    // Bottom Green Signal Bulb
+    const gBulb = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.72, 14), greenMat);
+    gBulb.rotation.x = Math.PI / 2;
+    gBulb.position.set(px, 4.22, 0);
+    gantryGroup.add(gBulb);
   }
+
+  // 4. Central Digital Speed Trap / Countdown LED Matrix Display
+  const timerHousing = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.65, 0.2), podMat);
+  timerHousing.position.set(0, 5.9, 0.52);
+  gantryGroup.add(timerHousing);
+
+  const timerScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 0.52),
+    new THREE.MeshStandardMaterial({
+      color: 0x05070a,
+      emissive: 0x38bdf8,
+      emissiveIntensity: isNight ? 1.6 : 0.9,
+      roughness: 0.15,
+    })
+  );
+  timerScreen.position.set(0, 5.9, 0.63);
+  gantryGroup.add(timerScreen);
   if (isSunset || isNight || isRain) {
     const gantryBeamMat = new THREE.MeshBasicMaterial({
       color: isSunset ? 0xfed7aa : isNight ? envCfg.lighting.nightFloodlightColor : 0xe0f2fe,
@@ -903,7 +1172,14 @@ export function buildCircuitTrack(
   const jumboLegGeo = new THREE.CylinderGeometry(0.24, 0.34, 8.5, 8);
   const jumboHousingGeo = new THREE.BoxGeometry(10.8, 5.6, 0.65);
   const jumboFaceGeo = new THREE.PlaneGeometry(10.2, 5.1);
-  trackDisposables.push(jumboFrameMat, jumboScreenMat, jumboLegGeo, jumboHousingGeo, jumboFaceGeo);
+  const jumboBezelMat = new THREE.MeshStandardMaterial({
+    color: 0x0284c7,
+    emissive: 0x38bdf8,
+    emissiveIntensity: isNight ? 1.8 : 0.9,
+    roughness: 0.2,
+  });
+  const jumboBezelGeo = new THREE.BoxGeometry(10.5, 5.3, 0.08);
+  trackDisposables.push(jumboFrameMat, jumboScreenMat, jumboBezelMat, jumboLegGeo, jumboHousingGeo, jumboFaceGeo, jumboBezelGeo);
 
   for (const [frac, side] of [
     [0.06, -(halfW + 10.5)],
@@ -914,19 +1190,55 @@ export function buildCircuitTrack(
     const jGroup = new THREE.Group();
     jGroup.position.copy(jf.point).addScaledVector(jf.right, side);
     jGroup.rotation.y = Math.atan2(-jf.tangent.x, -jf.tangent.z) + (side > 0 ? -0.45 : 0.45);
-    const jLeg = new THREE.Mesh(jumboLegGeo, jumboFrameMat);
-    jLeg.position.y = 4.25;
-    jGroup.add(jLeg);
+
+    // Dual structural support pylons with concrete foundation footings
+    for (const lx of [-3.2, 3.2]) {
+      const jLeg = new THREE.Mesh(jumboLegGeo, jumboFrameMat);
+      jLeg.position.set(lx, 4.25, 0);
+      jGroup.add(jLeg);
+
+      const jFooting = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.32, 1.2), concreteFootingMat);
+      jFooting.position.set(lx, 0.16, 0);
+      jGroup.add(jFooting);
+
+      // Rear diagonal grounding struts
+      const jStrut = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 7.8, 6), jumboFrameMat);
+      jStrut.position.set(lx, 4.1, -2.6);
+      jStrut.rotation.x = -0.58;
+      jGroup.add(jStrut);
+    }
+
+    // Rear structural scaffolding cross-bracing behind display
+    for (const bz of [-0.65, -1.25]) {
+      const rearBeam = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.18, 0.18), jumboFrameMat);
+      rearBeam.position.set(0, 9.4, bz);
+      jGroup.add(rearBeam);
+    }
+
     const jBox = new THREE.Mesh(jumboHousingGeo, jumboFrameMat);
     jBox.position.y = 9.4;
     jGroup.add(jBox);
+
+    // Front high-resolution broadcast screen & glowing perimeter LED bezel
     const jFaceFront = new THREE.Mesh(jumboFaceGeo, jumboScreenMat);
     jFaceFront.position.set(0, 9.4, 0.35);
     jGroup.add(jFaceFront);
+
+    const jBezelFront = new THREE.Mesh(jumboBezelGeo, jumboBezelMat);
+    jBezelFront.position.set(0, 9.4, 0.33);
+    jGroup.add(jBezelFront);
+
+    // Rear timing graphic screen
     const jFaceBack = new THREE.Mesh(jumboFaceGeo, jumboScreenMat);
     jFaceBack.position.set(0, 9.4, -0.35);
     jFaceBack.rotation.y = Math.PI;
     jGroup.add(jFaceBack);
+
+    const jBezelBack = new THREE.Mesh(jumboBezelGeo, jumboBezelMat);
+    jBezelBack.position.set(0, 9.4, -0.33);
+    jBezelBack.rotation.y = Math.PI;
+    jGroup.add(jBezelBack);
+
     group.add(jGroup);
   }
 
@@ -1183,6 +1495,7 @@ export function buildCircuitTrack(
     setSurfaceWetness: (wetness: number) => {
       const w = THREE.MathUtils.clamp(wetness, 0, 1);
       wetnessUniform.value = w;
+      snowUniform.value = isSnow ? w : 0;
       roadMat.color.lerpColors(dryRoadColor, wetRoadColor, w);
       roadMat.roughness = THREE.MathUtils.lerp(isSunset ? 0.44 : 0.82, 0.12, w);
       roadMat.metalness = THREE.MathUtils.lerp(isSunset ? 0.16 : 0.06, 0.36, w);
@@ -1688,10 +2001,62 @@ function buildGrandstand(
   upperRibbon.position.set(-0.8, 9.0, 0);
   g.add(upperRibbon);
 
+  // VIP Hospitality Glass Skybox Suites along the rear concourse beneath the canopy
+  const glassSuiteMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    metalness: 0.85,
+    roughness: 0.12,
+    emissive: 0xfef08a,
+    emissiveIntensity: isNight ? 1.4 : isSunset ? 0.9 : 0.42,
+  });
+  const suiteBalconyMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.75, roughness: 0.25 });
+  const vipSuite = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.1, length - 4.0), glassSuiteMat);
+  vipSuite.position.set(7.5, 7.2, 0);
+  g.add(vipSuite);
+
+  const vipRail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.42, length - 4.0), suiteBalconyMat);
+  vipRail.position.set(6.3, 6.4, 0);
+  g.add(vipRail);
+
+  // Vomitory pedestrian tunnel portals cut into grandstand tiers
+  const vomitoryCount = Math.max(2, Math.floor(length / 28));
+  const vomMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.95 });
+  for (let v = 0; v < vomitoryCount; v++) {
+    const vz = -length * 0.38 + (v / Math.max(1, vomitoryCount - 1)) * (length * 0.76);
+    const vomPortal = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 2.4), vomMat);
+    vomPortal.position.set(2.8, 1.8, vz);
+    g.add(vomPortal);
+  }
+
+  // Structural Steel Pylons, Tension Stay Suspension Cables & Ground Anchors
+  const cableMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.92, roughness: 0.18 });
+
   for (let z = -length * 0.46; z <= length * 0.46; z += length * 0.23) {
     const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 9.4, 0.32), steelMat);
     pillar.position.set(8.8, 4.7, z);
     g.add(pillar);
+
+    // Mast extension above roof line
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 4.4, 8), steelMat);
+    mast.position.set(8.8, 11.6, z);
+    g.add(mast);
+
+    // Front high-tensile stay suspension cable to leading canopy lip
+    const p1 = new THREE.Vector3(8.8, 13.6, z);
+    const p2 = new THREE.Vector3(-2.1, 10.2, z);
+    const cableLen = p1.distanceTo(p2);
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, cableLen, 6), cableMat);
+    cable.position.copy(p1).add(p2).multiplyScalar(0.5);
+    cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p2.clone().sub(p1).normalize());
+    g.add(cable);
+
+    // Rear ground backstay cable anchoring mast to concourse
+    const pBack = new THREE.Vector3(11.2, 0.4, z);
+    const backLen = p1.distanceTo(pBack);
+    const backCable = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, backLen, 6), cableMat);
+    backCable.position.copy(p1).add(pBack).multiplyScalar(0.5);
+    backCable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pBack.clone().sub(p1).normalize());
+    g.add(backCable);
   }
 
   const roof = new THREE.Mesh(new THREE.BoxGeometry(12.6, 0.38, length + 2), canopyMat);

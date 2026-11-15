@@ -350,19 +350,27 @@ const SpeedEffectShader = {
           col *= (1.0 - cavity * shadowWeight * uAoStrength * 1.45);
         }
 
-        // PS5 EGO Engine Anamorphic Red Rain-Light & Specular Highlight Horizontal Optical Glare
+        // PS5 EGO Engine Anamorphic Red Rain-Light & Specular Highlight Horizontal + Starburst Optical Glare
         vec3 hLeft = texture2D(tDiffuse, uv - vec2(uTexelSize.x * 8.0, 0.0)).rgb;
         vec3 hRight = texture2D(tDiffuse, uv + vec2(uTexelSize.x * 8.0, 0.0)).rgb;
         vec3 hFarL = texture2D(tDiffuse, uv - vec2(uTexelSize.x * 18.0, 0.0)).rgb;
         vec3 hFarR = texture2D(tDiffuse, uv + vec2(uTexelSize.x * 18.0, 0.0)).rgb;
+        vec3 dUL = texture2D(tDiffuse, uv + uTexelSize * vec2(-6.5, 6.5)).rgb;
+        vec3 dUR = texture2D(tDiffuse, uv + uTexelSize * vec2(6.5, 6.5)).rgb;
+        vec3 dDL = texture2D(tDiffuse, uv + uTexelSize * vec2(-6.5, -6.5)).rgb;
+        vec3 dDR = texture2D(tDiffuse, uv + uTexelSize * vec2(6.5, -6.5)).rgb;
         vec3 streakSample = (hLeft + hRight) * 0.35 + (hFarL + hFarR) * 0.15;
+        vec3 starburstSample = (dUL + dUR + dDL + dDR) * 0.25;
         float redBeaconMask = smoothstep(0.52, 0.92, streakSample.r - streakSample.g * 0.85);
-        col += vec3(1.0, 0.18, 0.24) * redBeaconMask * (0.16 + uWetness * 0.20);
+        col += vec3(1.0, 0.18, 0.24) * redBeaconMask * (0.18 + uWetness * 0.22);
 
-        // Broadcast Anamorphic Clearcoat & Floodlight Specular Glint Streak
+        // Broadcast Anamorphic Clearcoat & 4-Point Starburst Specular Glint
         float specLuma = getLuma(streakSample);
-        float specGlint = smoothstep(0.88, 1.22, specLuma);
-        col += mix(streakSample, vec3(0.78, 0.90, 1.0), 0.38) * specGlint * (0.12 + uWetness * 0.10);
+        float starLuma = getLuma(starburstSample);
+        float specGlint = smoothstep(0.84, 1.18, specLuma);
+        float starGlint = smoothstep(0.88, 1.24, starLuma);
+        col += mix(streakSample, vec3(0.82, 0.92, 1.0), 0.38) * specGlint * (0.15 + uWetness * 0.12);
+        col += mix(starburstSample, vec3(1.0, 0.96, 0.88), 0.35) * starGlint * 0.11;
       }
 
       // Volumetric atmospheric crepuscular sun shafts + anamorphic broadcast lens streak
@@ -505,11 +513,11 @@ export class RacingEngine {
     timeOfDay: 'afternoon',
     dynamicTimeOfDay: false,
     totalLaps: 3,
-    graphicsQuality: 'extreme',
+    graphicsQuality: 'ultra_8k',
     resolutionScale: 2.0,
-    textureQuality: 'ultra',
-    shadowQuality: 'ultra',
-    reflectionQuality: 'ultra',
+    textureQuality: 'cinematic',
+    shadowQuality: 'cinematic',
+    reflectionQuality: 'cinematic',
     ambientOcclusion: 'ultra',
     antiAliasing: 'high',
     particleDensity: 'ultra',
@@ -519,7 +527,7 @@ export class RacingEngine {
     absAssist: true,
     tcAssist: true,
     ps5GraphicsMode: 'cinematic',
-    rayTracingQuality: 'ultra',
+    rayTracingQuality: 'cinematic',
     pssrUpscaling: true,
     hdrMode: 'hdr10',
     steeringAssist: false,
@@ -548,6 +556,8 @@ export class RacingEngine {
   private trackWetness = 0.0;
   private timeOfDayProgress = 0.35;
   private weatherSchedule: { atProgress: number; mode: WeatherMode }[] = [];
+  private playerSlipstreamPct = 0;
+  private playerDirtyAirPct = 0;
   private weatherPhaseIndex = 0;
   private weatherForecastAlerted = false;
   private queuedCompound: TyreCompound | null = null;
@@ -660,11 +670,27 @@ export class RacingEngine {
   private sparkCursor = 0;
   private readonly sparkPoolSize = 320;
 
+  // Pooled Surface Deformation Particles (Tyre Rubber Marbles, Clag & Track Aggregate)
+  private surfaceDebrisGeo: THREE.BufferGeometry;
+  private surfaceDebrisPoints: THREE.Points;
+  private surfaceDebrisPositions: Float32Array;
+  private surfaceDebrisColors: Float32Array;
+  private surfaceDebrisVel: Float32Array;
+  private surfaceDebrisLife: Float32Array;
+  private surfaceDebrisCursor = 0;
+  private readonly surfaceDebrisPoolSize = 640;
+
   // Pooled Rain Particles
   private rainGeo: THREE.BufferGeometry;
   private rainPoints: THREE.Points;
   private rainPositions: Float32Array;
   private readonly rainCount = 2000;
+
+  // Pooled Volumetric Snow Particles
+  private snowGeo: THREE.BufferGeometry;
+  private snowPoints: THREE.Points;
+  private snowPositions: Float32Array;
+  private readonly snowCount = 1800;
 
   // Pooled Finish-Line Fireworks Particles
   private fireworkGeo: THREE.BufferGeometry;
@@ -1108,6 +1134,30 @@ export class RacingEngine {
     this.sparkPoints.frustumCulled = false;
     this.scene.add(this.sparkPoints);
 
+    // Pooled Surface Deformation Particles (Tyre Rubber Marbles, Clag & Aggregate)
+    this.surfaceDebrisPositions = new Float32Array(this.surfaceDebrisPoolSize * 3);
+    this.surfaceDebrisPositions.fill(-9999);
+    this.surfaceDebrisColors = new Float32Array(this.surfaceDebrisPoolSize * 3);
+    this.surfaceDebrisColors.fill(0.1);
+    this.surfaceDebrisVel = new Float32Array(this.surfaceDebrisPoolSize * 3);
+    this.surfaceDebrisLife = new Float32Array(this.surfaceDebrisPoolSize);
+    this.surfaceDebrisGeo = new THREE.BufferGeometry();
+    this.surfaceDebrisGeo.setAttribute('position', new THREE.BufferAttribute(this.surfaceDebrisPositions, 3));
+    this.surfaceDebrisGeo.setAttribute('color', new THREE.BufferAttribute(this.surfaceDebrisColors, 3));
+    this.surfaceDebrisPoints = new THREE.Points(
+      this.surfaceDebrisGeo,
+      new THREE.PointsMaterial({
+        size: 0.48,
+        vertexColors: true,
+        map: this.textures.sparkSpriteMap,
+        transparent: true,
+        opacity: 0.94,
+        depthWrite: false,
+      })
+    );
+    this.surfaceDebrisPoints.frustumCulled = false;
+    this.scene.add(this.surfaceDebrisPoints);
+
     // Pooled Rain Streaks
     this.rainPositions = new Float32Array(this.rainCount * 3);
     for (let i = 0; i < this.rainCount; i++) {
@@ -1131,6 +1181,30 @@ export class RacingEngine {
     this.rainPoints.frustumCulled = false;
     this.rainPoints.visible = false;
     this.scene.add(this.rainPoints);
+
+    // Pooled Volumetric Snow Flakes
+    this.snowPositions = new Float32Array(this.snowCount * 3);
+    for (let i = 0; i < this.snowCount; i++) {
+      this.snowPositions[i * 3] = (Math.random() - 0.5) * 65;
+      this.snowPositions[i * 3 + 1] = Math.random() * 28;
+      this.snowPositions[i * 3 + 2] = (Math.random() - 0.5) * 65;
+    }
+    this.snowGeo = new THREE.BufferGeometry();
+    this.snowGeo.setAttribute('position', new THREE.BufferAttribute(this.snowPositions, 3));
+    this.snowPoints = new THREE.Points(
+      this.snowGeo,
+      new THREE.PointsMaterial({
+        color: 0xf8fafc,
+        map: this.textures.sparkSpriteMap,
+        size: 0.85,
+        transparent: true,
+        opacity: 0.78,
+        depthWrite: false,
+      })
+    );
+    this.snowPoints.frustumCulled = false;
+    this.snowPoints.visible = false;
+    this.scene.add(this.snowPoints);
 
     // Pooled Finish-Line Fireworks (Additive Multi-Color Bursts)
     this.fireworkPositions = new Float32Array(this.fireworkPoolSize * 3);
@@ -1698,7 +1772,15 @@ export class RacingEngine {
     }
 
     const startMode: WeatherMode = this.settings.weather === 'night' ? 'partly_cloudy' : this.settings.weather;
-    if (startMode === 'heavy_rain' || startMode === 'rain') {
+    if (startMode === 'snow' || startMode === 'blizzard') {
+      this.weatherSchedule = [
+        { atProgress: 0, mode: startMode },
+        { atProgress: 0.28, mode: 'blizzard' },
+        { atProgress: 0.58, mode: 'snow' },
+        { atProgress: 0.80, mode: 'cloudy' },
+        { atProgress: 0.92, mode: 'partly_cloudy' },
+      ];
+    } else if (startMode === 'heavy_rain' || startMode === 'rain') {
       this.weatherSchedule = [
         { atProgress: 0, mode: startMode },
         { atProgress: 0.34, mode: 'cloudy' },
@@ -1848,17 +1930,18 @@ export class RacingEngine {
       return;
     }
     const q = this.settings.graphicsQuality;
+    const isTopTier = q === 'ultra_8k' || q === 'extreme' || q === 'cinematic';
     const ps5Mode = this.settings.ps5GraphicsMode ?? 'rt_pro';
     const rtQual =
       this.settings.rayTracingQuality ??
-      (q === 'extreme' || q === 'cinematic' ? 'cinematic' : q === 'ultra' ? 'ultra' : q === 'high' ? 'high' : 'off');
+      (isTopTier ? 'cinematic' : q === 'ultra' ? 'ultra' : q === 'high' ? 'high' : 'off');
     const pssrOn = this.settings.pssrUpscaling !== false;
     const hdrMode = this.settings.hdrMode ?? 'hdr10';
     const w = Math.max(1, this.container.clientWidth || window.innerWidth);
     const h = Math.max(1, this.container.clientHeight || window.innerHeight);
 
-    // Support true 4K (3840x2160) supersampled rendering on Extreme / Ultra / Cinematic modes
-    const dpr4k = Math.min(3.0, Math.max(window.devicePixelRatio || 1, Math.min(3840 / w, 2160 / h)));
+    // Support true 4K/8K supersampled rendering on Ultra 8K / Extreme / Ultra / Cinematic modes
+    const dpr4k = Math.min(3.5, Math.max(window.devicePixelRatio || 1, Math.min(3840 / w, 2160 / h)));
     const modeScale = ps5Mode === 'performance' ? 0.85 : ps5Mode === 'rt_pro' ? 1.05 : ps5Mode === 'cinematic' ? 1.25 : 1.0;
 
     let basePr: number;
@@ -1873,11 +1956,13 @@ export class RacingEngine {
             ? 1.0
             : q === 'high'
               ? Math.min(window.devicePixelRatio || 1, 1.65) * modeScale
-              : q === 'extreme'
-                ? dpr4k * 1.5 * this.adaptiveDprScale * modeScale
-                : q === 'cinematic'
-                  ? dpr4k * 1.35 * this.adaptiveDprScale * modeScale
-                  : dpr4k * this.adaptiveDprScale * modeScale;
+              : q === 'ultra_8k'
+                ? dpr4k * 1.65 * this.adaptiveDprScale * modeScale
+                : q === 'extreme'
+                  ? dpr4k * 1.5 * this.adaptiveDprScale * modeScale
+                  : q === 'cinematic'
+                    ? dpr4k * 1.35 * this.adaptiveDprScale * modeScale
+                    : dpr4k * this.adaptiveDprScale * modeScale;
     }
     const targetPr = THREE.MathUtils.clamp(basePr, 0.75, 4.0);
     this.renderer.setPixelRatio(targetPr);
@@ -1887,7 +1972,7 @@ export class RacingEngine {
 
     const shadowSetting =
       this.settings.shadowQuality ??
-      (q === 'low' ? 'off' : q === 'medium' ? 'medium' : q === 'high' ? 'high' : 'ultra');
+      (q === 'low' ? 'off' : q === 'medium' ? 'medium' : q === 'high' ? 'high' : isTopTier ? 'cinematic' : 'ultra');
     const shadowsOn = shadowSetting !== 'off';
     this.renderer.shadowMap.enabled = shadowsOn;
     this.sunLight.castShadow = shadowsOn;
@@ -1897,7 +1982,7 @@ export class RacingEngine {
           ? 1024
           : shadowSetting === 'high'
             ? 2048
-            : q === 'extreme' || q === 'cinematic'
+            : shadowSetting === 'cinematic' || isTopTier
               ? 8192
               : 4096;
       if (this.sunLight.shadow.mapSize.width !== shadowRes) {
@@ -1916,17 +2001,17 @@ export class RacingEngine {
     const aoSettingGtao = this.settings.ambientOcclusion;
     const gtaoOn =
       !!this.gtaoPass &&
-      (q === 'extreme' || q === 'cinematic' || q === 'ultra') &&
+      (isTopTier || q === 'ultra') &&
       aoSettingGtao !== 'off' &&
       aoSettingGtao !== 'low';
     if (this.gtaoPass) {
       this.gtaoPass.enabled = gtaoOn;
       if (gtaoOn) {
-        const gtaoSamples = q === 'ultra' ? 8 : 16;
+        const gtaoSamples = q === 'ultra_8k' ? 24 : q === 'ultra' ? 8 : 16;
         if (gtaoSamples !== this.gtaoSamplesApplied) {
           this.gtaoSamplesApplied = gtaoSamples;
           this.gtaoPass.updateGtaoMaterial({
-            radius: 0.55,
+            radius: q === 'ultra_8k' ? 0.62 : 0.55,
             distanceExponent: 1.0,
             thickness: 1.5,
             scale: 1.0,
@@ -1947,7 +2032,7 @@ export class RacingEngine {
       this.speedPass.enabled = q !== 'low';
       const hdrGradeBoost = hdrMode === 'hdr10' ? 0.03 : hdrMode === 'scrgb' ? 0.015 : 0;
       this.speedPass.uniforms['uGradeContrast'].value =
-        (q === 'extreme' || q === 'cinematic' ? 0.24 : q === 'ultra' ? 0.18 : q === 'high' ? 0.14 : 0.08) + hdrGradeBoost;
+        (q === 'ultra_8k' ? 0.27 : isTopTier ? 0.24 : q === 'ultra' ? 0.18 : q === 'high' ? 0.14 : 0.08) + hdrGradeBoost;
 
       const aoSetting = this.settings.ambientOcclusion;
       const aoVal =
@@ -1960,9 +2045,9 @@ export class RacingEngine {
               : aoSetting === 'high'
                 ? 0.44
                 : aoSetting === 'ultra'
-                  ? 0.60
-                  : q === 'extreme'
-                    ? 0.58
+                  ? 0.64
+                  : q === 'ultra_8k' || q === 'extreme'
+                    ? 0.62
                     : rtQual === 'cinematic'
                       ? 0.48
                       : rtQual === 'ultra'
@@ -1984,17 +2069,21 @@ export class RacingEngine {
             : aaSetting === 'smaa'
               ? 0.30
               : aaSetting === 'high'
-                ? 0.48
+                ? q === 'ultra_8k'
+                  ? 0.56
+                  : 0.48
                 : pssrOn
-                  ? q === 'extreme'
-                    ? 0.48
-                    : q === 'cinematic'
-                      ? 0.42
-                      : q === 'ultra'
-                        ? 0.34
-                        : q === 'high'
-                          ? 0.22
-                          : 0.12
+                  ? q === 'ultra_8k'
+                    ? 0.56
+                    : q === 'extreme'
+                      ? 0.48
+                      : q === 'cinematic'
+                        ? 0.42
+                        : q === 'ultra'
+                          ? 0.34
+                          : q === 'high'
+                            ? 0.22
+                            : 0.12
                   : 0.0;
       this.speedPass.uniforms['uSharpness'].value = sharpVal;
 
@@ -2005,7 +2094,7 @@ export class RacingEngine {
 
       const mbSetting =
         this.settings.motionBlurLevel ??
-        (this.settings.motionBlur ? (q === 'extreme' || q === 'cinematic' ? 'cinematic' : 'medium') : 'off');
+        (this.settings.motionBlur ? (isTopTier ? 'cinematic' : 'medium') : 'off');
       if (!this.speedPass.enabled || mbSetting === 'off' || !this.settings.motionBlur) {
         this.speedPass.uniforms['uIntensity'].value = 0;
       }
@@ -2037,7 +2126,7 @@ export class RacingEngine {
 
     const refSetting =
       this.settings.reflectionQuality ??
-      (q === 'extreme' || q === 'cinematic' || q === 'ultra' ? 'ultra' : q === 'high' ? 'high' : 'off');
+      (isTopTier || q === 'ultra' ? 'cinematic' : q === 'high' ? 'high' : 'off');
     if (refSetting === 'off' || rtQual === 'off') {
       for (let i = 0; i < this.racers.length; i++) {
         this.racers[i].model.setBodyEnvMap(null);
@@ -2082,7 +2171,7 @@ export class RacingEngine {
     tint.set(_hdrSunCol.r, _hdrSunCol.g, _hdrSunCol.b);
 
     const qScale =
-      q === 'extreme' ? 1.55 : q === 'cinematic' ? 1.45 : q === 'ultra' ? 1.08 : q === 'high' ? 0.78 : 0.35;
+      q === 'ultra_8k' ? 1.72 : q === 'extreme' ? 1.55 : q === 'cinematic' ? 1.45 : q === 'ultra' ? 1.08 : q === 'high' ? 0.78 : 0.35;
     this.speedPass.uniforms['uVolumetric'].value = baseStrength * alignment * alignment * qScale;
   }
 
@@ -2098,14 +2187,19 @@ export class RacingEngine {
       return;
     }
     this.cubeFrameCounter++;
-    const interval =
-      rtQual === 'cinematic' || this.settings.graphicsQuality === 'extreme'
+    const adaptiveStride = this.adaptiveDprScale < 0.82 ? 2 : this.adaptiveDprScale < 0.92 ? 1 : 0;
+    const interval = Math.min(
+      6,
+      (rtQual === 'cinematic' ||
+      this.settings.graphicsQuality === 'ultra_8k' ||
+      this.settings.graphicsQuality === 'extreme'
         ? 1
         : rtQual === 'ultra'
           ? 2
           : rtQual === 'high'
             ? 3
-            : 5;
+            : 5) + adaptiveStride
+    );
     if (!force && this.screen !== 'title' && this.cubeFrameCounter % interval !== 0) return;
 
     this.heroCubeCamera.position.set(player.position.x, player.position.y + 0.65, player.position.z);
@@ -2123,7 +2217,7 @@ export class RacingEngine {
   private updateBokehPass(enabled: boolean, focusDist: number, aperture = 0.00014, maxblur = 0.0055, snap = false) {
     if (!this.bokehPass || this.isSoftwareGl) return;
     const q = this.settings.graphicsQuality;
-    const allowed = enabled && (q === 'high' || q === 'ultra' || q === 'cinematic' || q === 'extreme');
+    const allowed = enabled && (q === 'high' || q === 'ultra' || q === 'cinematic' || q === 'extreme' || q === 'ultra_8k');
     this.bokehPass.enabled = allowed;
     if (allowed) {
       const clampedTarget = THREE.MathUtils.clamp(focusDist, 1.5, 90);
@@ -2153,11 +2247,11 @@ export class RacingEngine {
       this.settings.hdrMode === 'hdr10' ? 0.08 : this.settings.hdrMode === 'scrgb' ? 0.04 : 0;
 
     let targetStrength =
-      q === 'extreme' ? 0.82 : q === 'cinematic' ? 0.76 : q === 'ultra' ? 0.64 : q === 'high' ? 0.52 : 0.36;
+      q === 'ultra_8k' ? 0.88 : q === 'extreme' ? 0.82 : q === 'cinematic' ? 0.76 : q === 'ultra' ? 0.64 : q === 'high' ? 0.52 : 0.36;
     let targetRadius =
-      q === 'extreme' ? 0.85 : q === 'cinematic' ? 0.82 : q === 'ultra' ? 0.74 : q === 'high' ? 0.64 : 0.52;
+      q === 'ultra_8k' ? 0.88 : q === 'extreme' ? 0.85 : q === 'cinematic' ? 0.82 : q === 'ultra' ? 0.74 : q === 'high' ? 0.64 : 0.52;
     let targetThreshold =
-      q === 'extreme' ? 0.68 : q === 'cinematic' ? 0.70 : q === 'ultra' ? 0.75 : q === 'high' ? 0.79 : 0.83;
+      q === 'ultra_8k' ? 0.66 : q === 'extreme' ? 0.68 : q === 'cinematic' ? 0.70 : q === 'ultra' ? 0.75 : q === 'high' ? 0.79 : 0.83;
 
     // Realistic eye-adaptation simulation between tunnels / shaded areas and bright sunlight
     let targetEyeAdaptation = 1.0;
@@ -2418,9 +2512,31 @@ export class RacingEngine {
     const envCfg = getCircuitEnvironmentConfig(this.currentTrack);
     const effTod = this.getEffectiveLiveTimeOfDay();
     const todProf = getTimeOfDayProfile(effTod);
-    const dynamicShift = this.settings.dynamicTimeOfDay ? (this.timeOfDayProgress - 0.35) * 42 : 0;
-    const azRad = THREE.MathUtils.degToRad(envCfg.lighting.sunAzimuthDeg + todProf.azimuthShiftDeg + dynamicShift);
-    const elDeg = Math.max(7, todProf.elevationDeg + envCfg.lighting.sunElevationOffsetDeg);
+    const isDynamic = this.settings.dynamicTimeOfDay || this.isDynamicWeatherEnabled();
+
+    let azDeg: number;
+    let elDeg: number;
+
+    if (isDynamic) {
+      // Continuous 24h orbital solar & lunar transit
+      // Sweeps smoothly: morning (low east) -> noon (high peak) -> sunset (low west) -> night (moon rise)
+      const sunPhase = this.timeOfDayProgress * Math.PI * 1.35;
+      const baseEl = Math.sin(sunPhase) * 64.0;
+      if (baseEl < 2.0) {
+        // Night: directional light acts as lunar illumination from opposite horizon
+        elDeg = Math.max(14.0, 28.0 - baseEl * 0.4);
+        azDeg = envCfg.lighting.sunAzimuthDeg + 180.0 + (this.timeOfDayProgress - 0.75) * 55.0;
+      } else {
+        elDeg = Math.max(3.5, baseEl + envCfg.lighting.sunElevationOffsetDeg);
+        azDeg = envCfg.lighting.sunAzimuthDeg + (this.timeOfDayProgress - 0.25) * 115.0;
+      }
+    } else {
+      const dynamicShift = (this.timeOfDayProgress - 0.35) * 42;
+      azDeg = envCfg.lighting.sunAzimuthDeg + todProf.azimuthShiftDeg + dynamicShift;
+      elDeg = Math.max(7, todProf.elevationDeg + envCfg.lighting.sunElevationOffsetDeg);
+    }
+
+    const azRad = THREE.MathUtils.degToRad(azDeg);
     const elRad = THREE.MathUtils.degToRad(elDeg);
     const horiz = Math.cos(elRad) * radius;
     out.set(Math.cos(azRad) * horiz, Math.sin(elRad) * radius, Math.sin(azRad) * horiz);
@@ -2867,10 +2983,17 @@ export class RacingEngine {
       this.renderer.toneMappingExposure = this.curExposure;
     }
 
+    const isSnow = weather === 'snow' || weather === 'blizzard';
     const rainMat = this.rainPoints.material as THREE.PointsMaterial;
-    rainMat.opacity = this.curRainOpacity;
+    rainMat.opacity = isSnow ? 0 : this.curRainOpacity;
     rainMat.size = this.curRainSize;
-    this.rainPoints.visible = isTrackView && this.curRainOpacity > 0.04;
+    this.rainPoints.visible = isTrackView && !isSnow && this.curRainOpacity > 0.04;
+
+    const snowMat = this.snowPoints.material as THREE.PointsMaterial;
+    snowMat.opacity = isSnow ? Math.min(0.95, this.curRainOpacity * 1.35) : 0;
+    snowMat.size = weather === 'blizzard' ? 1.2 : 0.85;
+    this.snowPoints.visible = isTrackView && isSnow && this.curRainOpacity > 0.04;
+
     this.audio.setRainLevel(!isTrackView ? 0 : this.curRainAudio);
     this.pushAtmosphereToTrack();
   }
@@ -2889,13 +3012,16 @@ export class RacingEngine {
           this.weatherForecastAlerted = true;
           this.audio.playPitRadioBeep();
           const comingWet = nextStep.mode === 'rain' || nextStep.mode === 'heavy_rain';
-          this.bannerMessage = comingWet
-            ? `RADAR: ${nextStep.mode === 'heavy_rain' ? 'STORM' : 'RAIN'} APPROACHING — PRESS 4 OR B TO BOX FOR WETS`
-            : nextStep.mode === 'fog'
-              ? 'RADAR: DENSE CIRCUIT MIST & FOG FORMING'
-              : nextStep.mode === 'day' || nextStep.mode === 'partly_cloudy'
-                ? 'RADAR: SKIES CLEARING SOON — PREPARE SLICK TYRES'
-                : 'RADAR: HEAVY CLOUD COVER MOVING OVER CIRCUIT';
+          const comingSnow = nextStep.mode === 'snow' || nextStep.mode === 'blizzard';
+          this.bannerMessage = comingSnow
+            ? `RADAR: ${nextStep.mode === 'blizzard' ? 'BLIZZARD STORM' : 'VOLUMETRIC SNOW'} APPROACHING — REDUCE SPEED & BOX FOR INTERMEDIATE/WETS`
+            : comingWet
+              ? `RADAR: ${nextStep.mode === 'heavy_rain' ? 'STORM' : 'RAIN'} APPROACHING — PRESS 4 OR B TO BOX FOR WETS`
+              : nextStep.mode === 'fog'
+                ? 'RADAR: DENSE CIRCUIT MIST & FOG FORMING'
+                : nextStep.mode === 'day' || nextStep.mode === 'partly_cloudy'
+                  ? 'RADAR: SKIES CLEARING SOON — PREPARE SLICK TYRES'
+                  : 'RADAR: HEAVY CLOUD COVER MOVING OVER CIRCUIT';
           this.bannerTimer = 3.6;
         }
         if (raceFrac >= nextStep.atProgress) {
@@ -2904,7 +3030,11 @@ export class RacingEngine {
           this.liveWeather = nextStep.mode;
           this.nextWeather = this.weatherSchedule[this.weatherPhaseIndex + 1]?.mode ?? null;
           this.audio.playPitRadioBeep();
-          if (this.liveWeather === 'heavy_rain') {
+          if (this.liveWeather === 'blizzard') {
+            this.bannerMessage = 'WEATHER SHIFT: FREEZING BLIZZARD — EXTREME LOW SURFACE GRIP';
+          } else if (this.liveWeather === 'snow') {
+            this.bannerMessage = 'WEATHER SHIFT: VOLUMETRIC SNOW FLURRIES — COLD ASPHALT';
+          } else if (this.liveWeather === 'heavy_rain') {
             this.bannerMessage = 'WEATHER SHIFT: TORRENTIAL RAIN — STANDING WATER BUILDING';
           } else if (this.liveWeather === 'rain') {
             this.bannerMessage = 'WEATHER SHIFT: RAIN FALLING — WET TYRES ADVISED (4 / B)';
@@ -2985,16 +3115,24 @@ export class RacingEngine {
     this.scene.environmentIntensity = this.curEnvIntensity + this.lightningFlash * 0.35;
     this.renderer.toneMappingExposure = this.curExposure;
 
+    const isSnow = this.liveWeather === 'snow' || this.liveWeather === 'blizzard';
     const rainMat = this.rainPoints.material as THREE.PointsMaterial;
-    rainMat.opacity = this.curRainOpacity;
+    rainMat.opacity = isSnow ? 0 : this.curRainOpacity;
     rainMat.size = this.curRainSize;
-    this.rainPoints.visible = this.curRainOpacity > 0.04;
+    this.rainPoints.visible = !isSnow && this.curRainOpacity > 0.04;
+
+    const snowMat = this.snowPoints.material as THREE.PointsMaterial;
+    snowMat.opacity = isSnow ? Math.min(0.95, this.curRainOpacity * 1.35) : 0;
+    snowMat.size = this.liveWeather === 'blizzard' ? 1.2 : 0.85;
+    this.snowPoints.visible = isSnow && this.curRainOpacity > 0.04;
+
     this.audio.setRainLevel(this.screen === 'playing' ? this.curRainAudio : 0);
     this.pushAtmosphereToTrack();
   }
 
   private updateDynamicTimeOfDay(dt: number, raceLive: boolean) {
-    if (!this.settings.dynamicTimeOfDay) return;
+    const isDynamic = this.settings.dynamicTimeOfDay || this.isDynamicWeatherEnabled();
+    if (!isDynamic) return;
     const todOrder: TimeOfDayMode[] = ['morning', 'midday', 'afternoon', 'golden_hour', 'sunset', 'night'];
     if (raceLive && this.screen === 'playing') {
       const startTod = this.settings.timeOfDay ?? getCircuitEnvironmentConfig(this.currentTrack).defaultTimeOfDay;
@@ -3007,7 +3145,7 @@ export class RacingEngine {
           0,
           1
         );
-        this.timeOfDayProgress = Math.min(1, startFrac + raceFrac * 0.45);
+        this.timeOfDayProgress = Math.min(1, startFrac + raceFrac * 0.55);
       } else {
         this.timeOfDayProgress = (this.timeOfDayProgress + dt * 0.008) % 1.0;
       }
@@ -3069,6 +3207,13 @@ export class RacingEngine {
     const idealOffset = sample.idealLateralOffset ?? 0;
     const distFromLine = Math.abs(latOffset - idealOffset);
 
+    // Dynamic surface deformation particles: shed rubber clag marbles & verge aggregate
+    if (distFromLine > 1.75 && absSpeed > 22 && Math.random() < 0.32) {
+      this.spawnSurfaceDebris(car, 'marbles', 0.85);
+    } else if (Math.abs(latOffset) > halfW - 0.45 && absSpeed > 18 && Math.random() < 0.45) {
+      this.spawnSurfaceDebris(car, Math.abs(latOffset) > halfW + 0.15 ? 'gravel' : 'kerb', 1.1);
+    }
+
     // Cars tracking within the racing line corridor lay down heated vulcanized tyre polymer
     const grooveProximity = Math.max(0, 1.0 - distFromLine / Math.max(2.2, halfW * 0.45));
     if (grooveProximity <= 0.02) return;
@@ -3087,7 +3232,7 @@ export class RacingEngine {
     const gridScale = Math.max(1, this.racers.length);
 
     const depDelta =
-      ((dt * grooveProximity * compoundDepRate * cornerShear * speedFactor) / (gridScale * totalLapsScale)) * 0.14;
+      ((dt * grooveProximity * compoundDepRate * cornerShear * speedFactor) / (gridScale * totalLapsScale)) * 0.22;
     const secIdx = this.getSectorFromT(sample.t) - 1;
     this.sectorDepositionAccum[secIdx] = Math.min(3.0, this.sectorDepositionAccum[secIdx] + depDelta);
   }
@@ -3634,7 +3779,8 @@ export class RacingEngine {
         !this.isSoftwareGl &&
         (this.settings.graphicsQuality === 'ultra' ||
           this.settings.graphicsQuality === 'cinematic' ||
-          this.settings.graphicsQuality === 'extreme') &&
+          this.settings.graphicsQuality === 'extreme' ||
+          this.settings.graphicsQuality === 'ultra_8k') &&
         rawMs > 4 &&
         rawMs < 120
       ) {
@@ -3997,13 +4143,15 @@ export class RacingEngine {
           this.speedPass.uniforms['uHeatDistort'].value = clipIdx === 2 || clipIdx === 3 ? 0.55 : 0.25;
           this.speedPass.uniforms['uWetness'].value = Math.max(this.trackWetness, this.curRainOpacity * 0.9);
           this.speedPass.uniforms['uGradeContrast'].value =
-            this.settings.graphicsQuality === 'extreme'
-              ? 0.25
-              : this.settings.graphicsQuality === 'cinematic'
-                ? 0.22
-                : this.settings.graphicsQuality === 'ultra'
-                  ? 0.19
-                  : 0.14;
+            this.settings.graphicsQuality === 'ultra_8k'
+              ? 0.27
+              : this.settings.graphicsQuality === 'extreme'
+                ? 0.25
+                : this.settings.graphicsQuality === 'cinematic'
+                  ? 0.22
+                  : this.settings.graphicsQuality === 'ultra'
+                    ? 0.19
+                    : 0.14;
           this.updateVolumetricSunUniforms();
         }
         this.updateBokehPass(true, focalDist, aperture, maxblur, forceCut);
@@ -4206,7 +4354,7 @@ export class RacingEngine {
     if (player && this.builtTrack) {
       const drsZones = this.builtTrack.drsZones;
       const activeDrsZone = findActiveDrsZoneAtT(drsZones, player.lastT);
-      const drsDisabledByWeather = this.trackWetness > 0.48 || this.liveWeather === 'heavy_rain';
+      const drsDisabledByWeather = this.trackWetness > 0.48 || this.liveWeather === 'heavy_rain' || this.liveWeather === 'blizzard';
       const drsGapQualified = this.gameMode === 'time_trial' || this.settings.drsAssist !== false || this.playerDrsGapQualified;
       const drsAvailable =
         Boolean(activeDrsZone) &&
@@ -4463,6 +4611,41 @@ export class RacingEngine {
       dt,
     });
 
+    // 2026 Aerodynamic Slipstream ("Tow") & Turbulent Dirty-Air Wake Physics
+    let targetSlipstream = 0;
+    let targetDirtyAir = 0;
+    let curTrackCurvature = 0;
+    if (this.builtTrack) {
+      curTrackCurvature = this.builtTrack.samples[car.closestIdx]?.curvature ?? 0;
+      const trackLen = this.builtTrack.totalLength || 1000;
+      for (let i = 0; i < this.racers.length; i++) {
+        const other = this.racers[i];
+        if (other.id === car.id || other.finished) continue;
+        let progDelta = other.totalProgress - car.totalProgress;
+        if (progDelta > 0 && progDelta * trackLen < 78) {
+          const distAheadMeters = progDelta * trackLen;
+          const otherSample = this.builtTrack.samples[other.closestIdx];
+          const otherLatOffset = otherSample
+            ? _vecA.subVectors(other.position, otherSample.point).dot(otherSample.right)
+            : other.aiTargetLane;
+          const latDelta = Math.abs(playerLatOffset - otherLatOffset);
+          if (latDelta < 2.8 && speedKmh > 115) {
+            const alignFactor = 1.0 - latDelta / 2.8;
+            const distFactor = 1.0 - THREE.MathUtils.clamp((distAheadMeters - 6) / 72, 0, 1);
+            const wakeStrength = alignFactor * distFactor * THREE.MathUtils.clamp((speedKmh - 110) / 140, 0, 1);
+            if (curTrackCurvature < 0.11) {
+              targetSlipstream = Math.max(targetSlipstream, wakeStrength);
+            } else {
+              targetDirtyAir = Math.max(targetDirtyAir, wakeStrength * THREE.MathUtils.clamp(curTrackCurvature * 5.2, 0.3, 1.0));
+            }
+          }
+        }
+      }
+    }
+    this.playerSlipstreamPct = THREE.MathUtils.damp(this.playerSlipstreamPct, targetSlipstream, 5.5, dt);
+    this.playerDirtyAirPct = THREE.MathUtils.damp(this.playerDirtyAirPct, targetDirtyAir, 5.5, dt);
+
+    const dirtyAirGripPenalty = 1.0 - this.playerDirtyAirPct * 0.085;
     const surfaceGrip =
       (offTrack ? 0.55 : 1.0) *
       hazardEval.gripMultiplier *
@@ -4471,6 +4654,7 @@ export class RacingEngine {
       wearGrip *
       trackEvolutionGrip *
       this.currentContactPatch.gripPenaltyMultiplier *
+      dirtyAirGripPenalty *
       aeroBonus *
       tyreBonus *
       suspensionBonus *
@@ -4481,13 +4665,14 @@ export class RacingEngine {
           hazardEval.gripMultiplier *
           lineGripEval.localSurfaceGripPct *
           wearGrip *
+          dirtyAirGripPenalty *
           this.currentContactPatch.gripPenaltyMultiplier,
         25,
         100
       )
     );
     const activeDrsZone = findActiveDrsZoneAtT(drsZones, curPlayerT);
-    const drsDisabledByWeather = wet > 0.48 || this.liveWeather === 'heavy_rain';
+    const drsDisabledByWeather = wet > 0.48 || this.liveWeather === 'heavy_rain' || this.liveWeather === 'blizzard';
     const drsZoneQualified =
       this.gameMode === 'time_trial' || this.settings.drsAssist !== false || this.playerDrsGapQualified;
     const drsEligible =
@@ -4511,8 +4696,14 @@ export class RacingEngine {
     }
 
     const fuelWeightAccelMult = 1 - (car.fuelPct / 100) * 0.045;
+    const slipstreamAccelBoost = 1.0 + this.playerSlipstreamPct * 0.075;
     const forwardAccel =
-      throttleIn * accelForce * fuelWeightAccelMult * (car.drsOpen ? 1.24 : 1.0) * (car.fuelPct > 0 ? 1 : 0.45);
+      throttleIn *
+      accelForce *
+      fuelWeightAccelMult *
+      slipstreamAccelBoost *
+      (car.drsOpen ? 1.24 : 1.0) *
+      (car.fuelPct > 0 ? 1 : 0.45);
     let longForce = 0;
 
     if (this.settings.transmission === 'auto') {
@@ -4535,10 +4726,17 @@ export class RacingEngine {
       }
     }
 
-    const dragCoeff = (car.drsOpen ? 0.0029 : 0.0038) + (offTrack ? 0.018 : 0.0012);
+    const dragCoeff =
+      ((car.drsOpen ? 0.0029 : 0.0038) * (1.0 - this.playerSlipstreamPct * 0.19)) +
+      (offTrack ? 0.018 : 0.0012);
     const dragForce = car.speed * Math.abs(car.speed) * dragCoeff + car.speed * 0.14;
     car.speed += (longForce - dragForce) * dt;
-    car.speed = THREE.MathUtils.clamp(car.speed, -22, maxSpeedMs * (car.drsOpen ? 1.09 : 1.0));
+    const slipstreamTopSpeedMult = 1.0 + this.playerSlipstreamPct * 0.042;
+    car.speed = THREE.MathUtils.clamp(
+      car.speed,
+      -22,
+      maxSpeedMs * (car.drsOpen ? 1.09 : 1.0) * slipstreamTopSpeedMult
+    );
 
     const absSpeed = Math.abs(car.speed);
     if (this.settings.transmission === 'auto' && car.gear >= 1) {
@@ -4692,6 +4890,14 @@ export class RacingEngine {
     if (slipAmount > 0.4 && absSpeed > 12 && !offTrack) {
       this.stampSkidMarks(car);
     }
+    // Dynamic Surface Deformation Particles (Marbles, Gravel & Kerb Chips)
+    if (offTrack && absSpeed > 12) {
+      this.spawnSurfaceDebris(car, 'gravel', 1.25);
+    } else if (onKerb && absSpeed > 16) {
+      this.spawnSurfaceDebris(car, 'kerb', 1.0);
+    } else if ((slipAmount > 0.28 || lineGripEval.offLineRatio > 0.38) && absSpeed > 20) {
+      this.spawnSurfaceDebris(car, 'marbles', 0.9);
+    }
     if ((speedKmh > 235 || (onKerb && speedKmh > 125)) && Math.random() < 0.65) {
       this.spawnUnderfloorSparks(car);
     }
@@ -4771,6 +4977,59 @@ export class RacingEngine {
       this.sparkVel[idx * 3 + 1] = 2.4 + Math.random() * 4.0;
       this.sparkVel[idx * 3 + 2] = -fwdZ * (16 + Math.random() * 12) + (Math.random() - 0.5) * 5;
       this.sparkLife[idx] = 0.38 + Math.random() * 0.25;
+    }
+  }
+
+  private spawnSurfaceDebris(
+    car: RacerEntity,
+    type: 'marbles' | 'gravel' | 'kerb',
+    intensity = 1.0
+  ) {
+    const fwdX = -Math.sin(car.yaw);
+    const fwdZ = -Math.cos(car.yaw);
+    const rightX = Math.cos(car.yaw);
+    const rightZ = -Math.sin(car.yaw);
+    const speed = Math.abs(car.speed);
+    if (speed < 12) return;
+
+    const pDensity =
+      this.settings.particleDensity ?? (this.settings.graphicsQuality === 'extreme' ? 'ultra' : 'high');
+    const baseCount = pDensity === 'ultra' ? 4 : pDensity === 'high' ? 3 : pDensity === 'medium' ? 2 : 1;
+    const count = Math.min(8, Math.max(1, Math.round(baseCount * intensity)));
+
+    for (let k = 0; k < count; k++) {
+      const idx = this.surfaceDebrisCursor % this.surfaceDebrisPoolSize;
+      this.surfaceDebrisCursor++;
+      const side = (k % 2 === 0 ? -1 : 1) * 0.92;
+
+      // Contact patch position behind rear tyres
+      this.surfaceDebrisPositions[idx * 3] = car.position.x - fwdX * 1.55 + rightX * side + (Math.random() - 0.5) * 0.28;
+      this.surfaceDebrisPositions[idx * 3 + 1] = car.position.y + 0.045 + Math.random() * 0.06;
+      this.surfaceDebrisPositions[idx * 3 + 2] = car.position.z - fwdZ * 1.55 + rightZ * side + (Math.random() - 0.5) * 0.28;
+
+      const kickSpeed = speed * (0.32 + Math.random() * 0.22) + (Math.random() - 0.5) * 3.5;
+      this.surfaceDebrisVel[idx * 3] = -fwdX * kickSpeed + (Math.random() - 0.5) * 3.2;
+      this.surfaceDebrisVel[idx * 3 + 1] = 1.6 + Math.random() * 3.4;
+      this.surfaceDebrisVel[idx * 3 + 2] = -fwdZ * kickSpeed + (Math.random() - 0.5) * 3.2;
+
+      this.surfaceDebrisLife[idx] = 0.55 + Math.random() * 0.55;
+
+      if (type === 'marbles') {
+        const c = 0.06 + Math.random() * 0.04;
+        this.surfaceDebrisColors[idx * 3] = c;
+        this.surfaceDebrisColors[idx * 3 + 1] = c;
+        this.surfaceDebrisColors[idx * 3 + 2] = c * 1.1;
+      } else if (type === 'gravel') {
+        const c = 0.38 + Math.random() * 0.22;
+        this.surfaceDebrisColors[idx * 3] = c * 1.05;
+        this.surfaceDebrisColors[idx * 3 + 1] = c;
+        this.surfaceDebrisColors[idx * 3 + 2] = c * 0.94;
+      } else {
+        const isRed = Math.random() > 0.45;
+        this.surfaceDebrisColors[idx * 3] = isRed ? 0.88 : 0.94;
+        this.surfaceDebrisColors[idx * 3 + 1] = isRed ? 0.22 : 0.94;
+        this.surfaceDebrisColors[idx * 3 + 2] = isRed ? 0.18 : 0.96;
+      }
     }
   }
 
@@ -4863,10 +5122,25 @@ export class RacingEngine {
       car.tyreCompound
     );
     const cornerSeverity = Math.max(targetSample.curvature, farSample.curvature);
+    // AI Slipstream Tow: AI cars within 55m behind another car on straights gain a +4% aerodynamic tow
+    let aiSlipstreamBoost = 1.0;
+    if (cornerSeverity < 0.09 && this.builtTrack) {
+      const tLen = this.builtTrack.totalLength || 1000;
+      for (let i = 0; i < this.racers.length; i++) {
+        const other = this.racers[i];
+        if (other.id === car.id || other.finished) continue;
+        const pDiff = (other.totalProgress - car.totalProgress) * tLen;
+        if (pDiff > 5 && pDiff < 55) {
+          aiSlipstreamBoost = 1.042;
+          break;
+        }
+      }
+    }
     const weatherPace =
       (1 - wet * (car.tyreCompound === 'wet' ? 0.14 : 0.3)) *
       (avoidingHazardAhead ? 0.93 : 1.0) *
-      (0.96 + (aiLineGrip.lineEvolutionGripMultiplier - 1.0) * 0.55);
+      (0.96 + (aiLineGrip.lineEvolutionGripMultiplier - 1.0) * 0.55) *
+      aiSlipstreamBoost;
     const maxAiSpeed = 84 * car.aiBasePace * weatherPace * (aiHazardEval.gripMultiplier < 1 ? 0.82 : 1.0);
     let cornerSpeed = Math.max(24, maxAiSpeed * (1 - Math.min(0.68, cornerSeverity * 1.85)));
     if (aiHazardEval.hazardType === 'oil') {
@@ -5006,6 +5280,9 @@ export class RacingEngine {
     }
     if (car.incidentTimer > 0.8 && car.speed > 9) {
       this.stampSkidMarks(car);
+    }
+    if (car.incidentTimer > 0.4 && car.speed > 14 && Math.random() < 0.45) {
+      this.spawnSurfaceDebris(car, 'marbles', 0.85);
     }
     if ((car.speed * 3.6 > 245 && Math.random() < 0.3) || (car.incidentTimer > 1.8 && Math.random() < 0.5)) {
       this.spawnUnderfloorSparks(car);
@@ -5260,10 +5537,11 @@ export class RacingEngine {
     const rightX = Math.cos(car.yaw);
     const rightZ = -Math.sin(car.yaw);
     const isWet = this.trackWetness > 0.2 || this.liveWeather === 'rain' || this.liveWeather === 'heavy_rain';
+    const isSnow = this.liveWeather === 'snow' || this.liveWeather === 'blizzard';
     const pDensity =
       this.settings.particleDensity ?? (this.settings.graphicsQuality === 'extreme' ? 'ultra' : 'high');
     const densityAdd = pDensity === 'ultra' ? 2 : pDensity === 'high' ? 1 : 0;
-    const plumes = (car.isPlayer && isWet ? 3 : isWet ? 2 : 1) + densityAdd;
+    const plumes = (car.isPlayer && (isWet || isSnow) ? 3 : isWet || isSnow ? 2 : 1) + densityAdd;
 
     for (let p = 0; p < plumes; p++) {
       const idx = this.smokeCursor % this.smokePoolSize;
@@ -5279,9 +5557,9 @@ export class RacingEngine {
 
       const backSpeed = Math.min(14, Math.abs(car.speed) * 0.16);
       this.smokeVel[idx * 3] = -fwdX * backSpeed + rightX * (tireSide * 1.15 + (Math.random() - 0.5) * 1.8);
-      this.smokeVel[idx * 3 + 1] = (isWet ? 2.1 : 1.2) + Math.random() * 1.9;
+      this.smokeVel[idx * 3 + 1] = (isWet ? 2.8 : isSnow ? 2.0 : 1.2) + Math.random() * 2.2;
       this.smokeVel[idx * 3 + 2] = -fwdZ * backSpeed + rightZ * (tireSide * 1.15 + (Math.random() - 0.5) * 1.8);
-      this.smokeLife[idx] = isWet ? 0.72 + Math.random() * 0.25 : 0.62;
+      this.smokeLife[idx] = (isWet || isSnow) ? 0.88 + Math.random() * 0.32 : 0.62;
     }
   }
 
@@ -5313,6 +5591,36 @@ export class RacingEngine {
     }
     this.sparkGeo.attributes.position.needsUpdate = true;
 
+    let debrisUpdated = false;
+    for (let i = 0; i < this.surfaceDebrisPoolSize; i++) {
+      if (this.surfaceDebrisLife[i] > 0) {
+        debrisUpdated = true;
+        this.surfaceDebrisLife[i] -= dt;
+        this.surfaceDebrisVel[i * 3 + 1] -= 18.0 * dt;
+        this.surfaceDebrisVel[i * 3] *= Math.max(0, 1.0 - 0.85 * dt);
+        this.surfaceDebrisVel[i * 3 + 2] *= Math.max(0, 1.0 - 0.85 * dt);
+
+        this.surfaceDebrisPositions[i * 3] += this.surfaceDebrisVel[i * 3] * dt;
+        this.surfaceDebrisPositions[i * 3 + 1] += this.surfaceDebrisVel[i * 3 + 1] * dt;
+        this.surfaceDebrisPositions[i * 3 + 2] += this.surfaceDebrisVel[i * 3 + 2] * dt;
+
+        if (this.surfaceDebrisPositions[i * 3 + 1] < 0.04) {
+          this.surfaceDebrisPositions[i * 3 + 1] = 0.04;
+          this.surfaceDebrisVel[i * 3 + 1] = -this.surfaceDebrisVel[i * 3 + 1] * 0.35;
+          this.surfaceDebrisVel[i * 3] *= 0.65;
+          this.surfaceDebrisVel[i * 3 + 2] *= 0.65;
+        }
+
+        if (this.surfaceDebrisLife[i] <= 0) {
+          this.surfaceDebrisPositions[i * 3 + 1] = -999;
+        }
+      }
+    }
+    if (debrisUpdated) {
+      this.surfaceDebrisGeo.attributes.position.needsUpdate = true;
+      this.surfaceDebrisGeo.attributes.color.needsUpdate = true;
+    }
+
     if (this.rainPoints.visible) {
       const cx = this.camera.position.x;
       const cy = this.camera.position.y;
@@ -5327,6 +5635,28 @@ export class RacingEngine {
         }
       }
       this.rainGeo.attributes.position.needsUpdate = true;
+    }
+
+    if (this.snowPoints.visible) {
+      const cx = this.camera.position.x;
+      const cy = this.camera.position.y;
+      const cz = this.camera.position.z;
+      const fallSpeed = this.liveWeather === 'blizzard' ? 14.5 : 7.2;
+      const timeSec = performance.now() * 0.001;
+      const windForce = this.liveWeather === 'blizzard' ? 6.2 : 2.5;
+      for (let i = 0; i < this.snowCount; i++) {
+        const driftX = Math.sin(timeSec * 1.8 + i * 0.5) * windForce;
+        const driftZ = Math.cos(timeSec * 1.4 + i * 0.7) * windForce;
+        this.snowPositions[i * 3] += driftX * dt;
+        this.snowPositions[i * 3 + 1] -= fallSpeed * dt;
+        this.snowPositions[i * 3 + 2] += driftZ * dt;
+        if (this.snowPositions[i * 3 + 1] < cy - 4) {
+          this.snowPositions[i * 3] = cx + (Math.random() - 0.5) * 65;
+          this.snowPositions[i * 3 + 1] = cy + 20 + Math.random() * 8;
+          this.snowPositions[i * 3 + 2] = cz + (Math.random() - 0.5) * 65;
+        }
+      }
+      this.snowGeo.attributes.position.needsUpdate = true;
     }
 
     let fireworksActive = false;
@@ -5703,7 +6033,13 @@ export class RacingEngine {
       const rearFacing = mode === 'chase' || mode === 'low_track';
       this.speedPass.uniforms['uHeatDistort'].value = rearFacing ? (0.18 + speedRatio * 0.52) : 0;
       this.speedPass.uniforms['uGradeContrast'].value =
-        this.settings.graphicsQuality === 'extreme' || this.settings.graphicsQuality === 'cinematic' ? 0.24 : this.settings.graphicsQuality === 'ultra' ? 0.18 : 0.14;
+        this.settings.graphicsQuality === 'ultra_8k'
+          ? 0.27
+          : this.settings.graphicsQuality === 'extreme' || this.settings.graphicsQuality === 'cinematic'
+            ? 0.24
+            : this.settings.graphicsQuality === 'ultra'
+              ? 0.18
+              : 0.14;
       if (this.settings.motionBlur && this.settings.graphicsQuality !== 'low' && this.settings.motionBlurLevel !== 'off') {
         const mbMult =
           this.settings.motionBlurLevel === 'low'
@@ -5961,7 +6297,7 @@ export class RacingEngine {
 
     const drsZones = this.builtTrack.drsZones;
     const activeDrsZone = findActiveDrsZoneAtT(drsZones, player.lastT);
-    const drsDisabledByWeather = this.trackWetness > 0.48 || this.liveWeather === 'heavy_rain';
+    const drsDisabledByWeather = this.trackWetness > 0.48 || this.liveWeather === 'heavy_rain' || this.liveWeather === 'blizzard';
     const drsGapQualified =
       this.gameMode === 'time_trial' || this.settings.drsAssist !== false || this.playerDrsGapQualified;
     const drsRemainingMeters = activeDrsZone
@@ -6053,6 +6389,8 @@ export class RacingEngine {
       gForceTotal: this.currentGForce.gTotal,
       pitStrategy: this.currentStrategy,
       tyreContactPatch: this.currentContactPatch,
+      slipstreamPct: Math.round(this.playerSlipstreamPct * 100),
+      dirtyAirPct: Math.round(this.playerDirtyAirPct * 100),
     });
   }
 
@@ -6092,8 +6430,40 @@ export class RacingEngine {
       return { flag: 'none', reason: '', distanceMeters: null };
     }
 
+    const totalLaps = Math.max(1, this.settings.totalLaps);
+    const leaderFinished = this.gameMode !== 'time_trial' && this.racers.some((r) => r.finished);
+    const onFinalSprint =
+      this.gameMode !== 'time_trial' &&
+      player.lap >= totalLaps &&
+      player.lastT >= 0.80 &&
+      this.raceElapsedMs > 8000;
+
+    // 1. Checkered Flag: Waving at finish line on final lap sprint or once race leader finishes
+    if (leaderFinished || onFinalSprint) {
+      const distToLine = Math.max(1, Math.round((1 - player.lastT) * trackLen));
+      return {
+        flag: 'checkered',
+        reason: leaderFinished
+          ? 'RACE LEADER FINISHED — TAKE CHECKERED FLAG'
+          : 'FINAL SECTOR SPRINT — CHECKERED FLAG AHEAD',
+        distanceMeters: distToLine,
+        sector: 3,
+        marshalPost: 18,
+        subDirective: 'FINISH LINE MARSHAL POST · FULL THROTTLE TO THE LINE',
+      };
+    }
+
     let nearestYellowDist = Infinity;
     let yellowReason = '';
+    let yellowSector: 1 | 2 | 3 = this.getSectorFromT(player.lastT);
+    let yellowPost = Math.max(1, Math.min(18, Math.ceil(player.lastT * 18)));
+    let yellowDriverCode = '';
+    let severeBlockageDist = Infinity;
+    let severeBlockageReason = '';
+    let severeSector: 1 | 2 | 3 = yellowSector;
+    let severePost = yellowPost;
+    let severeDriverCode = '';
+    let activeIncidentCountAhead = 0;
 
     for (const r of this.racers) {
       if (r.isPlayer) continue;
@@ -6110,28 +6480,88 @@ export class RacingEngine {
       const trackDistAhead = fracAhead * trackLen;
       const euclidDist = r.position.distanceTo(player.position);
 
-      if ((trackDistAhead > 3 && trackDistAhead <= 220) || (euclidDist <= 160 && trackDistAhead < trackLen * 0.45)) {
+      if ((trackDistAhead > 3 && trackDistAhead <= 240) || (euclidDist <= 170 && trackDistAhead < trackLen * 0.45)) {
         const effectiveDist = Math.min(trackDistAhead > 1 ? trackDistAhead : euclidDist, euclidDist);
+        const rSector = this.getSectorFromT(r.lastT);
+        const rPost = Math.max(1, Math.min(18, Math.ceil(r.lastT * 18)));
+        const lastName = r.name.split(' ').pop()?.toUpperCase() ?? 'CAR';
+        const code = lastName.slice(0, 3);
+
+        if (isSidewaysOrSpun) {
+          activeIncidentCountAhead += 1;
+        }
+
+        // Severe stopped/reversed car blocking track or multi-car incident triggers Red Flag condition
+        const isTrackBlocked =
+          this.raceElapsedMs > 5500 &&
+          ((alignment < 0.18 && r.speed < 7.5 && effectiveDist <= 165) || activeIncidentCountAhead >= 2);
+        if (isTrackBlocked && effectiveDist < severeBlockageDist) {
+          severeBlockageDist = effectiveDist;
+          severeSector = rSector;
+          severePost = rPost;
+          severeDriverCode = code;
+          severeBlockageReason =
+            activeIncidentCountAhead >= 2
+              ? `MULTI-CAR INCIDENT IN SECTOR ${rSector} (${lastName})`
+              : `TRACK BLOCKED — ${lastName} STOPPED ON RACING LINE`;
+        }
+
         if (effectiveDist < nearestYellowDist) {
           nearestYellowDist = effectiveDist;
-          yellowReason = r.incidentTimer > 0 || alignment < 0.65
-            ? `INCIDENT AHEAD (${r.name.split(' ').pop()?.toUpperCase() ?? 'CAR'} SPIN)`
-            : 'CAUTION — SLOW CAR AHEAD';
+          yellowSector = rSector;
+          yellowPost = rPost;
+          yellowDriverCode = code;
+          yellowReason =
+            r.incidentTimer > 0 || alignment < 0.65
+              ? `INCIDENT AHEAD — ${lastName} SPUN IN S${rSector}`
+              : `CAUTION — SLOW CAR AHEAD (${lastName})`;
         }
       }
     }
 
-    if (nearestYellowDist < Infinity) {
+    // 2. Red Flag: Multi-car blockage ahead or critical player barrier damage
+    if (severeBlockageDist < Infinity || player.damagePct >= 82) {
+      const playerSector = this.getSectorFromT(player.lastT);
+      const playerPost = Math.max(1, Math.min(18, Math.ceil(player.lastT * 18)));
       return {
-        flag: 'yellow',
-        reason: yellowReason,
-        distanceMeters: Math.max(5, Math.round(nearestYellowDist)),
+        flag: 'red',
+        reason:
+          severeBlockageDist < Infinity
+            ? severeBlockageReason
+            : `CRITICAL CHASSIS DAMAGE (${Math.round(player.damagePct)}%) — BOX IMMEDIATELY`,
+        distanceMeters:
+          severeBlockageDist < Infinity ? Math.max(5, Math.round(severeBlockageDist)) : null,
+        sector: severeBlockageDist < Infinity ? severeSector : playerSector,
+        marshalPost: severeBlockageDist < Infinity ? severePost : playerPost,
+        subDirective: 'RED FLAG CONDITION · NO OVERTAKING · REDUCE SPEED & PREPARE FOR PIT LANE',
+        driverCode: severeDriverCode || undefined,
       };
     }
 
-    // Surface Flag (FIA Yellow/Red Striped): oil spill or carbon debris ahead in sector
+    // 3. Yellow Flag: Single-car spin, slow car ahead, or player off-axis recovery
+    if (nearestYellowDist < Infinity || player.incidentTimer > 0.15) {
+      const playerSector = this.getSectorFromT(player.lastT);
+      const playerPost = Math.max(1, Math.min(18, Math.ceil(player.lastT * 18)));
+      return {
+        flag: 'yellow',
+        reason:
+          nearestYellowDist < Infinity
+            ? yellowReason
+            : `LOCAL YELLOW — RECOVERING TRACTION IN S${playerSector}`,
+        distanceMeters:
+          nearestYellowDist < Infinity ? Math.max(5, Math.round(nearestYellowDist)) : null,
+        sector: nearestYellowDist < Infinity ? yellowSector : playerSector,
+        marshalPost: nearestYellowDist < Infinity ? yellowPost : playerPost,
+        subDirective: 'NO OVERTAKING IN MARSHAL SECTOR · DRS AUTOMATICALLY DISABLED',
+        driverCode: yellowDriverCode || undefined,
+      };
+    }
+
+    // 4. Surface Flag (FIA Yellow/Red Striped): oil spill or carbon debris ahead in sector
     let nearestSurfaceDist = Infinity;
     let surfaceReason = '';
+    let surfaceSector: 1 | 2 | 3 = 1;
+    let surfacePost = 1;
     for (const hz of this.surfaceHazards) {
       const fracAhead = (((hz.t - player.lastT) % 1) + 1) % 1;
       const trackDistAhead = fracAhead * trackLen;
@@ -6140,6 +6570,8 @@ export class RacingEngine {
         const effectiveDist = Math.min(trackDistAhead > 1 ? trackDistAhead : euclidDist, euclidDist);
         if (effectiveDist < nearestSurfaceDist) {
           nearestSurfaceDist = effectiveDist;
+          surfaceSector = hz.sector;
+          surfacePost = Math.max(1, Math.min(18, Math.ceil(hz.t * 18)));
           const lineAdvice = hz.lateralOffset < 0 ? 'TAKE RIGHT LINE' : 'TAKE LEFT LINE';
           const label = hz.type === 'oil' ? 'OIL SPILL' : 'CARBON DEBRIS';
           surfaceReason = `${label} IN S${hz.sector} — ${lineAdvice}`;
@@ -6152,32 +6584,52 @@ export class RacingEngine {
         flag: 'surface',
         reason: surfaceReason,
         distanceMeters: Math.max(4, Math.round(nearestSurfaceDist)),
+        sector: surfaceSector,
+        marshalPost: surfacePost,
+        subDirective: 'REDUCED SURFACE ADHESION · AVOID OFF-LINE DEBRIS FIELD',
       };
     }
 
-    // Blue Flag: faster lapping car approaching closely behind player
+    // 5. Blue Flag: faster lapping car or high-speed overtaking car approaching closely behind player
     let nearestBlueDist = Infinity;
     let blueReason = '';
+    let blueDriverCode = '';
     for (const r of this.racers) {
       if (r.isPlayer || r.finished) continue;
-      const isLappingPlayer = r.totalProgress - player.totalProgress >= 0.75;
-      if (!isLappingPlayer) continue;
-
+      const isLappingPlayer = r.totalProgress - player.totalProgress >= 0.72;
       const fracBehind = (((player.lastT - r.lastT) % 1) + 1) % 1;
       const trackDistBehind = fracBehind * trackLen;
-      if (trackDistBehind > 1 && trackDistBehind <= 120 && r.speed > player.speed * 0.8) {
+      const isRapidClosingCar =
+        this.raceElapsedMs > 9000 &&
+        trackDistBehind > 2 &&
+        trackDistBehind <= 72 &&
+        r.speed > player.speed + 5.8;
+
+      if (!isLappingPlayer && !isRapidClosingCar) continue;
+
+      if (trackDistBehind > 1 && trackDistBehind <= 125 && r.speed > player.speed * 0.82) {
         if (trackDistBehind < nearestBlueDist) {
           nearestBlueDist = trackDistBehind;
-          blueReason = `YIELD TO FASTER CAR (${r.name.split(' ').pop()?.toUpperCase() ?? 'LEAD'})`;
+          const lastName = r.name.split(' ').pop()?.toUpperCase() ?? 'LEAD';
+          blueDriverCode = lastName.slice(0, 3);
+          blueReason = isLappingPlayer
+            ? `YIELD TO LAPPING LEADER (${lastName})`
+            : `FASTER CAR CLOSING FAST BEHIND (${lastName})`;
         }
       }
     }
 
     if (nearestBlueDist < Infinity) {
+      const playerSector = this.getSectorFromT(player.lastT);
+      const playerPost = Math.max(1, Math.min(18, Math.ceil(player.lastT * 18)));
       return {
         flag: 'blue',
         reason: blueReason,
         distanceMeters: Math.max(3, Math.round(nearestBlueDist)),
+        sector: playerSector,
+        marshalPost: playerPost,
+        subDirective: 'CHECK MIRRORS · ALLOW FASTER CAR CLEAN PASSING CORRIDOR',
+        driverCode: blueDriverCode || undefined,
       };
     }
 

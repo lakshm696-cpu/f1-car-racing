@@ -82,8 +82,26 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
   const showCamera = activeTab === 'all' || activeTab === 'camera';
   const showDualsense = activeTab === 'all' || activeTab === 'dualsense';
 
-  const applyPs5Preset = (preset: 'extreme_graphics' | 'rt_pro' | 'perf_120' | 'sim_pro' | 'broadcast') => {
-    if (preset === 'extreme_graphics') {
+  const applyPs5Preset = (preset: 'ultra_8k_graphics' | 'extreme_graphics' | 'rt_pro' | 'perf_120' | 'sim_pro' | 'broadcast') => {
+    if (preset === 'ultra_8k_graphics') {
+      onUpdateSettings({
+        graphicsQuality: 'ultra_8k',
+        resolutionScale: 2.0,
+        textureQuality: 'cinematic',
+        shadowQuality: 'cinematic',
+        reflectionQuality: 'cinematic',
+        ambientOcclusion: 'ultra',
+        antiAliasing: 'high',
+        particleDensity: 'ultra',
+        motionBlurLevel: 'cinematic',
+        motionBlur: true,
+        hdrMode: 'hdr10',
+        ps5GraphicsMode: 'cinematic',
+        rayTracingQuality: 'cinematic',
+        pssrUpscaling: true,
+        targetFps: 60,
+      });
+    } else if (preset === 'extreme_graphics') {
       onUpdateSettings({
         graphicsQuality: 'extreme',
         resolutionScale: 2.0,
@@ -217,10 +235,17 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => applyPs5Preset('extreme_graphics')}
-                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-gradient-to-r from-amber-500/25 via-red-500/25 to-sky-500/25 border border-amber-400/70 text-amber-200 hover:brightness-125 cursor-pointer shadow-sm shadow-amber-500/20"
+                onClick={() => applyPs5Preset('ultra_8k_graphics')}
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-gradient-to-r from-amber-500/30 via-fuchsia-500/25 to-sky-500/30 border border-amber-400/80 text-amber-200 hover:brightness-125 cursor-pointer shadow-sm shadow-amber-500/25"
               >
-                ⭐ Recommended EXTREME (4K 200%)
+                🌟 ULTRA 8K PATH-TRACED (200%)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPs5Preset('extreme_graphics')}
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-500/20 border border-amber-400/50 text-amber-200 hover:brightness-125 cursor-pointer"
+              >
+                ⭐ EXTREME (4K)
               </button>
               <button
                 type="button"
@@ -264,10 +289,10 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => applyPs5Preset('extreme_graphics')}
+                  onClick={() => applyPs5Preset('ultra_8k_graphics')}
                   className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-slate-950 hover:bg-amber-300 cursor-pointer shadow-sm shadow-amber-400/30"
                 >
-                  Apply EXTREME Preset
+                  Apply ULTRA 8K Preset
                 </button>
               </div>
 
@@ -275,15 +300,17 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-white">Graphics Preset</div>
-                  <div className="text-xs text-slate-400">Global fidelity preset (LOW through CINEMATIC)</div>
+                  <div className="text-xs text-slate-400">Global fidelity preset (LOW through ULTRA 8K PATH-TRACED)</div>
                 </div>
-                <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['low', 'medium', 'high', 'ultra', 'extreme', 'cinematic'] as GraphicsQuality[]).map((q) => (
+                <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(['low', 'medium', 'high', 'ultra', 'extreme', 'cinematic', 'ultra_8k'] as GraphicsQuality[]).map((q) => (
                     <button
                       key={q}
                       type="button"
                       onClick={() => {
-                        if (q === 'extreme') {
+                        if (q === 'ultra_8k') {
+                          applyPs5Preset('ultra_8k_graphics');
+                        } else if (q === 'extreme') {
                           applyPs5Preset('extreme_graphics');
                         } else {
                           onUpdateSettings({ graphicsQuality: q });
@@ -291,13 +318,13 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                       }}
                       className={`px-2.5 py-1.5 rounded-md text-xs font-semibold uppercase cursor-pointer transition-all ${
                         settings.graphicsQuality === q
-                          ? q === 'extreme'
+                          ? q === 'ultra_8k' || q === 'extreme'
                             ? 'bg-amber-400 text-slate-950 font-bold shadow-md shadow-amber-400/30'
                             : 'bg-sky-400 text-slate-950'
                           : 'text-slate-300 hover:text-white'
                       }`}
                     >
-                      {q}
+                      {q === 'ultra_8k' ? 'ultra 8k' : q}
                     </button>
                   ))}
                 </div>
@@ -345,12 +372,14 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['medium', 'high', 'ultra'] as TextureQuality[]).map((tq) => {
+                  {(['medium', 'high', 'ultra', 'cinematic'] as TextureQuality[]).map((tq) => {
                     const isSel =
                       (settings.textureQuality ??
-                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
-                          ? 'ultra'
-                          : 'high')) === tq;
+                        (settings.graphicsQuality === 'ultra_8k'
+                          ? 'cinematic'
+                          : settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                            ? 'ultra'
+                            : 'high')) === tq;
                     return (
                       <button
                         key={tq}
@@ -372,16 +401,18 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                 <div>
                   <div className="text-sm font-semibold text-white">Shadow Quality</div>
                   <div className="text-xs text-slate-400">
-                    PCF Soft shadow filtering with up to 4096×4096 shadow map
+                    PCF Soft shadow filtering with up to 8192×8192 shadow map
                   </div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
                   {(['off', 'medium', 'high', 'ultra', 'cinematic'] as ShadowQuality[]).map((sq) => {
                     const isSel =
                       (settings.shadowQuality ??
-                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
-                          ? 'ultra'
-                          : 'high')) === sq;
+                        (settings.graphicsQuality === 'ultra_8k'
+                          ? 'cinematic'
+                          : settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                            ? 'ultra'
+                            : 'high')) === sq;
                     return (
                       <button
                         key={sq}
@@ -403,16 +434,18 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                 <div>
                   <div className="text-sm font-semibold text-white">Reflections & Ray Tracing</div>
                   <div className="text-xs text-slate-400">
-                    Dynamic HalfFloat HDR CubeCamera reflections on car bodywork & wet asphalt
+                    Dynamic HalfFloat 2048px HDR CubeCamera reflections on car bodywork & wet asphalt
                   </div>
                 </div>
                 <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
-                  {(['off', 'medium', 'high', 'ultra'] as ReflectionQuality[]).map((rq) => {
+                  {(['off', 'medium', 'high', 'ultra', 'cinematic'] as ReflectionQuality[]).map((rq) => {
                     const isSel =
                       (settings.reflectionQuality ??
-                        (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
-                          ? 'ultra'
-                          : 'high')) === rq;
+                        (settings.graphicsQuality === 'ultra_8k'
+                          ? 'cinematic'
+                          : settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra'
+                            ? 'ultra'
+                            : 'high')) === rq;
                     return (
                       <button
                         key={rq}
@@ -696,50 +729,54 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                     AAA RACING GRAPHICS ENGINE · ACTIVE SPECIFICATION
                   </span>
                   <span className="text-[11px] font-mono font-bold text-emerald-400">
-                    {settings.graphicsQuality === 'extreme'
-                      ? '⭐ EXTREME 4K PIPELINE ACTIVE'
-                      : `${settings.graphicsQuality.toUpperCase()} PRESET ACTIVE`}
+                    {settings.graphicsQuality === 'ultra_8k'
+                      ? '🌟 ULTRA 8K PATH-TRACED PIPELINE ACTIVE'
+                      : settings.graphicsQuality === 'extreme'
+                        ? '⭐ EXTREME 4K PIPELINE ACTIVE'
+                        : `${settings.graphicsQuality.toUpperCase()} PRESET ACTIVE`}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-[11px]">
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Resolution</span>
                     <span className="font-mono font-bold text-white">
-                      {(settings.resolutionScale ?? (settings.graphicsQuality === 'extreme' ? 2.0 : 1.0)) >= 2.0
-                        ? '3840×2160 (4K)'
-                        : (settings.resolutionScale ?? 1.0) >= 1.5
-                          ? '2560×1440 (QHD)'
-                          : '1920×1080 (FHD)'}
+                      {settings.graphicsQuality === 'ultra_8k'
+                        ? '3840×2160 (8K SS)'
+                        : (settings.resolutionScale ?? (settings.graphicsQuality === 'extreme' ? 2.0 : 1.0)) >= 2.0
+                          ? '3840×2160 (4K)'
+                          : (settings.resolutionScale ?? 1.0) >= 1.5
+                            ? '2560×1440 (QHD)'
+                            : '1920×1080 (FHD)'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Render quality</span>
                     <span className="font-mono font-bold text-amber-300">
-                      {Math.round((settings.resolutionScale ?? (settings.graphicsQuality === 'extreme' ? 2.0 : 1.0)) * 100)}%
+                      {Math.round((settings.resolutionScale ?? (settings.graphicsQuality === 'extreme' || settings.graphicsQuality === 'ultra_8k' ? 2.0 : 1.0)) * 100)}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Textures</span>
                     <span className="font-mono font-bold text-sky-300 uppercase">
-                      {settings.textureQuality ?? (settings.graphicsQuality === 'extreme' ? 'Ultra' : settings.graphicsQuality)}
+                      {settings.textureQuality ?? (settings.graphicsQuality === 'ultra_8k' ? 'Cinematic' : settings.graphicsQuality === 'extreme' ? 'Ultra' : settings.graphicsQuality)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Shadows</span>
                     <span className="font-mono font-bold text-sky-300 uppercase">
-                      {settings.shadowQuality ?? (settings.graphicsQuality === 'extreme' ? 'Ultra (4096)' : settings.graphicsQuality)}
+                      {settings.shadowQuality ?? (settings.graphicsQuality === 'ultra_8k' ? 'Cinematic (8192)' : settings.graphicsQuality === 'extreme' ? 'Ultra (8192)' : settings.graphicsQuality)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Reflections</span>
                     <span className="font-mono font-bold text-cyan-300 uppercase">
-                      {settings.reflectionQuality ?? (settings.graphicsQuality === 'extreme' ? 'Ultra (RT)' : rtQuality)}
+                      {settings.reflectionQuality ?? (settings.graphicsQuality === 'ultra_8k' ? 'Cinematic (RT)' : settings.graphicsQuality === 'extreme' ? 'Ultra (RT)' : rtQuality)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">
                     <span className="text-slate-400">Ambient occlusion</span>
                     <span className="font-mono font-bold text-white uppercase">
-                      {settings.ambientOcclusion ?? (settings.graphicsQuality === 'extreme' ? 'Ultra (SSAO)' : 'High')}
+                      {settings.ambientOcclusion ?? (settings.graphicsQuality === 'ultra_8k' || settings.graphicsQuality === 'extreme' ? 'Ultra (24-Tap GTAO)' : 'High')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1">

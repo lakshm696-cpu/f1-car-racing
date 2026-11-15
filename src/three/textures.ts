@@ -51,53 +51,62 @@ const PIRELLI_COMPOUND_HEX: Record<TyreCompound, string> = {
 
 export function createPirelliSidewallTexture(compound: TyreCompound): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 512;
+  c.width = 1024;
+  c.height = 1024;
   const ctx = c.getContext('2d')!;
-  const cx = 256;
-  const cy = 256;
+  const cx = 512;
+  const cy = 512;
 
-  // Base vulcanized sidewall rubber with subtle radial molding ribs
-  ctx.fillStyle = '#12151B';
-  ctx.fillRect(0, 0, 512, 512);
+  // Base vulcanized sidewall rubber with subtle radial molding ribs & micro-knurling
+  ctx.fillStyle = '#101319';
+  ctx.fillRect(0, 0, 1024, 1024);
 
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.strokeStyle = 'rgba(255,255,255,0.045)';
-  ctx.lineWidth = 1.2;
-  for (let i = 0; i < 120; i++) {
-    const a = (i / 120) * Math.PI * 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+  ctx.lineWidth = 1.8;
+  for (let i = 0; i < 180; i++) {
+    const a = (i / 180) * Math.PI * 2;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * 155, Math.sin(a) * 155);
-    ctx.lineTo(Math.cos(a) * 244, Math.sin(a) * 244);
+    ctx.moveTo(Math.cos(a) * 310, Math.sin(a) * 310);
+    ctx.lineTo(Math.cos(a) * 488, Math.sin(a) * 488);
+    ctx.stroke();
+  }
+
+  // Concentric vulcanized mold rings
+  for (const r of [328, 356, 442, 474]) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
   }
 
   const col = PIRELLI_COMPOUND_HEX[compound];
 
-  // Signature twin Pirelli compound arcs
+  // Signature twin Pirelli compound arcs with subtle outer glow
   ctx.strokeStyle = col;
-  ctx.lineWidth = 15;
+  ctx.lineWidth = 30;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(0, 0, 198, -Math.PI * 0.28, Math.PI * 0.28);
+  ctx.arc(0, 0, 396, -Math.PI * 0.28, Math.PI * 0.28);
   ctx.stroke();
   ctx.beginPath();
-  ctx.arc(0, 0, 198, Math.PI * 0.72, Math.PI * 1.28);
+  ctx.arc(0, 0, 396, Math.PI * 0.72, Math.PI * 1.28);
   ctx.stroke();
 
   // Inner fine technical bead line
-  ctx.strokeStyle = 'rgba(248, 250, 252, 0.26)';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.34)';
+  ctx.lineWidth = 4.5;
   ctx.beginPath();
-  ctx.arc(0, 0, 170, 0, Math.PI * 2);
+  ctx.arc(0, 0, 340, 0, Math.PI * 2);
   ctx.stroke();
 
   // Curved "PIRELLI" top arc & "P ZERO" bottom arc lettering
   const drawArcText = (text: string, radius: number, startAngle: number, stepAngle: number, color: string) => {
     ctx.save();
     ctx.fillStyle = color;
-    ctx.font = 'italic 900 28px "Chakra Petch", sans-serif';
+    ctx.font = 'italic 900 56px "Chakra Petch", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (let i = 0; i < text.length; i++) {
@@ -111,8 +120,8 @@ export function createPirelliSidewallTexture(compound: TyreCompound): THREE.Canv
     ctx.restore();
   };
 
-  drawArcText('PIRELLI', 198, -0.45, 0.15, col);
-  drawArcText('P ZERO', 198, Math.PI - 0.38, 0.15, '#F8FAFC');
+  drawArcText('PIRELLI', 396, -0.45, 0.15, col);
+  drawArcText('P ZERO', 396, Math.PI - 0.38, 0.15, '#F8FAFC');
   ctx.restore();
 
   const tex = new THREE.CanvasTexture(c);
@@ -122,30 +131,30 @@ export function createPirelliSidewallTexture(compound: TyreCompound): THREE.Canv
 
 export function createNumberDecalTexture(numText: string, accentHex: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 256;
+  c.width = 512;
+  c.height = 512;
   const ctx = c.getContext('2d')!;
-  ctx.clearRect(0, 0, 256, 256);
+  ctx.clearRect(0, 0, 512, 512);
 
   ctx.fillStyle = accentHex;
   ctx.beginPath();
-  ctx.roundRect(24, 44, 208, 168, 26);
+  ctx.roundRect(48, 88, 416, 336, 52);
   ctx.fill();
 
   ctx.fillStyle = '#090B0F';
   ctx.beginPath();
-  ctx.roundRect(34, 54, 188, 148, 20);
+  ctx.roundRect(68, 108, 376, 296, 40);
   ctx.fill();
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(42, 62, 172, 132);
+  ctx.strokeStyle = 'rgba(255,255,255,0.24)';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(84, 124, 344, 264);
 
   ctx.fillStyle = '#F8FAFC';
-  ctx.font = 'italic bold 118px sans-serif';
+  ctx.font = 'italic bold 236px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(numText, 128, 134);
+  ctx.fillText(numText, 256, 268);
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -163,43 +172,43 @@ export function createProceduralTextures(
   asphaltCanvas.width = 2048;
   asphaltCanvas.height = 2048;
   const actx = asphaltCanvas.getContext('2d')!;
-  actx.fillStyle = '#1c2028';
+  actx.fillStyle = '#1a1e26';
   actx.fillRect(0, 0, 2048, 2048);
 
   const groove = actx.createLinearGradient(0, 0, 2048, 0);
   groove.addColorStop(0, 'rgba(28,30,36,0.0)');
-  groove.addColorStop(0.24, 'rgba(8,10,14,0.26)');
-  groove.addColorStop(0.5, 'rgba(16,18,24,0.10)');
-  groove.addColorStop(0.76, 'rgba(8,10,14,0.26)');
+  groove.addColorStop(0.24, 'rgba(6,8,12,0.32)');
+  groove.addColorStop(0.5, 'rgba(14,16,22,0.14)');
+  groove.addColorStop(0.76, 'rgba(6,8,12,0.32)');
   groove.addColorStop(1, 'rgba(28,30,36,0.0)');
   actx.fillStyle = groove;
   actx.fillRect(0, 0, 2048, 2048);
 
-  // Ultra-fine mineral aggregate stone grain & bitumen variation
-  for (let i = 0; i < 160000; i++) {
+  // Ultra-fine mineral aggregate stone grain & crystalline quartz granite specs
+  for (let i = 0; i < 210000; i++) {
     const x = Math.random() * 2048;
     const y = Math.random() * 2048;
-    const v = 22 + Math.floor(Math.random() * 54);
-    actx.fillStyle = `rgb(${v},${v + 1},${v + 5})`;
+    const v = 20 + Math.floor(Math.random() * 62);
+    actx.fillStyle = `rgb(${v},${v + 2},${v + 6})`;
     actx.fillRect(x, y, 2, 2);
   }
 
   // Longitudinal laser-screeded asphalt paving micro-striations
-  actx.fillStyle = 'rgba(10, 12, 16, 0.14)';
-  for (let s = 0; s < 140; s++) {
+  actx.fillStyle = 'rgba(8, 10, 14, 0.16)';
+  for (let s = 0; s < 180; s++) {
     const sx = 64 + Math.random() * 1920;
-    actx.fillRect(sx, 0, 1 + Math.random() * 2, 2048);
+    actx.fillRect(sx, 0, 1 + Math.random() * 2.2, 2048);
   }
 
-  // Realistic hairline asphalt cracks & tar overband repairs
-  actx.strokeStyle = 'rgba(6, 8, 11, 0.72)';
-  actx.lineWidth = 2.2;
-  for (let c = 0; c < 32; c++) {
+  // Realistic hairline asphalt cracks & glossy tar overband repairs
+  actx.strokeStyle = 'rgba(5, 7, 10, 0.78)';
+  actx.lineWidth = 2.4;
+  for (let c = 0; c < 42; c++) {
     let cx = 120 + Math.random() * 1808;
     let cy = Math.random() * 2048;
     actx.beginPath();
     actx.moveTo(cx, cy);
-    for (let s = 0; s < 12; s++) {
+    for (let s = 0; s < 14; s++) {
       cx += (Math.random() - 0.5) * 56;
       cy += 22 + Math.random() * 44;
       actx.lineTo(cx, cy);
@@ -208,17 +217,17 @@ export function createProceduralTextures(
   }
 
   // Faint initial rubber skid marks along braking/acceleration zones
-  for (let s = 0; s < 36; s++) {
+  for (let s = 0; s < 48; s++) {
     const sx = (s % 2 === 0 ? 500 : 1380) + (Math.random() - 0.5) * 240;
     const sy = Math.random() * 1800;
-    actx.fillStyle = 'rgba(5, 6, 9, 0.22)';
+    actx.fillStyle = 'rgba(4, 5, 8, 0.26)';
     actx.fillRect(sx, sy, 5 + Math.random() * 6, 70 + Math.random() * 160);
   }
 
   // Rubber marbling off the racing line
-  for (let m = 0; m < 2400; m++) {
+  for (let m = 0; m < 3200; m++) {
     const side = Math.random() > 0.5 ? 96 + Math.random() * 176 : 1776 + Math.random() * 176;
-    actx.fillStyle = 'rgba(6,7,10,0.62)';
+    actx.fillStyle = 'rgba(5,6,9,0.68)';
     actx.fillRect(side, Math.random() * 2048, 5, 9);
   }
 
@@ -234,17 +243,62 @@ export function createProceduralTextures(
   asphaltMap.repeat.set(1, 78);
   asphaltMap.anisotropy = maxAnisotropy;
 
-  // 2. High-Definition Asphalt Micro-Grain Normal Map (1024x1024)
+  // 2. High-Definition Multi-Octave Asphalt Normal Map (1024x1024)
+  // Synthesizes true multi-octave tangent normals for basalt aggregates, bitumen seams, and micro-quartz facets
   const normCanvas = document.createElement('canvas');
   normCanvas.width = 1024;
   normCanvas.height = 1024;
   const nctx = normCanvas.getContext('2d')!;
   const nImg = nctx.createImageData(1024, 1024);
-  for (let i = 0; i < 1024 * 1024; i++) {
-    nImg.data[i * 4] = 128 + (Math.random() - 0.5) * 108;
-    nImg.data[i * 4 + 1] = 128 + (Math.random() - 0.5) * 108;
-    nImg.data[i * 4 + 2] = 226;
-    nImg.data[i * 4 + 3] = 255;
+  const nSize = 1024;
+  const hMap = new Float32Array(nSize * nSize);
+
+  // Multi-frequency heightfield synthesis (4 procedural octaves)
+  for (let y = 0; y < nSize; y++) {
+    const rowOffset = y * nSize;
+    const normY = y / nSize;
+    for (let x = 0; x < nSize; x++) {
+      const normX = x / nSize;
+      // Octave 0: Macro road undulations & bitumen seams
+      const oct0 = Math.sin(normX * 24.0) * Math.cos(normY * 24.0) * 0.32 +
+                   Math.sin((normX + normY) * 16.0) * 0.16;
+      // Octave 1: Granite stone chip aggregate (medium frequency)
+      const oct1 = Math.sin(normX * 120.0 + Math.cos(normY * 90.0) * 2.2) * Math.cos(normY * 120.0) * 0.24;
+      // Octave 2: Crushed basalt chip facets (fine frequency)
+      const oct2 = Math.sin(normX * 360.0) * Math.sin(normY * 360.0) * 0.16 +
+                   Math.cos(normX * 480.0 - normY * 240.0) * 0.10;
+      // Octave 3: High-frequency crystalline quartz micro-roughness
+      const hash = ((x * 1597334677) ^ (y * 3812015801)) >>> 0;
+      const microNoise = (hash / 4294967296.0 - 0.5) * 0.14;
+
+      hMap[rowOffset + x] = oct0 + oct1 + oct2 + microNoise;
+    }
+  }
+
+  // Central-difference Sobel filter: Tangent-Space Normal Vector [Nx, Ny, Nz]
+  const nStrength = 2.8;
+  for (let y = 0; y < nSize; y++) {
+    const rowOffset = y * nSize;
+    const yPrev = ((y - 1 + nSize) % nSize) * nSize;
+    const yNext = ((y + 1) % nSize) * nSize;
+    for (let x = 0; x < nSize; x++) {
+      const xPrev = (x - 1 + nSize) % nSize;
+      const xNext = (x + 1) % nSize;
+
+      const dX = (hMap[rowOffset + xNext] - hMap[rowOffset + xPrev]) * nStrength;
+      const dY = (hMap[yNext + x] - hMap[yPrev + x]) * nStrength;
+
+      const len = Math.hypot(-dX, -dY, 1.0);
+      const nx = -dX / len;
+      const ny = -dY / len;
+      const nz = 1.0 / len;
+
+      const pixelIdx = (rowOffset + x) * 4;
+      nImg.data[pixelIdx] = Math.round((nx * 0.5 + 0.5) * 255);
+      nImg.data[pixelIdx + 1] = Math.round((ny * 0.5 + 0.5) * 255);
+      nImg.data[pixelIdx + 2] = Math.round((nz * 0.5 + 0.5) * 255);
+      nImg.data[pixelIdx + 3] = 255;
+    }
   }
   nctx.putImageData(nImg, 0, 0);
   const asphaltNormalMap = new THREE.CanvasTexture(normCanvas);
@@ -253,50 +307,50 @@ export function createProceduralTextures(
   asphaltNormalMap.repeat.set(4, 150);
   asphaltNormalMap.anisotropy = maxAnisotropy;
 
-  // 3. High-Precision Asphalt Roughness Map (512x512 — standing puddles in Rain, polished groove in Dry)
+  // 3. High-Precision 1024x1024 Asphalt Roughness Map (standing puddles in Rain, polished groove in Dry)
   const isRain = weather === 'rain' || weather === 'heavy_rain';
   const isSunset = weather === 'sunset';
   const roughCanvas = document.createElement('canvas');
-  roughCanvas.width = 512;
-  roughCanvas.height = 512;
+  roughCanvas.width = 1024;
+  roughCanvas.height = 1024;
   const rctx = roughCanvas.getContext('2d')!;
   rctx.fillStyle = isRain
     ? weather === 'heavy_rain'
-      ? 'rgb(42,42,42)'
-      : 'rgb(64,64,64)'
+      ? 'rgb(36,36,36)'
+      : 'rgb(56,56,56)'
     : isSunset
-      ? 'rgb(148,148,148)'
-      : 'rgb(190,190,190)';
-  rctx.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 24000; i++) {
-    const base = isRain ? (weather === 'heavy_rain' ? 14 : 22) : isSunset ? 108 : 142;
+      ? 'rgb(142,142,142)'
+      : 'rgb(184,184,184)';
+  rctx.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 56000; i++) {
+    const base = isRain ? (weather === 'heavy_rain' ? 12 : 20) : isSunset ? 102 : 136;
     const v = base + Math.floor(Math.random() * 76);
     rctx.fillStyle = `rgb(${v},${v},${v})`;
-    rctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+    rctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
   }
   if (isRain) {
-    const puddleCount = weather === 'heavy_rain' ? 68 : 48;
+    const puddleCount = weather === 'heavy_rain' ? 110 : 76;
     for (let p = 0; p < puddleCount; p++) {
-      const px = Math.random() * 512;
-      const py = Math.random() * 512;
-      const pr = 20 + Math.random() * (weather === 'heavy_rain' ? 76 : 62);
-      const pg = rctx.createRadialGradient(px, py, 3, px, py, pr);
-      pg.addColorStop(0, 'rgba(4,4,4,0.99)');
-      pg.addColorStop(0.65, 'rgba(18,18,18,0.78)');
-      pg.addColorStop(1, 'rgba(64,64,64,0)');
+      const px = Math.random() * 1024;
+      const py = Math.random() * 1024;
+      const pr = 36 + Math.random() * (weather === 'heavy_rain' ? 148 : 116);
+      const pg = rctx.createRadialGradient(px, py, 6, px, py, pr);
+      pg.addColorStop(0, 'rgba(2,2,2,0.99)');
+      pg.addColorStop(0.65, 'rgba(14,14,14,0.82)');
+      pg.addColorStop(1, 'rgba(56,56,56,0)');
       rctx.fillStyle = pg;
       rctx.beginPath();
       rctx.arc(px, py, pr, 0, Math.PI * 2);
       rctx.fill();
     }
   } else {
-    const grooveRough = rctx.createLinearGradient(0, 0, 512, 0);
+    const grooveRough = rctx.createLinearGradient(0, 0, 1024, 0);
     grooveRough.addColorStop(0, 'rgba(200,200,200,0)');
-    grooveRough.addColorStop(0.24, isSunset ? 'rgba(84,84,84,0.56)' : 'rgba(128,128,128,0.45)');
-    grooveRough.addColorStop(0.76, isSunset ? 'rgba(84,84,84,0.56)' : 'rgba(128,128,128,0.45)');
+    grooveRough.addColorStop(0.24, isSunset ? 'rgba(72,72,72,0.62)' : 'rgba(116,116,116,0.52)');
+    grooveRough.addColorStop(0.76, isSunset ? 'rgba(72,72,72,0.62)' : 'rgba(116,116,116,0.52)');
     grooveRough.addColorStop(1, 'rgba(200,200,200,0)');
     rctx.fillStyle = grooveRough;
-    rctx.fillRect(0, 0, 512, 512);
+    rctx.fillRect(0, 0, 1024, 1024);
   }
   const asphaltRoughnessMap = new THREE.CanvasTexture(roughCanvas);
   asphaltRoughnessMap.wrapS = THREE.ClampToEdgeWrapping;
@@ -304,30 +358,38 @@ export function createProceduralTextures(
   asphaltRoughnessMap.repeat.set(1, 78);
   asphaltRoughnessMap.anisotropy = maxAnisotropy;
 
-  // 4. FIA Serrated Kerb Map with beveled concrete seam lines (256x512)
+  // 4. FIA Serrated Kerb Map with beveled concrete seam lines & rubber tire scuff marks (512x1024)
   const kerbCanvas = document.createElement('canvas');
-  kerbCanvas.width = 256;
-  kerbCanvas.height = 512;
+  kerbCanvas.width = 512;
+  kerbCanvas.height = 1024;
   const kctx = kerbCanvas.getContext('2d')!;
   kctx.fillStyle = kerbA;
-  kctx.fillRect(0, 0, 256, 256);
+  kctx.fillRect(0, 0, 512, 512);
   kctx.fillStyle = kerbB;
-  kctx.fillRect(0, 256, 256, 256);
+  kctx.fillRect(0, 512, 512, 512);
   // Serrated rumble-strip bevel shading
-  for (let y = 0; y < 512; y += 32) {
-    const rGrad = kctx.createLinearGradient(0, y, 0, y + 32);
-    rGrad.addColorStop(0, 'rgba(255,255,255,0.16)');
-    rGrad.addColorStop(0.7, 'rgba(0,0,0,0.0)');
-    rGrad.addColorStop(1, 'rgba(0,0,0,0.28)');
+  for (let y = 0; y < 1024; y += 64) {
+    const rGrad = kctx.createLinearGradient(0, y, 0, y + 64);
+    rGrad.addColorStop(0, 'rgba(255,255,255,0.22)');
+    rGrad.addColorStop(0.68, 'rgba(0,0,0,0.0)');
+    rGrad.addColorStop(1, 'rgba(0,0,0,0.34)');
     kctx.fillStyle = rGrad;
-    kctx.fillRect(0, y, 256, 32);
+    kctx.fillRect(0, y, 512, 64);
   }
-  kctx.fillStyle = 'rgba(0,0,0,0.38)';
-  kctx.fillRect(0, 248, 256, 16);
-  kctx.fillRect(0, 0, 256, 8);
-  for (let i = 0; i < 1600; i++) {
-    kctx.fillStyle = 'rgba(0,0,0,0.09)';
-    kctx.fillRect(Math.random() * 256, Math.random() * 512, 4, 4);
+  // Longitudinal vulcanized tire scuff streaks along the inside kerb edge
+  const scuffGrad = kctx.createLinearGradient(0, 0, 512, 0);
+  scuffGrad.addColorStop(0, 'rgba(10,12,16,0.42)');
+  scuffGrad.addColorStop(0.35, 'rgba(10,12,16,0.16)');
+  scuffGrad.addColorStop(1, 'rgba(10,12,16,0.0)');
+  kctx.fillStyle = scuffGrad;
+  kctx.fillRect(0, 0, 512, 1024);
+
+  kctx.fillStyle = 'rgba(0,0,0,0.42)';
+  kctx.fillRect(0, 496, 512, 28);
+  kctx.fillRect(0, 0, 512, 14);
+  for (let i = 0; i < 3600; i++) {
+    kctx.fillStyle = 'rgba(0,0,0,0.10)';
+    kctx.fillRect(Math.random() * 512, Math.random() * 1024, 4, 4);
   }
 
   const kerbMap = new THREE.CanvasTexture(kerbCanvas);
@@ -337,92 +399,92 @@ export function createProceduralTextures(
   kerbMap.repeat.set(1, 145);
   kerbMap.anisotropy = maxAnisotropy;
 
-  // 5. Ultra-Detailed 2x2 Twill Carbon Fiber + High-Res Normal Map (512x512 for 4K Close-Ups)
+  // 5. Ultra-Detailed 2x2 Twill Carbon Fiber + High-Res Normal Map (1024x1024 for 8K Close-Ups)
   const carbonCanvas = document.createElement('canvas');
-  carbonCanvas.width = 512;
-  carbonCanvas.height = 512;
+  carbonCanvas.width = 1024;
+  carbonCanvas.height = 1024;
   const cctx = carbonCanvas.getContext('2d')!;
-  cctx.fillStyle = '#0c0f15';
-  cctx.fillRect(0, 0, 512, 512);
-  for (let y = 0; y < 512; y += 8) {
-    for (let x = 0; x < 512; x += 8) {
-      const shift = ((y / 8) % 4) * 4;
-      const gx = (x + shift) % 512;
-      const g1 = cctx.createLinearGradient(gx, y, gx + 4, y + 4);
-      g1.addColorStop(0, '#3e4658');
-      g1.addColorStop(0.5, '#29303e');
-      g1.addColorStop(1, '#12161e');
+  cctx.fillStyle = '#0a0d13';
+  cctx.fillRect(0, 0, 1024, 1024);
+  for (let y = 0; y < 1024; y += 16) {
+    for (let x = 0; x < 1024; x += 16) {
+      const shift = ((y / 16) % 4) * 8;
+      const gx = (x + shift) % 1024;
+      const g1 = cctx.createLinearGradient(gx, y, gx + 8, y + 8);
+      g1.addColorStop(0, '#465066');
+      g1.addColorStop(0.5, '#2b3342');
+      g1.addColorStop(1, '#10141c');
       cctx.fillStyle = g1;
-      cctx.fillRect(gx, y, 4, 4);
+      cctx.fillRect(gx, y, 8, 8);
 
       // Micro-filament specular thread highlight
-      cctx.fillStyle = 'rgba(255,255,255,0.09)';
-      cctx.fillRect(gx + 1, y, 1, 4);
+      cctx.fillStyle = 'rgba(255,255,255,0.13)';
+      cctx.fillRect(gx + 2, y, 2, 8);
 
-      const gx2 = (gx + 4) % 512;
-      const g2 = cctx.createLinearGradient(gx2, y + 4, gx2 + 4, y + 8);
-      g2.addColorStop(0, '#242b38');
-      g2.addColorStop(1, '#0f1219');
+      const gx2 = (gx + 8) % 1024;
+      const g2 = cctx.createLinearGradient(gx2, y + 8, gx2 + 8, y + 16);
+      g2.addColorStop(0, '#283040');
+      g2.addColorStop(1, '#0d1017');
       cctx.fillStyle = g2;
-      cctx.fillRect(gx2, y + 4, 4, 4);
+      cctx.fillRect(gx2, y + 8, 8, 8);
     }
   }
   const carbonMap = new THREE.CanvasTexture(carbonCanvas);
   carbonMap.colorSpace = THREE.SRGBColorSpace;
   carbonMap.wrapS = THREE.RepeatWrapping;
   carbonMap.wrapT = THREE.RepeatWrapping;
-  carbonMap.repeat.set(20, 20);
+  carbonMap.repeat.set(24, 24);
   carbonMap.anisotropy = maxAnisotropy;
 
   const cNormCanvas = document.createElement('canvas');
-  cNormCanvas.width = 512;
-  cNormCanvas.height = 512;
+  cNormCanvas.width = 1024;
+  cNormCanvas.height = 1024;
   const cnctx = cNormCanvas.getContext('2d')!;
   cnctx.fillStyle = 'rgb(128,128,255)';
-  cnctx.fillRect(0, 0, 512, 512);
-  for (let y = 0; y < 512; y += 8) {
-    for (let x = 0; x < 512; x += 8) {
-      const shift = ((y / 8) % 4) * 4;
-      const gx = (x + shift) % 512;
-      cnctx.fillStyle = 'rgb(188,124,228)';
-      cnctx.fillRect(gx, y, 4, 4);
-      cnctx.fillStyle = 'rgb(124,188,228)';
-      cnctx.fillRect((gx + 4) % 512, y + 4, 4, 4);
+  cnctx.fillRect(0, 0, 1024, 1024);
+  for (let y = 0; y < 1024; y += 16) {
+    for (let x = 0; x < 1024; x += 16) {
+      const shift = ((y / 16) % 4) * 8;
+      const gx = (x + shift) % 1024;
+      cnctx.fillStyle = 'rgb(196,122,232)';
+      cnctx.fillRect(gx, y, 8, 8);
+      cnctx.fillStyle = 'rgb(122,196,232)';
+      cnctx.fillRect((gx + 8) % 1024, y + 8, 8, 8);
     }
   }
   const carbonNormalMap = new THREE.CanvasTexture(cNormCanvas);
   carbonNormalMap.wrapS = THREE.RepeatWrapping;
   carbonNormalMap.wrapT = THREE.RepeatWrapping;
-  carbonNormalMap.repeat.set(20, 20);
+  carbonNormalMap.repeat.set(24, 24);
   carbonNormalMap.anisotropy = maxAnisotropy;
 
-  // 5b. Metallic Paint Flake & Clearcoat Micro-Polish Normal Map (512x512)
+  // 5b. Metallic Paint Flake & Clearcoat Micro-Polish Normal Map (1024x1024)
   const flakeCanvas = document.createElement('canvas');
-  flakeCanvas.width = 512;
-  flakeCanvas.height = 512;
+  flakeCanvas.width = 1024;
+  flakeCanvas.height = 1024;
   const flCtx = flakeCanvas.getContext('2d')!;
-  const flImg = flCtx.createImageData(512, 512);
-  for (let i = 0; i < 512 * 512; i++) {
-    flImg.data[i * 4] = 128 + (Math.random() - 0.5) * 22;
-    flImg.data[i * 4 + 1] = 128 + (Math.random() - 0.5) * 22;
-    flImg.data[i * 4 + 2] = 250;
+  const flImg = flCtx.createImageData(1024, 1024);
+  for (let i = 0; i < 1024 * 1024; i++) {
+    flImg.data[i * 4] = 128 + (Math.random() - 0.5) * 28;
+    flImg.data[i * 4 + 1] = 128 + (Math.random() - 0.5) * 28;
+    flImg.data[i * 4 + 2] = 248;
     flImg.data[i * 4 + 3] = 255;
   }
   flCtx.putImageData(flImg, 0, 0);
-  flCtx.strokeStyle = 'rgba(136, 122, 248, 0.25)';
-  flCtx.lineWidth = 1;
-  for (let s = 0; s < 56; s++) {
-    const sx = Math.random() * 512;
-    const sy = Math.random() * 512;
+  flCtx.strokeStyle = 'rgba(138, 124, 250, 0.28)';
+  flCtx.lineWidth = 1.2;
+  for (let s = 0; s < 110; s++) {
+    const sx = Math.random() * 1024;
+    const sy = Math.random() * 1024;
     flCtx.beginPath();
     flCtx.moveTo(sx, sy);
-    flCtx.lineTo(sx + (Math.random() - 0.5) * 52, sy + (Math.random() - 0.5) * 18);
+    flCtx.lineTo(sx + (Math.random() - 0.5) * 68, sy + (Math.random() - 0.5) * 24);
     flCtx.stroke();
   }
   const paintFlakeNormalMap = new THREE.CanvasTexture(flakeCanvas);
   paintFlakeNormalMap.wrapS = THREE.RepeatWrapping;
   paintFlakeNormalMap.wrapT = THREE.RepeatWrapping;
-  paintFlakeNormalMap.repeat.set(20, 20);
+  paintFlakeNormalMap.repeat.set(24, 24);
   paintFlakeNormalMap.anisotropy = maxAnisotropy;
 
   // 5c. High-Res Tyre Tread, Drainage Grooves & Grained Racing Rubber Normal Map (512x512)
@@ -432,10 +494,10 @@ export function createProceduralTextures(
   const tnCtx = tyreNormCanvas.getContext('2d')!;
   tnCtx.fillStyle = 'rgb(128,128,255)';
   tnCtx.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 16000; i++) {
+  for (let i = 0; i < 18000; i++) {
     const rx = Math.random() * 512;
     const ry = Math.random() * 512;
-    tnCtx.fillStyle = Math.random() > 0.5 ? 'rgb(146,128,242)' : 'rgb(110,128,242)';
+    tnCtx.fillStyle = Math.random() > 0.5 ? 'rgb(148,128,242)' : 'rgb(108,128,242)';
     tnCtx.fillRect(rx, ry, 2, 2);
   }
   // Circumferential mold seam & deep water evacuation channels
@@ -465,69 +527,69 @@ export function createProceduralTextures(
   tyreTreadNormalMap.repeat.set(1, 8);
   tyreTreadNormalMap.anisotropy = maxAnisotropy;
 
-  // 5d. Ultra High-Res Slotted & Cross-Drilled Carbon-Ceramic Brake Rotor Texture (512x512)
+  // 5d. Ultra High-Res Slotted & Cross-Drilled Carbon-Ceramic Brake Rotor Texture (1024x1024)
   const discCanvas = document.createElement('canvas');
-  discCanvas.width = 512;
-  discCanvas.height = 512;
+  discCanvas.width = 1024;
+  discCanvas.height = 1024;
   const dCtx = discCanvas.getContext('2d')!;
-  dCtx.fillStyle = '#262a32';
-  dCtx.fillRect(0, 0, 512, 512);
+  dCtx.fillStyle = '#242830';
+  dCtx.fillRect(0, 0, 1024, 1024);
 
   // Micro-grooved concentric pad-friction wear tracks
-  for (let r = 118; r <= 244; r += 6) {
-    dCtx.strokeStyle = (r % 12 === 0) ? 'rgba(8,10,14,0.65)' : 'rgba(255,255,255,0.06)';
-    dCtx.lineWidth = 1.8;
+  for (let r = 236; r <= 488; r += 8) {
+    dCtx.strokeStyle = (r % 16 === 0) ? 'rgba(8,10,14,0.72)' : 'rgba(255,255,255,0.075)';
+    dCtx.lineWidth = 2.4;
     dCtx.beginPath();
-    dCtx.arc(256, 256, r, 0, Math.PI * 2);
+    dCtx.arc(512, 512, r, 0, Math.PI * 2);
     dCtx.stroke();
   }
 
   // Curved radial aerodynamic gas-ventilation channels (Brembo F1 Spec)
-  dCtx.strokeStyle = 'rgba(10, 12, 16, 0.92)';
-  dCtx.lineWidth = 3.2;
-  for (let s = 0; s < 32; s++) {
-    const sAng = (s / 32) * Math.PI * 2;
+  dCtx.strokeStyle = 'rgba(8, 10, 14, 0.94)';
+  dCtx.lineWidth = 5.5;
+  for (let s = 0; s < 36; s++) {
+    const sAng = (s / 36) * Math.PI * 2;
     dCtx.beginPath();
-    const rStart = 132;
-    const rEnd = 240;
-    dCtx.moveTo(256 + Math.cos(sAng) * rStart, 256 + Math.sin(sAng) * rStart);
+    const rStart = 264;
+    const rEnd = 480;
+    dCtx.moveTo(512 + Math.cos(sAng) * rStart, 512 + Math.sin(sAng) * rStart);
     dCtx.quadraticCurveTo(
-      256 + Math.cos(sAng + 0.18) * 186,
-      256 + Math.sin(sAng + 0.18) * 186,
-      256 + Math.cos(sAng + 0.32) * rEnd,
-      256 + Math.sin(sAng + 0.32) * rEnd
+      512 + Math.cos(sAng + 0.18) * 372,
+      512 + Math.sin(sAng + 0.18) * 372,
+      512 + Math.cos(sAng + 0.32) * rEnd,
+      512 + Math.sin(sAng + 0.32) * rEnd
     );
     dCtx.stroke();
   }
 
-  // 1,200 micro-ventilation drilled cooling holes across rotor face
-  dCtx.fillStyle = '#080a0e';
-  for (let a = 0; a < 28; a++) {
-    const baseAngle = (a / 28) * Math.PI * 2;
-    for (let ring = 0; ring < 4; ring++) {
-      const rad = 138 + ring * 27;
-      const ang = baseAngle + ring * 0.16;
+  // Cross-drilled micro-ventilation cooling holes across rotor face
+  dCtx.fillStyle = '#07090d';
+  for (let a = 0; a < 32; a++) {
+    const baseAngle = (a / 32) * Math.PI * 2;
+    for (let ring = 0; ring < 5; ring++) {
+      const rad = 272 + ring * 44;
+      const ang = baseAngle + ring * 0.14;
       dCtx.beginPath();
-      dCtx.arc(256 + Math.cos(ang) * rad, 256 + Math.sin(ang) * rad, 4.8, 0, Math.PI * 2);
+      dCtx.arc(512 + Math.cos(ang) * rad, 512 + Math.sin(ang) * rad, 8.2, 0, Math.PI * 2);
       dCtx.fill();
 
       // Chamfered carbon hole ring highlight
-      dCtx.strokeStyle = 'rgba(255,255,255,0.12)';
-      dCtx.lineWidth = 1.2;
+      dCtx.strokeStyle = 'rgba(255,255,255,0.16)';
+      dCtx.lineWidth = 1.8;
       dCtx.stroke();
     }
   }
 
   // Inner floating aluminum/titanium hat bobbins
-  for (let b = 0; b < 10; b++) {
-    const bAng = (b / 10) * Math.PI * 2;
-    dCtx.fillStyle = '#475569';
+  for (let b = 0; b < 12; b++) {
+    const bAng = (b / 12) * Math.PI * 2;
+    dCtx.fillStyle = '#64748b';
     dCtx.beginPath();
-    dCtx.arc(256 + Math.cos(bAng) * 116, 256 + Math.sin(bAng) * 116, 7.5, 0, Math.PI * 2);
+    dCtx.arc(512 + Math.cos(bAng) * 232, 512 + Math.sin(bAng) * 232, 14, 0, Math.PI * 2);
     dCtx.fill();
     dCtx.fillStyle = '#0f172a';
     dCtx.beginPath();
-    dCtx.arc(256 + Math.cos(bAng) * 116, 256 + Math.sin(bAng) * 116, 3.2, 0, Math.PI * 2);
+    dCtx.arc(512 + Math.cos(bAng) * 232, 512 + Math.sin(bAng) * 232, 6.2, 0, Math.PI * 2);
     dCtx.fill();
   }
 
@@ -577,40 +639,57 @@ export function createProceduralTextures(
   sctx.fillRect(0, 0, 256, 256);
   const contactShadowMap = new THREE.CanvasTexture(shadowCanvas);
 
-  // 8. Ground Turf & Runoff Gravel
+  // 8. Ground Turf & Runoff Gravel (16K-Scale Procedural Detail)
   const grassCanvas = document.createElement('canvas');
-  grassCanvas.width = 512;
-  grassCanvas.height = 512;
+  grassCanvas.width = 1024;
+  grassCanvas.height = 1024;
   const gctx = grassCanvas.getContext('2d')!;
-  gctx.fillStyle = '#253a26';
-  gctx.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 18000; i++) {
-    gctx.fillStyle = Math.random() > 0.5 ? '#2f4930' : '#1d2f1e';
-    gctx.fillRect(Math.random() * 512, Math.random() * 512, 3, 3);
+  gctx.fillStyle = '#213322';
+  gctx.fillRect(0, 0, 1024, 1024);
+
+  // Deep fertile soil and root moisture variation
+  for (let i = 0; i < 48; i++) {
+    const rx = Math.random() * 1024;
+    const ry = Math.random() * 1024;
+    const rad = 45 + Math.random() * 110;
+    const sg = gctx.createRadialGradient(rx, ry, 5, rx, ry, rad);
+    sg.addColorStop(0, 'rgba(24, 38, 22, 0.45)');
+    sg.addColorStop(1, 'rgba(33, 51, 34, 0)');
+    gctx.fillStyle = sg;
+    gctx.beginPath();
+    gctx.arc(rx, ry, rad, 0, Math.PI * 2);
+    gctx.fill();
+  }
+
+  // Multi-tone lush turf blades and meadow clover micro-stippling
+  const turfColors = ['#1d2e1e', '#253d26', '#2d4b2e', '#355936', '#3e6640', '#182719'];
+  for (let i = 0; i < 85000; i++) {
+    gctx.fillStyle = turfColors[i % turfColors.length];
+    gctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 3);
   }
   const groundGrassMap = new THREE.CanvasTexture(grassCanvas);
   groundGrassMap.colorSpace = THREE.SRGBColorSpace;
   groundGrassMap.wrapS = THREE.RepeatWrapping;
   groundGrassMap.wrapT = THREE.RepeatWrapping;
-  groundGrassMap.repeat.set(95, 95);
+  groundGrassMap.repeat.set(85, 85);
   groundGrassMap.anisotropy = maxAnisotropy;
 
   const gravelCanvas = document.createElement('canvas');
-  gravelCanvas.width = 256;
-  gravelCanvas.height = 256;
+  gravelCanvas.width = 512;
+  gravelCanvas.height = 512;
   const grctx = gravelCanvas.getContext('2d')!;
-  grctx.fillStyle = '#5c554c';
-  grctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 9500; i++) {
-    const shade = 68 + Math.floor(Math.random() * 55);
-    grctx.fillStyle = `rgb(${shade + 8},${shade + 2},${shade - 6})`;
-    grctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  grctx.fillStyle = '#554e44';
+  grctx.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 38000; i++) {
+    const shade = 64 + Math.floor(Math.random() * 68);
+    grctx.fillStyle = `rgb(${shade + 10},${shade + 4},${shade - 6})`;
+    grctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
   const gravelMap = new THREE.CanvasTexture(gravelCanvas);
   gravelMap.colorSpace = THREE.SRGBColorSpace;
   gravelMap.wrapS = THREE.RepeatWrapping;
   gravelMap.wrapT = THREE.RepeatWrapping;
-  gravelMap.repeat.set(2, 120);
+  gravelMap.repeat.set(3, 140);
   gravelMap.anisotropy = maxAnisotropy;
 
   // 9. Atmospheric Sky Dome Gradient (2048x1024) with Sun Halo / Volumetric Cloud Bands / Night Horizon

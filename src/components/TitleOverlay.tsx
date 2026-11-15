@@ -20,6 +20,7 @@ import {
   Play,
   Settings2,
   ShieldCheck,
+  Snowflake,
   Sparkles,
   Sun,
   Sunrise,
@@ -1540,6 +1541,26 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => onSelectWeather('snow')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'snow' ? 'bg-sky-200 text-slate-950 shadow-[0_0_10px_rgba(224,242,254,0.4)]' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Snowflake className="w-3.5 h-3.5" />
+                  <span>Snow</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectWeather('blizzard')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+                    weather === 'blizzard' ? 'bg-blue-300 text-slate-950 shadow-[0_0_12px_rgba(147,197,253,0.5)]' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Snowflake className="w-3.5 h-3.5 animate-pulse" />
+                  <span>Blizzard</span>
+                </button>
+                <button
+                  type="button"
                   onClick={onToggleDynamicWeather}
                   className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap border ${
                     dynamicWeather || totalLaps >= 5
@@ -1593,7 +1614,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                           : 'border-white/10 text-slate-300 hover:text-white'
                       }`}
                     >
-                      <span>Dynamic TOD</span>
+                      <span>Dynamic Cycle</span>
                     </button>
                   )}
                 </div>

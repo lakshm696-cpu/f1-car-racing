@@ -9,6 +9,8 @@ export type WeatherMode =
   | 'cloudy'
   | 'rain'
   | 'heavy_rain'
+  | 'snow'
+  | 'blizzard'
   | 'fog'
   | 'night';
 
@@ -41,7 +43,7 @@ export type PodiumCameraShot = 'auto' | 'wide' | 'winner' | 'trophy' | 'full' | 
 
 export type DifficultyLevel = 'rookie' | 'pro' | 'legend';
 
-export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra' | 'extreme' | 'cinematic';
+export type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra' | 'extreme' | 'cinematic' | 'ultra_8k';
 
 export type TyreCompound = 'soft' | 'medium' | 'hard' | 'wet';
 
@@ -209,9 +211,9 @@ export type HapticFeedbackLevel = 'off' | 'subtle' | 'full';
 export type SpeedUnitMode = 'kmh' | 'mph';
 export type ReflexLowLatencyMode = 'off' | 'on' | 'boost';
 
-export type TextureQuality = 'medium' | 'high' | 'ultra';
+export type TextureQuality = 'medium' | 'high' | 'ultra' | 'cinematic';
 export type ShadowQuality = 'off' | 'medium' | 'high' | 'ultra' | 'cinematic';
-export type ReflectionQuality = 'off' | 'medium' | 'high' | 'ultra';
+export type ReflectionQuality = 'off' | 'medium' | 'high' | 'ultra' | 'cinematic';
 export type AmbientOcclusionQuality = 'off' | 'low' | 'medium' | 'high' | 'ultra';
 export type ParticleDensityQuality = 'low' | 'medium' | 'high' | 'ultra';
 export type AntiAliasingMode = 'off' | 'fxaa' | 'smaa' | 'high';
@@ -303,12 +305,16 @@ export interface TrackHazardBlip {
   gripMultiplier: number;
 }
 
-export type TrackFlagType = 'none' | 'yellow' | 'blue' | 'surface';
+export type TrackFlagType = 'none' | 'yellow' | 'red' | 'blue' | 'checkered' | 'surface' | 'green';
 
 export interface TrackFlagState {
   flag: TrackFlagType;
   reason: string;
   distanceMeters: number | null;
+  sector?: 1 | 2 | 3;
+  marshalPost?: number;
+  subDirective?: string;
+  driverCode?: string;
 }
 
 export interface RacerStanding {
@@ -447,6 +453,8 @@ export interface HudTelemetry {
   gForceTotal: number;
   pitStrategy: PitStrategyData;
   tyreContactPatch?: TyreContactPatchTelemetry;
+  slipstreamPct?: number; // 0..100% aerodynamic draft tow from car ahead
+  dirtyAirPct?: number; // 0..100% turbulent wake downforce loss in corners
 }
 
 

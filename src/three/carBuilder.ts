@@ -53,18 +53,21 @@ const _heatCol = new THREE.Color();
 
 function createSculptedTyreGeometry(outerR: number, innerR: number, width: number): THREE.BufferGeometry {
   const hw = width * 0.5;
-  const shoulderW = hw * 0.82;
+  const shoulderW = hw * 0.83;
+  const midShoulderW = hw * 0.92;
   const pts: THREE.Vector2[] = [
     new THREE.Vector2(innerR, -hw * 0.94),
-    new THREE.Vector2(outerR * 0.86, -hw),
-    new THREE.Vector2(outerR * 0.985, -shoulderW),
+    new THREE.Vector2(outerR * 0.85, -hw),
+    new THREE.Vector2(outerR * 0.945, -midShoulderW),
+    new THREE.Vector2(outerR * 0.988, -shoulderW),
     new THREE.Vector2(outerR, -shoulderW * 0.45),
     new THREE.Vector2(outerR, shoulderW * 0.45),
-    new THREE.Vector2(outerR * 0.985, shoulderW),
-    new THREE.Vector2(outerR * 0.86, hw),
+    new THREE.Vector2(outerR * 0.988, shoulderW),
+    new THREE.Vector2(outerR * 0.945, midShoulderW),
+    new THREE.Vector2(outerR * 0.85, hw),
     new THREE.Vector2(innerR, hw * 0.94),
   ];
-  const geo = new THREE.LatheGeometry(pts, 56);
+  const geo = new THREE.LatheGeometry(pts, 84);
   geo.computeVertexNormals();
   geo.computeTangents();
   return geo;
@@ -102,47 +105,47 @@ export function buildFormulaCar(
     color: new THREE.Color(initStealth ? '#2A303D' : primaryHex),
     map: initStealth ? carbonMap : null,
     normalMap: initStealth ? carbonNormalMap : paintFlakeNormalMap,
-    normalScale: new THREE.Vector2(initStealth ? 0.72 : 0.065, initStealth ? 0.72 : 0.065),
+    normalScale: new THREE.Vector2(initStealth ? 0.78 : 0.075, initStealth ? 0.78 : 0.075),
     roughnessMap: bodyRoughnessMap ?? null,
     aoMap: carAoMap ?? null,
-    aoMapIntensity: 0.82,
-    metalness: initStealth ? 0.56 : 0.7,
-    roughness: initStealth ? 0.17 : 0.13,
+    aoMapIntensity: 0.88,
+    metalness: initStealth ? 0.58 : 0.74,
+    roughness: initStealth ? 0.15 : 0.11,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.025,
+    clearcoatRoughness: 0.018,
     clearcoatNormalMap: paintFlakeNormalMap,
-    clearcoatNormalScale: new THREE.Vector2(0.04, 0.04),
-    ior: 1.52,
+    clearcoatNormalScale: new THREE.Vector2(0.045, 0.045),
+    ior: 1.56,
     specularIntensity: 1.0,
-    sheen: 0.16,
-    sheenRoughness: 0.28,
-    iridescence: 0.16,
-    iridescenceIOR: 1.38,
-    iridescenceThicknessMinimum: 120,
-    iridescenceThicknessMaximum: 260,
-    envMapIntensity: 2.75,
+    sheen: 0.22,
+    sheenRoughness: 0.24,
+    iridescence: 0.22,
+    iridescenceIOR: 1.42,
+    iridescenceThicknessMinimum: 130,
+    iridescenceThicknessMaximum: 290,
+    envMapIntensity: 3.15,
   });
 
   const secondaryMat = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(secondaryHex),
     map: initStealth ? carbonMap : null,
     normalMap: initStealth ? carbonNormalMap : paintFlakeNormalMap,
-    normalScale: new THREE.Vector2(initStealth ? 0.58 : 0.045, initStealth ? 0.58 : 0.045),
+    normalScale: new THREE.Vector2(initStealth ? 0.62 : 0.055, initStealth ? 0.62 : 0.055),
     roughnessMap: bodyRoughnessMap ?? null,
     aoMap: carAoMap ?? null,
-    aoMapIntensity: 0.78,
-    metalness: 0.68,
-    roughness: 0.17,
+    aoMapIntensity: 0.82,
+    metalness: 0.72,
+    roughness: 0.14,
     clearcoat: 1.0,
-    clearcoatRoughness: 0.03,
+    clearcoatRoughness: 0.022,
     clearcoatNormalMap: paintFlakeNormalMap,
-    clearcoatNormalScale: new THREE.Vector2(0.035, 0.035),
-    ior: 1.52,
+    clearcoatNormalScale: new THREE.Vector2(0.04, 0.04),
+    ior: 1.55,
     specularIntensity: 1.0,
-    envMapIntensity: 2.45,
+    envMapIntensity: 2.85,
   });
 
-  // Procedural Metallic Paint Micro-Flake Sparkle & Grazing-Angle Fresnel Clearcoat Brilliance
+  // Procedural Dual-Scale Metallic Mica Paint Flake Sparkle & Grazing-Angle Fresnel Clearcoat Brilliance
   const attachMetallicFlakeShader = (mat: THREE.MeshPhysicalMaterial, flakeStrength: number) => {
     mat.onBeforeCompile = (shader) => {
       shader.vertexShader =
@@ -164,54 +167,63 @@ export function buildFormulaCar(
         `{
           vec3 viewDir = normalize(vViewPosition);
           float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
-          float fresnelRim = pow(1.0 - ndv, 3.6);
-          vec3 flakeCell = floor(vPaintLocalPos * 165.0);
-          float flakeSeed = paintFlakeHash(flakeCell);
-          vec3 flakeNorm = normalize(normal + vec3(
-            paintFlakeHash(flakeCell + 1.7) - 0.5,
-            paintFlakeHash(flakeCell + 3.1) - 0.5,
-            paintFlakeHash(flakeCell + 5.3) - 0.5
-          ) * 0.42);
-          float glint = pow(max(0.0, dot(flakeNorm, viewDir)), 28.0) * step(0.68, flakeSeed);
-          gl_FragColor.rgb += (diffuseColor.rgb * 0.65 + vec3(0.38, 0.40, 0.45)) * glint * ${flakeStrength.toFixed(2)};
-          gl_FragColor.rgb += (diffuseColor.rgb * 0.45 + vec3(0.14, 0.16, 0.20)) * fresnelRim * 0.22;
+          float fresnelRim = pow(1.0 - ndv, 3.2);
+          vec3 flakeCellA = floor(vPaintLocalPos * 195.0);
+          float flakeSeedA = paintFlakeHash(flakeCellA);
+          vec3 flakeNormA = normalize(normal + vec3(
+            paintFlakeHash(flakeCellA + 1.7) - 0.5,
+            paintFlakeHash(flakeCellA + 3.1) - 0.5,
+            paintFlakeHash(flakeCellA + 5.3) - 0.5
+          ) * 0.45);
+          float glintA = pow(max(0.0, dot(flakeNormA, viewDir)), 32.0) * step(0.64, flakeSeedA);
+
+          vec3 flakeCellB = floor(vPaintLocalPos * 340.0);
+          float flakeSeedB = paintFlakeHash(flakeCellB + 11.3);
+          float glintB = pow(max(0.0, ndv), 18.0) * step(0.76, flakeSeedB) * 0.65;
+
+          float totalGlint = glintA + glintB;
+          gl_FragColor.rgb += (diffuseColor.rgb * 0.68 + vec3(0.42, 0.45, 0.50)) * totalGlint * ${flakeStrength.toFixed(2)};
+          gl_FragColor.rgb += (diffuseColor.rgb * 0.52 + vec3(0.18, 0.22, 0.28)) * fresnelRim * 0.28;
         }
         #include <dithering_fragment>`
       );
     };
   };
-  attachMetallicFlakeShader(primaryMat, 0.34);
-  attachMetallicFlakeShader(secondaryMat, 0.26);
+  attachMetallicFlakeShader(primaryMat, 0.42);
+  attachMetallicFlakeShader(secondaryMat, 0.34);
 
   const accentMat = new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(accentHex),
+    normalMap: paintFlakeNormalMap,
+    normalScale: new THREE.Vector2(0.04, 0.04),
     aoMap: carAoMap ?? null,
-    aoMapIntensity: 0.65,
-    metalness: 0.62,
-    roughness: 0.19,
-    clearcoat: 0.92,
-    clearcoatRoughness: 0.045,
-    ior: 1.5,
-    envMapIntensity: 2.15,
+    aoMapIntensity: 0.72,
+    metalness: 0.68,
+    roughness: 0.15,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.028,
+    ior: 1.54,
+    envMapIntensity: 2.65,
   });
+  attachMetallicFlakeShader(accentMat, 0.28);
 
   const carbonMat = new THREE.MeshPhysicalMaterial({
-    color: 0x1e232e,
+    color: 0x1c212c,
     map: carbonMap,
     normalMap: carbonNormalMap,
-    normalScale: new THREE.Vector2(0.88, 0.88),
+    normalScale: new THREE.Vector2(0.95, 0.95),
     roughnessMap: bodyRoughnessMap ?? null,
     aoMap: carAoMap ?? null,
-    aoMapIntensity: 0.85,
-    metalness: 0.46,
-    roughness: 0.24,
-    anisotropy: 0.78,
+    aoMapIntensity: 0.88,
+    metalness: 0.52,
+    roughness: 0.20,
+    anisotropy: 0.86,
     anisotropyRotation: Math.PI / 4,
-    clearcoat: 0.82,
-    clearcoatRoughness: 0.09,
-    ior: 1.52,
-    specularIntensity: 0.96,
-    envMapIntensity: 2.35,
+    clearcoat: 0.90,
+    clearcoatRoughness: 0.06,
+    ior: 1.54,
+    specularIntensity: 1.0,
+    envMapIntensity: 2.75,
   });
 
   const tyrePatchUniforms = {
@@ -700,11 +712,12 @@ export function buildFormulaCar(
   const tubGeo = new THREE.ExtrudeGeometry(tubShape, {
     depth: 2.2,
     bevelEnabled: true,
-    bevelSegments: 2,
-    bevelSize: 0.03,
-    bevelThickness: 0.03,
+    bevelSegments: 5,
+    bevelSize: 0.032,
+    bevelThickness: 0.032,
   });
   tubGeo.translate(0, 0.38, -1.18);
+  tubGeo.computeVertexNormals();
   const tub = new THREE.Mesh(tubGeo, primaryMat);
   tub.castShadow = true;
   chassisGroup.add(tub);
@@ -720,13 +733,14 @@ export function buildFormulaCar(
   const noseGeo = new THREE.ExtrudeGeometry(noseShape, {
     depth: 0.36,
     bevelEnabled: true,
-    bevelSegments: 3,
-    steps: 1,
-    bevelSize: 0.05,
-    bevelThickness: 0.05,
+    bevelSegments: 5,
+    steps: 2,
+    bevelSize: 0.052,
+    bevelThickness: 0.052,
   });
   noseGeo.rotateY(Math.PI / 2);
   noseGeo.translate(-0.18, 0.34, -1.14);
+  noseGeo.computeVertexNormals();
   const noseMesh = new THREE.Mesh(noseGeo, primaryMat);
   noseMesh.castShadow = true;
   chassisGroup.add(noseMesh);
@@ -856,11 +870,27 @@ export function buildFormulaCar(
   const sidepodGeo = new THREE.ExtrudeGeometry(sidepodShape, {
     depth: 0.4,
     bevelEnabled: true,
-    bevelSegments: 3,
-    bevelSize: 0.045,
-    bevelThickness: 0.045,
+    bevelSegments: 5,
+    bevelSize: 0.048,
+    bevelThickness: 0.048,
   });
   sidepodGeo.rotateY(Math.PI / 2);
+  sidepodGeo.computeVertexNormals();
+
+  const mirrorGlassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xe2e8f0,
+    metalness: 1.0,
+    roughness: 0.015,
+    clearcoat: 1.0,
+    envMapIntensity: 3.5,
+  });
+
+  const mirrorRadarMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    emissive: 0xf59e0b,
+    emissiveIntensity: 1.8,
+    roughness: 0.2,
+  });
 
   for (const side of [-1, 1]) {
     const sidepod = new THREE.Mesh(sidepodGeo, primaryMat);
@@ -901,6 +931,15 @@ export function buildFormulaCar(
     const mirrorPod = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.09), primaryMat);
     mirrorPod.position.set(side * 0.55, 0.64, -0.45);
     chassisGroup.add(mirrorPod);
+
+    const mirrorGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.052), mirrorGlassMat);
+    mirrorGlass.position.set(side * 0.55, 0.64, -0.402);
+    chassisGroup.add(mirrorGlass);
+
+    // Blind-spot proximity LED indicator integrated into outer sidepod mirror bezel
+    const mirrorRadarLed = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.044, 0.008), mirrorRadarMat);
+    mirrorRadarLed.position.set(side * 0.608, 0.64, -0.403);
+    chassisGroup.add(mirrorRadarLed);
   }
 
   // Sculpted tinted polycarbonate cockpit aero windscreen
@@ -1654,12 +1693,16 @@ export function buildFormulaCar(
     const mats = [
       primaryMat,
       secondaryMat,
+      accentMat,
       carbonMat,
       rimMat,
+      caliperMat,
+      rubberMat,
       helmetMat,
       visorMat,
       titaniumMat,
       exhaustBlueMat,
+      mirrorGlassMat,
     ];
     for (const m of mats) {
       m.envMap = envMap;
@@ -1742,18 +1785,64 @@ export function buildFormulaCar(
     tyrePatchUniforms.uMicroSlip.value = slipNorm;
     tyrePatchUniforms.uSpinPhase.value = discSpinPhase;
 
-    const patchScaleZ = 0.85 + tyreLoad * 0.35 + grainNorm * 0.12;
-    for (const pm of contactPatchMeshes) {
-      pm.scale.set(1.0 + tyreLoad * 0.12, patchScaleZ, 1);
+    // High-Fidelity 4-Wheel Independent Tyre Deformation, Sidewall Bulge & Track Interaction
+    const frontPitchTransfer = braking ? 0.34 : -pitchAngle * 1.85;
+    const rearPitchTransfer = !braking ? 0.18 : pitchAngle * 1.4;
+    const lateralRollTransfer = rollAngle * 2.85; // positive = right corner, loads left tyres
+
+    const wheelLoads = [
+      THREE.MathUtils.clamp(tyreLoad * (1.0 + frontPitchTransfer + lateralRollTransfer), 0.15, 2.1), // FL
+      THREE.MathUtils.clamp(tyreLoad * (1.0 + frontPitchTransfer - lateralRollTransfer), 0.15, 2.1), // FR
+      THREE.MathUtils.clamp(tyreLoad * (1.0 + rearPitchTransfer + lateralRollTransfer), 0.15, 2.1),  // RL
+      THREE.MathUtils.clamp(tyreLoad * (1.0 + rearPitchTransfer - lateralRollTransfer), 0.15, 2.1),  // RR
+    ];
+
+    const basePatchZ = 0.82 + tyreLoad * 0.32 + grainNorm * 0.14;
+    for (let idx = 0; idx < 4; idx++) {
+      const load = wheelLoads[idx];
+      const w = wheels[idx];
+      const pm = contactPatchMeshes[idx];
+      const sideSign = idx % 2 === 0 ? -1 : 1;
+
+      // Radial squish under mechanical & aerodynamic downforce load
+      const vertSquish = THREE.MathUtils.clamp(1.0 - (load - 0.75) * 0.022, 0.955, 1.025);
+      // Lateral sidewall bulge from rubber Poisson ratio & cornering shear
+      const latBulge = THREE.MathUtils.clamp(1.0 + (load - 0.75) * 0.035 + Math.abs(rollAngle) * 0.038, 0.96, 1.065);
+      const longStretch = THREE.MathUtils.clamp(1.0 + (load - 0.75) * 0.016, 0.97, 1.035);
+
+      if (w) {
+        w.scale.set(latBulge, vertSquish, longStretch);
+      }
+      if (pm) {
+        // Contact patch footprint stretches under high normal load and braking
+        const patchW = THREE.MathUtils.clamp(1.0 + (load - 0.75) * 0.24, 0.78, 1.35);
+        const patchL = basePatchZ * THREE.MathUtils.clamp(0.85 + load * 0.28, 0.8, 1.45);
+        pm.scale.set(patchW, patchL, 1);
+        // Ground-level contact patch lateral scrub deflection under cornering shear
+        const lateralScrub = THREE.MathUtils.clamp(-rollAngle * 0.022, -0.018, 0.018);
+        pm.position.x = sideSign * 0.005 + lateralScrub;
+      }
     }
 
-    // Temporally smoothed aerodynamic downforce suspension heave (keeps wheels 100% circular & undistorted)
+    // Dynamic Suspension Camber Compliance (-3.2 deg front / -1.6 deg rear static camber + dynamic roll gain)
+    frontLeftPivot.rotation.z = -0.056 - rollAngle * 0.075;
+    frontRightPivot.rotation.z = 0.056 - rollAngle * 0.075;
+    rearLeftHub.rotation.z = -0.028 - rollAngle * 0.048;
+    rearRightHub.rotation.z = 0.028 - rollAngle * 0.048;
+
+    // Temporally smoothed aerodynamic downforce suspension heave (keeps chassis anchored to tarmac)
     const targetSquash = Math.min(0.045, Math.abs(rollAngle) * 0.45 + Math.abs(pitchAngle) * 0.35 + tyreLoad * 0.02);
     smoothSquash += (targetSquash - smoothSquash) * 0.22;
     chassisGroup.position.y = -smoothSquash * 0.36;
 
+    // 2026 F1 Active Aerodynamics: Synchronous Rear DRS Flap + Front Wing Upper Flap (X-Mode / Z-Mode)
     const targetFlap = drsOpen ? 0.05 : 0.48;
     drsFlap.rotation.x += (targetFlap - drsFlap.rotation.x) * 0.25;
+    const targetFrontUpperFlap = drsOpen ? 0.07 : 0.28;
+    const targetFrontAccentFlap = drsOpen ? 0.11 : 0.38;
+    upperFlap.rotation.x += (targetFrontUpperFlap - upperFlap.rotation.x) * 0.25;
+    flapAccent.rotation.x += (targetFrontAccentFlap - flapAccent.rotation.x) * 0.25;
+    mirrorRadarMat.emissiveIntensity = drsOpen ? 3.2 : tyreLoad > 0.45 ? 2.4 : 0.85;
 
     const rainPulse = 0.88 + Math.sin(plumePhase * 0.45) * 0.12;
     rainLightMat.emissiveIntensity = braking ? 9.5 : headlightsOn ? 7.2 * rainPulse : 2.2;

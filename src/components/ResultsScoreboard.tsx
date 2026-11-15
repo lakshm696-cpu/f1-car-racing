@@ -23,6 +23,8 @@ const WEATHER_LABELS: Record<WeatherMode, string> = {
   rain: 'Wet Track',
   heavy_rain: 'Heavy Storm',
   fog: 'Misty Fog',
+  snow: 'Snow Flurries',
+  blizzard: 'Whiteout Blizzard',
   night: 'Night Grand Prix',
 };
 
