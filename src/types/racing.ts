@@ -23,6 +23,10 @@ export type TimeOfDayMode =
   | 'night';
 
 export type TransmissionMode = 'auto' | 'manual';
+export type MobileControlStyle = 'virtual_joystick' | 'thumb_slider' | 'dual_pedals' | 'tilt_gyro';
+export type MobileButtonLayout = 'standard' | 'left_handed' | 'compact_thumb' | 'split_pro';
+export type MobileButtonScale = 'compact' | 'normal' | 'large';
+export type MobileButtonSpacing = 'compact' | 'normal' | 'wide';
 
 export type CameraMode =
   | 'chase'
@@ -111,7 +115,34 @@ export type CircuitBiome =
   | 'abu_dhabi'
   | 'bahrain'
   | 'qatar'
-  | 'melbourne';
+  | 'melbourne'
+  | 'madrid'
+  | 'shanghai'
+  | 'interlagos';
+
+export type ActiveAeroMode = 'x_mode' | 'z_mode';
+export type ErsDeploymentMode = 'harvest' | 'balanced' | 'overtake';
+export type DevelopmentFocus = 'balanced' | 'mguk_hybrid' | 'active_aero' | 'tyre_thermal';
+export type AiStrategyArchetype = 'undercut_1stop' | 'aggressive_2stop' | 'overcut_long' | 'wet_gamble';
+
+export interface PowerUnitWear {
+  ice: number; // 0..100 (100 = fresh)
+  mguk: number; // 0..100
+  battery: number; // 0..100
+  gearbox: number; // 0..100
+}
+
+export interface StaffAllocation {
+  aero: number; // headcount assigned to Active Aero / Chassis
+  powertrain: number; // headcount assigned to 350kW MGU-K / ICE
+  strategy: number; // headcount assigned to Pit Crew / Tyre Ops
+}
+
+export interface TeamManagementConfig {
+  developmentFocus: DevelopmentFocus;
+  staffAllocation: StaffAllocation;
+  puWear: PowerUnitWear;
+}
 
 export interface DrsZoneConfig {
   id: string;
@@ -197,6 +228,15 @@ export interface CareerProgress {
   polePositions?: number;
   podiumFinishes?: number;
   claimedAchievements?: string[];
+  // F1 2026 Career & Team Management State
+  developmentFocus?: DevelopmentFocus;
+  staffAllocation?: StaffAllocation;
+  sponsorId?: string;
+  costCapSpentM?: number;
+  costCapLimitM?: number;
+  seasonRound?: number;
+  workforceCount?: number;
+  puWear?: PowerUnitWear;
 }
 
 export type Ps5GraphicsMode = 'quality' | 'performance' | 'rt_pro' | 'cinematic';
@@ -219,12 +259,129 @@ export type ParticleDensityQuality = 'low' | 'medium' | 'high' | 'ultra';
 export type AntiAliasingMode = 'off' | 'fxaa' | 'smaa' | 'high';
 export type MotionBlurQuality = 'off' | 'low' | 'medium' | 'high' | 'cinematic';
 export type GraphicsColorCodeMode = 'standard' | 'palette_lut' | 'twilight_neon' | 'carbon_cinema';
+export type HudColorScheme = 'motorsport_dark' | 'sunlight_contrast' | 'night_amber' | 'telemetry_cyan';
+export type HudScaleMode = 'auto' | 'compact' | 'standard' | 'large';
+export type HudWidgetKey =
+  | 'leaderboard'
+  | 'timingTower'
+  | 'pitStrategy'
+  | 'miniMap'
+  | 'weatherOverlay'
+  | 'tyrePanel'
+  | 'haloCluster'
+  | 'gForceRadar'
+  | 'damageDiagram';
+export type HudWidgetVisibility = Record<HudWidgetKey, boolean>;
+
+export const DEFAULT_HUD_WIDGETS: HudWidgetVisibility = {
+  leaderboard: true,
+  timingTower: true,
+  pitStrategy: true,
+  miniMap: true,
+  weatherOverlay: true,
+  tyrePanel: true,
+  haloCluster: true,
+  gForceRadar: true,
+  damageDiagram: true,
+};
+
+export type OnlineMatchmakingPriority = 'balanced' | 'low_ping' | 'skill_matched' | 'fast_fill';
+export type OnlineSkillBand = 'strict' | 'standard' | 'open';
+export type OnlineSafetyFilter = 'any' | 'b_plus' | 'a_only' | 's_license';
+export type OnlineServerRegion =
+  | 'auto'
+  | 'na_east'
+  | 'na_west'
+  | 'eu_west'
+  | 'eu_central'
+  | 'asia_east'
+  | 'oceania'
+  | 'south_america';
+export type OnlineInputMatchmaking = 'any' | 'controller_only' | 'wheel_only';
+export type OnlineVoiceChatMode = 'lobby' | 'party_only' | 'muted';
+export type OnlineCarPerformanceMode = 'equal' | 'realistic';
+export type OnlineCornerCuttingMode = 'relaxed' | 'regular' | 'strict';
+export type OnlineCollisionMode = 'full' | 'lap1_ghost' | 'ghost_all';
+export type OnlineGridOrderMode = 'qualifying' | 'reverse_grid' | 'random';
+export type OnlineAssistCapPreset = 'full_assists' | 'limited_pro' | 'esports_no_assists' | 'custom';
+export type OnlineTransmissionRule = 'any' | 'manual_only';
+
+export interface OnlineGameplaySettings {
+  // Matchmaking Optimization
+  matchmakingPriority: OnlineMatchmakingPriority;
+  skillBand: OnlineSkillBand;
+  safetyFilter: OnlineSafetyFilter;
+  maxPingMs: number; // 40..180 ms
+  // Cross-Platform Play
+  crossPlayEnabled: boolean;
+  inputMatchmaking: OnlineInputMatchmaking;
+  voiceChat: OnlineVoiceChatMode;
+  // Server Region Preferences
+  serverRegion: OnlineServerRegion;
+  allowRegionFailover: boolean;
+  // Online Race Rules
+  applyOnlineRulesToSession: boolean;
+  carPerformance: OnlineCarPerformanceMode;
+  cornerCutting: OnlineCornerCuttingMode;
+  collisionMode: OnlineCollisionMode;
+  ghostLappedCars: boolean;
+  gridOrder: OnlineGridOrderMode;
+  parcFermeLock: boolean;
+  // Online Assist Options (Lobby Restrictions)
+  assistCapPreset: OnlineAssistCapPreset;
+  allowBrakingAssist: boolean;
+  allowSteeringAssist: boolean;
+  allowAbsAssist: boolean;
+  maxTractionControl: TractionControlMode;
+  maxRacingLine: RacingLineMode;
+  transmissionRule: OnlineTransmissionRule;
+  allowPitErsAssist: boolean;
+}
+
+export const DEFAULT_ONLINE_GAMEPLAY_SETTINGS: OnlineGameplaySettings = {
+  matchmakingPriority: 'balanced',
+  skillBand: 'standard',
+  safetyFilter: 'a_only',
+  maxPingMs: 90,
+  crossPlayEnabled: true,
+  inputMatchmaking: 'any',
+  voiceChat: 'party_only',
+  serverRegion: 'auto',
+  allowRegionFailover: true,
+  applyOnlineRulesToSession: true,
+  carPerformance: 'equal',
+  cornerCutting: 'regular',
+  collisionMode: 'lap1_ghost',
+  ghostLappedCars: true,
+  gridOrder: 'qualifying',
+  parcFermeLock: true,
+  assistCapPreset: 'limited_pro',
+  allowBrakingAssist: false,
+  allowSteeringAssist: false,
+  allowAbsAssist: true,
+  maxTractionControl: 'medium',
+  maxRacingLine: 'corners',
+  transmissionRule: 'any',
+  allowPitErsAssist: true,
+};
 
 export interface GameSettings {
   transmission: TransmissionMode;
   steeringSensitivity: number; // 0.5 - 1.5
   difficulty: DifficultyLevel;
   touchControls: boolean;
+  mobileControlStyle?: MobileControlStyle;
+  mobileButtonLayout?: MobileButtonLayout;
+  mobileButtonScale?: MobileButtonScale;
+  mobileButtonSpacing?: MobileButtonSpacing;
+  mobileButtonOpacity?: number; // 0.55 - 1.0
+  mobileSwipeGestures?: boolean;
+  mobileSwipeSensitivity?: number; // 0.6 - 1.6
+  mobileGyroSensitivity?: number; // 0.6 - 1.6
+  mobileSwapPedals?: boolean;
+  mobileFloatingJoystick?: boolean;
+  mobileShowErsButton?: boolean;
+  mobileShowGearStrip?: boolean;
   muted: boolean;
   cameraMode: CameraMode;
   weather: WeatherMode;
@@ -277,6 +434,12 @@ export interface GameSettings {
   raceObjectives?: boolean;
   launchClutchAssist?: boolean;
   reflexLowLatency?: ReflexLowLatencyMode;
+  // Adaptive HUD Scaling, Lighting Color Schemes & Modular Overlay Widgets
+  hudColorScheme?: HudColorScheme;
+  hudScaleMode?: HudScaleMode;
+  hudWidgets?: HudWidgetVisibility;
+  // Online Matchmaking, Cross-Platform, Region, Race Rules & Assist Caps
+  onlineGameplay?: OnlineGameplaySettings;
 }
 
 export interface MiniMapBlip {
@@ -305,7 +468,7 @@ export interface TrackHazardBlip {
   gripMultiplier: number;
 }
 
-export type TrackFlagType = 'none' | 'yellow' | 'red' | 'blue' | 'checkered' | 'surface' | 'green';
+export type TrackFlagType = 'none' | 'yellow' | 'red' | 'blue' | 'safety_car' | 'vsc' | 'checkered' | 'surface' | 'green';
 
 export interface TrackFlagState {
   flag: TrackFlagType;
@@ -336,6 +499,10 @@ export interface RacerStanding {
   isPlayer: boolean;
   isRival?: boolean;
   finished: boolean;
+  tyreCompound?: TyreCompound;
+  pitStops?: number;
+  isPitting?: boolean;
+  timePenaltySec?: number;
 }
 
 export interface PlannedPitStop {
@@ -398,6 +565,28 @@ export interface TyreContactPatchTelemetry {
   wearRateMultiplier: number; // 0.90..1.85 physical wear feedback multiplier
 }
 
+export type WeatherTyreRegime =
+  | 'optimal'
+  | 'extreme_heat'
+  | 'cold_track'
+  | 'wet_crossover'
+  | 'drying_crossover';
+
+export interface DynamicWeatherTyreImpact {
+  weather: WeatherMode;
+  trackTemperatureC: number;
+  trackTempTrend: 'heating' | 'cooling' | 'stable';
+  trackWetnessPct: number;
+  rainIntensity: number; // 0..1
+  gripMultiplier: number; // 0.55..1.05 real-time tyre grip modifier
+  wearMultiplier: number; // 0.85..2.35 real-time degradation rate modifier
+  thermalOffsetC: number; // Net cooling (-) or overheating (+) offset vs baseline tread temp
+  optimalCompound: TyreCompound;
+  crossoverUrgent: boolean;
+  regime: WeatherTyreRegime;
+  strategyRecommendation: string | null;
+}
+
 export interface HudTelemetry {
   speedKmh: number;
   rpm: number;
@@ -453,8 +642,27 @@ export interface HudTelemetry {
   gForceTotal: number;
   pitStrategy: PitStrategyData;
   tyreContactPatch?: TyreContactPatchTelemetry;
+  weatherTyreImpact?: DynamicWeatherTyreImpact;
   slipstreamPct?: number; // 0..100% aerodynamic draft tow from car ahead
   dirtyAirPct?: number; // 0..100% turbulent wake downforce loss in corners
+  // F1 2026 Active Aero, 350kW MGU-K Override & 4-Wheel Wear Telemetry
+  activeAeroMode?: ActiveAeroMode;
+  manualOverrideAvailable?: boolean;
+  manualOverrideActive?: boolean;
+  mgukPowerKw?: number;
+  wheelWearPct?: [number, number, number, number]; // [FL, FR, RL, RR]
+  // F1 Race Control, Track Limits, Overtake Counter & Grid Launch Gameplay
+  trackLimitWarnings?: number;
+  timePenaltySec?: number;
+  overtakesCount?: number;
+  launchFeedback?: string | null;
+  // PS5 F1 DualSense Telemetry & Live MFD Strategy Controls
+  ersMode?: ErsDeploymentMode;
+  brakeBiasPct?: number;
+  dualsenseConnected?: boolean;
+  dualsenseName?: string | null;
+  throttleInputPct?: number;
+  brakeInputPct?: number;
 }
 
 

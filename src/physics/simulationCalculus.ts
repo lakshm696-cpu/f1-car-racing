@@ -1,12 +1,26 @@
 import {
+  ActiveAeroMode,
+  AiStrategyArchetype,
+  BrakingAssistLevel,
   ContactPatchState,
+  DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+  DynamicWeatherTyreImpact,
+  ErsDeploymentMode,
+  GameSettings,
+  OnlineAssistCapPreset,
+  OnlineGameplaySettings,
+  OnlineServerRegion,
   PlannedPitStop,
   PlannedStopHudStatus,
   PreRacePitStrategy,
+  RacingLineMode,
   TimeOfDayMode,
+  TractionControlMode,
+  TransmissionMode,
   TyreCompound,
   TyreContactPatchTelemetry,
   WeatherMode,
+  WeatherTyreRegime,
 } from '../types/racing';
 
 export interface GForceVector {
@@ -94,10 +108,11 @@ export const BASE_FUEL_BURN_PER_LAP_PCT = 14.5; // ~14.5% per race lap (so >6 la
 
 export function getCompoundWearPerLap(compound: TyreCompound, weather: WeatherMode | 'wet' = 'day'): number {
   const isWetWeather = weather === 'rain' || weather === 'heavy_rain' || weather === 'wet' || weather === 'snow' || weather === 'blizzard';
-  if (compound === 'soft') return isWetWeather ? 26 : 18.5;
-  if (compound === 'medium') return isWetWeather ? 23 : 12.2;
-  if (compound === 'hard') return isWetWeather ? 20 : 8.1;
-  return isWetWeather ? 11.5 : 22.0; // wet tyre wears fast on dry track
+  // F1 2026 narrower Pirelli tire specs (25mm narrower front, 30mm narrower rear)
+  if (compound === 'soft') return isWetWeather ? 27 : 19.2;
+  if (compound === 'medium') return isWetWeather ? 23.5 : 12.6;
+  if (compound === 'hard') return isWetWeather ? 20.5 : 8.4;
+  return isWetWeather ? 11.8 : 23.5; // wet tyre degrades faster on hot dry asphalt
 }
 
 export function buildDefaultPitStrategy(
@@ -531,7 +546,8 @@ export function calculatePitStrategy(
   totalRacers: number,
   fuelPct = 100,
   strategyPlan?: PreRacePitStrategy,
-  completedStopIds?: ReadonlySet<string>
+  completedStopIds?: ReadonlySet<string>,
+  trackTemperatureC = 34
 ): StrategyCalculationResult {
   const windowStart = Math.max(1, Math.floor(totalLaps * 0.35));
   const windowEnd = Math.max(windowStart, Math.min(totalLaps - 1, Math.ceil(totalLaps * 0.65)));
@@ -551,9 +567,11 @@ export function calculatePitStrategy(
   let recommendedCompound: TyreCompound;
   const remainingLaps = Math.max(1, totalLaps - currentLap);
 
-  if (trackWetnessPct > 45) {
+  if (trackWetnessPct > 42) {
     recommendedCompound = 'wet';
-  } else if (remainingLaps <= 2) {
+  } else if (trackTemperatureC >= 45 && remainingLaps >= 4) {
+    recommendedCompound = 'hard';
+  } else if (remainingLaps <= 2 || (trackTemperatureC <= 23 && remainingLaps <= 5)) {
     recommendedCompound = 'soft';
   } else if (remainingLaps <= 5) {
     recommendedCompound = tyreCompound === 'medium' ? 'soft' : 'medium';
@@ -583,8 +601,10 @@ export function calculatePitStrategy(
   const estimatedFuelLapsRemaining = Number((fuelPct / burnPerLap).toFixed(1));
 
   let tacticalRadioCall: string | null = null;
-  if (trackWetnessPct > 50 && tyreCompound !== 'wet') {
+  if (trackWetnessPct > 48 && tyreCompound !== 'wet') {
     tacticalRadioCall = 'BOX BOX: Track wetness critical. Inters/Wets standing by!';
+  } else if (trackWetnessPct < 15 && tyreCompound === 'wet') {
+    tacticalRadioCall = 'TRACK DRYING: Wet tyres overheating. Box for dry slick crossover!';
   } else if (tyreDegradationStage === 'cliff') {
     tacticalRadioCall = 'BOX THIS LAP: Tyres at critical cliff. Box now for fresh compound!';
   } else if (nextPlannedStop && currentLap === nextPlannedStop.pitLap) {
@@ -1156,5 +1176,681 @@ export function evaluateRacingLineSurfaceGrip(
     localSurfaceGripPct,
   };
 }
+
+// ============================================================================
+// F1 2026 PHYSICS, TIRE WEAR & AI STRATEGY MODELS
+// ============================================================================
+
+export interface PowerUnit2026Result {
+  mgukPowerKw: number; // 0..350 kW
+  driveBoostMultiplier: number; // Longitudinal acceleration factor
+  ersDrainPerSec: number; // Battery %/sec net change (positive = drain, negative = harvest)
+}
+
+/**
+ * F1 2026 50/50 Hybrid Power Unit Calculus:
+ * - Standard deployment delivers up to 350 kW MGU-K, tapering linearly from 290 km/h down toward 355 km/h.
+ * - Manual Override Mode (MOM), available when chasing <1.0s behind (or override assist), sustains full 350 kW
+ *   up to 337 km/h before tapering cleanly, yielding decisive overtaking punch.
+ */
+export function calculate2026PowerUnitDeployment(params: {
+  speedKmh: number;
+  throttleIn: number;
+  brakeIn: number;
+  ersCharge: number;
+  overrideRequested: boolean;
+  overrideAvailable: boolean;
+  ersMode?: ErsDeploymentMode;
+  mgukHealthPct?: number; // 0..100 PU wear health
+  hybridFocusBonus?: number; // 1.0 baseline, ~1.18 when MGU-K R&D focus active
+}): PowerUnit2026Result {
+  const speed = Math.max(0, params.speedKmh);
+  const throttle = Math.max(0, Math.min(1, params.throttleIn));
+  const brake = Math.max(0, Math.min(1, params.brakeIn));
+  const mode: ErsDeploymentMode = params.ersMode ?? 'balanced';
+  const healthFactor = 0.86 + (Math.max(0, Math.min(100, params.mgukHealthPct ?? 100)) / 100) * 0.14;
+  const focusMult = params.hybridFocusBonus ?? 1.0;
+
+  if (brake > 0.05) {
+    // MGU-K regenerative braking harvest (up to 350kW regen into battery; extra regen in Harvest mode)
+    const modeRegenMult = mode === 'harvest' ? 1.38 : mode === 'overtake' ? 0.82 : 1.0;
+    const regenRate = (11.5 + (speed / 300) * 10.5) * brake * focusMult * modeRegenMult;
+    return {
+      mgukPowerKw: 0,
+      driveBoostMultiplier: 1.0,
+      ersDrainPerSec: -regenRate,
+    };
+  }
+
+  if (throttle <= 0.05 || params.ersCharge <= 1.5) {
+    return {
+      mgukPowerKw: 0,
+      driveBoostMultiplier: 0.94, // ICE-only partial derate when battery depleted
+      ersDrainPerSec: throttle <= 0.05 ? -(mode === 'harvest' ? 5.6 : 3.8) * focusMult : 0,
+    };
+  }
+
+  const momActive = params.overrideRequested && params.overrideAvailable;
+  let taper = 1.0;
+  if (momActive) {
+    if (speed > 337) {
+      taper = Math.max(0.22, 1.0 - (speed - 337) / 38);
+    }
+  } else if (speed > 290) {
+    taper = Math.max(0.05, 1.0 - (speed - 290) / 65);
+  }
+
+  const modePowerScale = momActive ? 1.0 : mode === 'harvest' ? 0.54 : mode === 'overtake' ? 1.0 : 0.86;
+  const mgukPowerKw = Math.round(350 * throttle * taper * healthFactor * modePowerScale);
+  const boostWeight = momActive ? 0.22 : mode === 'overtake' ? 0.17 : mode === 'harvest' ? 0.06 : 0.12;
+  const baseBoost = 1.0 + (mgukPowerKw / 350) * boostWeight * (focusMult > 1 ? 1.04 : 1.0);
+  const modeDrainRate = momActive ? 16.5 : mode === 'overtake' ? 9.8 : mode === 'harvest' ? 1.6 : 5.2;
+  const drainRate = modeDrainRate * throttle * taper / Math.max(0.85, focusMult * 0.95);
+
+  return {
+    mgukPowerKw,
+    driveBoostMultiplier: Number(baseBoost.toFixed(3)),
+    ersDrainPerSec: Number(drainRate.toFixed(2)),
+  };
+}
+
+export interface ActiveAero2026Result {
+  mode: ActiveAeroMode;
+  dragMultiplier: number; // <1 in X-mode low drag, 1.0 in Z-mode high downforce
+  downforceGripMultiplier: number; // higher in Z-mode corners
+  tyreVerticalLoadFactor: number; // relieves tyre pressure/wear on straights in X-mode
+}
+
+/**
+ * F1 2026 Active Aerodynamics (X-Mode vs Z-Mode):
+ * - X-Mode: Low-drag front & rear wing configuration usable on ALL designated straight zones or clean manual straight activation.
+ * - Z-Mode: High-downforce cornering configuration for grip through chicanes and sweepers.
+ */
+export function calculate2026ActiveAero(params: {
+  inAeroZone: boolean;
+  disabledByWeather: boolean;
+  speedKmh: number;
+  absSteerRad: number;
+  aeroFocusBonus?: number; // ~1.045 when Active Aero R&D focus active
+  manualXModeRequested?: boolean;
+  manualZModeLock?: boolean;
+}): ActiveAero2026Result {
+  const focus = params.aeroFocusBonus ?? 1.0;
+  const straightSafe = !params.disabledByWeather && params.speedKmh > 125 && params.absSteerRad < 0.22;
+  const xModeEngaged =
+    !params.manualZModeLock &&
+    ((params.inAeroZone && !params.disabledByWeather && params.speedKmh > 125 && params.absSteerRad < 0.26) ||
+      (Boolean(params.manualXModeRequested) && straightSafe && params.speedKmh > 165));
+
+  if (xModeEngaged) {
+    return {
+      mode: 'x_mode',
+      dragMultiplier: Number((0.74 / Math.max(0.95, focus * 0.98)).toFixed(3)),
+      downforceGripMultiplier: 0.95,
+      tyreVerticalLoadFactor: 0.86, // Relieves vertical tread scrubbing on fast straights
+    };
+  }
+
+  return {
+    mode: 'z_mode',
+    dragMultiplier: 1.0,
+    downforceGripMultiplier: Number((1.035 * focus).toFixed(3)),
+    tyreVerticalLoadFactor: 1.04,
+  };
+}
+
+export interface WheelWearDeltaInput {
+  lateralVelMs: number;
+  gLat: number;
+  gLong: number;
+  speedMs: number;
+  offTrack: boolean;
+  lockupWear: number;
+  debrisAbrasion: number;
+  compound: TyreCompound;
+  trackWetnessRatio: number;
+  wheelWearPct: [number, number, number, number];
+  wheelSurfaceTempC: [number, number, number, number];
+  contactPatchWearMult: number;
+  tyreVerticalLoadFactor: number;
+  thermalFocusReduction?: number; // e.g. 0.86 when tyre_thermal R&D focus is active
+  dt: number;
+}
+
+/**
+ * F1 2026 Narrower Tyre 4-Wheel Differential Wear Model [FL, FR, RL, RR]:
+ * Models asymmetric load transfer across left/right and front/rear axles plus 2026 narrower tread
+ * thermal sensitivity when exceeding compound thermal windows.
+ */
+export function calculateWheelWearDeltas(input: WheelWearDeltaInput): [number, number, number, number] {
+  const safeDt = Math.max(0.001, Math.min(0.1, input.dt));
+  const wetOnDryMult = input.compound === 'wet' && input.trackWetnessRatio < 0.18 ? 2.3 : 1.0;
+  const compoundFactor =
+    input.compound === 'soft' ? 1.48 : input.compound === 'hard' ? 0.64 : 1.0;
+  const thermalReduction = input.thermalFocusReduction ?? 1.0;
+
+  const optMaxByCompound: Record<TyreCompound, number> = {
+    soft: 105,
+    medium: 111,
+    hard: 117,
+    wet: 85,
+  };
+  const optMax = optMaxByCompound[input.compound];
+
+  // Lateral load transfer: turning left (gLat > 0) loads outer right tyres (FR, RR) harder
+  const latFactorRight = 1.0 + Math.max(-0.36, Math.min(0.42, input.gLat * 0.085));
+  const latFactorLeft = 1.0 - Math.max(-0.42, Math.min(0.36, input.gLat * 0.085));
+  // Longitudinal weight transfer: braking loads fronts, traction loads rears
+  const longFront = 1.0 + Math.max(-0.18, Math.min(0.35, -input.gLong * 0.065));
+  const longRear = 1.0 + Math.max(-0.18, Math.min(0.38, input.gLong * 0.085));
+
+  const cornerFactors: [number, number, number, number] = [
+    latFactorLeft * longFront, // FL
+    latFactorRight * longFront, // FR
+    latFactorLeft * longRear, // RL
+    latFactorRight * longRear, // RR
+  ];
+
+  const baseRate =
+    (Math.abs(input.lateralVelMs) * 0.088 +
+      (Math.abs(input.speedMs) > 5 ? 0.038 : 0) +
+      (input.offTrack ? 0.48 : 0) +
+      input.debrisAbrasion) *
+    wetOnDryMult *
+    compoundFactor *
+    input.contactPatchWearMult *
+    input.tyreVerticalLoadFactor *
+    thermalReduction *
+    safeDt;
+
+  const deltas: [number, number, number, number] = [0, 0, 0, 0];
+  for (let i = 0; i < 4; i++) {
+    const wearVal = input.wheelWearPct[i] ?? 100;
+    const cliffMult = wearVal < 28 ? 1.8 : wearVal < 48 ? 1.28 : 1.0;
+    const overheatDeg = Math.max(0, (input.wheelSurfaceTempC[i] ?? 95) - optMax);
+    const thermalShearMult = 1.0 + Math.min(0.65, overheatDeg * 0.025);
+    const frontLockup = i < 2 ? input.lockupWear * safeDt * 1.45 : input.lockupWear * safeDt * 0.4;
+    deltas[i] = Math.max(0, (baseRate * cornerFactors[i] * cliffMult * thermalShearMult) + frontLockup);
+  }
+  return deltas;
+}
+
+export interface AiPitDecisionInput {
+  archetype: AiStrategyArchetype;
+  currentLap: number;
+  totalLaps: number;
+  tyreWearPct: number;
+  currentCompound: TyreCompound;
+  trackWetnessRatio: number;
+  pitStopsCompleted: number;
+  gapAheadSec: number | null;
+}
+
+export interface AiPitDecisionResult {
+  shouldPit: boolean;
+  nextCompound: TyreCompound;
+  reason: 'weather_crossover' | 'tyre_cliff' | 'scheduled_strategy' | 'undercut' | 'none';
+}
+
+/**
+ * Evaluates AI opponent race strategy decisions using 2026 tyre degradation, track wetness crossover,
+ * and strategic archetypes (undercut_1stop, aggressive_2stop, overcut_long, wet_gamble).
+ */
+export function evaluateAiPitStrategy(input: AiPitDecisionInput): AiPitDecisionResult {
+  const { archetype, currentLap, totalLaps, tyreWearPct, currentCompound, trackWetnessRatio, pitStopsCompleted, gapAheadSec } =
+    input;
+
+  if (currentLap >= totalLaps) {
+    return { shouldPit: false, nextCompound: currentCompound, reason: 'none' };
+  }
+
+  const remainingLaps = totalLaps - currentLap;
+
+  // 1. Weather crossover switch (wet_gamble stays out slightly longer on drying track or boxes earlier in rain)
+  const wetEnterThreshold = archetype === 'wet_gamble' ? 0.34 : 0.44;
+  const dryExitThreshold = archetype === 'wet_gamble' ? 0.22 : 0.15;
+
+  if (trackWetnessRatio >= wetEnterThreshold && currentCompound !== 'wet') {
+    return { shouldPit: true, nextCompound: 'wet', reason: 'weather_crossover' };
+  }
+  if (trackWetnessRatio <= dryExitThreshold && currentCompound === 'wet') {
+    const nextDry: TyreCompound = remainingLaps <= 3 ? 'soft' : remainingLaps <= 6 ? 'medium' : 'hard';
+    return { shouldPit: true, nextCompound: nextDry, reason: 'weather_crossover' };
+  }
+
+  // Only allow scheduled/wear stops if race has >= 4 laps
+  if (totalLaps < 4) {
+    return { shouldPit: false, nextCompound: currentCompound, reason: 'none' };
+  }
+
+  // 2. Tyre cliff emergency pit
+  if (tyreWearPct <= 26 && remainingLaps >= 1) {
+    const nextCmp: TyreCompound =
+      trackWetnessRatio > 0.38 ? 'wet' : remainingLaps <= 3 ? 'soft' : remainingLaps <= 7 ? 'medium' : 'hard';
+    return { shouldPit: true, nextCompound: nextCmp, reason: 'tyre_cliff' };
+  }
+
+  // 3. Undercut opportunity when bottled up behind a slower car within 1.8s
+  if (
+    archetype === 'undercut_1stop' &&
+    pitStopsCompleted === 0 &&
+    gapAheadSec !== null &&
+    gapAheadSec <= 1.8 &&
+    currentLap >= Math.max(2, Math.floor(totalLaps * 0.32)) &&
+    tyreWearPct < 74
+  ) {
+    return {
+      shouldPit: true,
+      nextCompound: remainingLaps <= 4 ? 'medium' : 'hard',
+      reason: 'undercut',
+    };
+  }
+
+  // 4. Scheduled strategic pit windows
+  if (archetype === 'aggressive_2stop') {
+    const targetStops = totalLaps >= 7 ? 2 : 1;
+    if (pitStopsCompleted < targetStops) {
+      const triggerRatio = pitStopsCompleted === 0 ? 0.34 : 0.68;
+      if (currentLap >= Math.max(2, Math.round(totalLaps * triggerRatio)) && tyreWearPct < 72) {
+        return {
+          shouldPit: true,
+          nextCompound: pitStopsCompleted === 0 ? 'medium' : 'soft',
+          reason: 'scheduled_strategy',
+        };
+      }
+    }
+  } else if (pitStopsCompleted === 0) {
+    const windowRatio = archetype === 'overcut_long' ? 0.62 : 0.45;
+    if (currentLap >= Math.max(2, Math.round(totalLaps * windowRatio)) && tyreWearPct < 68) {
+      return {
+        shouldPit: true,
+        nextCompound: remainingLaps <= 3 ? 'soft' : currentCompound === 'hard' ? 'medium' : 'hard',
+        reason: 'scheduled_strategy',
+      };
+    }
+  }
+
+  return { shouldPit: false, nextCompound: currentCompound, reason: 'none' };
+}
+
+export interface DynamicWeatherTyreInput {
+  weather: WeatherMode;
+  timeOfDay?: TimeOfDayMode;
+  compound: TyreCompound;
+  trackWetnessRatio: number; // 0..1 standing water / dampness
+  trackTemperatureC: number; // live asphalt temp (°C)
+  prevTrackTemperatureC?: number; // prior sample for heating/cooling trend
+  speedMs: number;
+  remainingLaps: number;
+}
+
+/**
+ * Evaluates real-time impact of dynamic weather, rain intensity, ambient heat, and changing asphalt
+ * track temperature on tyre grip, tread degradation rate, carcass thermal balance, and pit strategy.
+ */
+export function evaluateDynamicWeatherTyreImpact(
+  input: DynamicWeatherTyreInput
+): DynamicWeatherTyreImpact {
+  const wet = Math.max(0, Math.min(1, input.trackWetnessRatio));
+  const trackTemp = input.trackTemperatureC;
+  const speedKmh = Math.abs(input.speedMs) * 3.6;
+
+  // 1. Live precipitation intensity blended with standing surface water
+  const precipByWeather: Record<WeatherMode, number> = {
+    day: 0,
+    partly_cloudy: 0,
+    sunset: 0,
+    cloudy: 0.05,
+    fog: 0.14,
+    rain: 0.68,
+    heavy_rain: 1.0,
+    snow: 0.72,
+    blizzard: 0.96,
+    night: 0,
+  };
+  const basePrecip = precipByWeather[input.weather] ?? 0;
+  const rainIntensity = Number(Math.max(basePrecip * 0.75, wet).toFixed(2));
+
+  // 2. Track temperature trend (heating up in clear sun vs cooling under cloud/rain)
+  const tempDiff =
+    input.prevTrackTemperatureC !== undefined ? trackTemp - input.prevTrackTemperatureC : 0;
+  const trackTempTrend: 'heating' | 'cooling' | 'stable' =
+    tempDiff > 0.25 ? 'heating' : tempDiff < -0.25 ? 'cooling' : 'stable';
+
+  // 3. Compound optimal track temperature windows (°C) and heat tolerance
+  const windows: Record<
+    TyreCompound,
+    { optMin: number; optMax: number; heatWearSensitivity: number; coldGripSensitivity: number }
+  > = {
+    soft: { optMin: 24, optMax: 41, heatWearSensitivity: 0.036, coldGripSensitivity: 0.008 },
+    medium: { optMin: 28, optMax: 45, heatWearSensitivity: 0.025, coldGripSensitivity: 0.011 },
+    hard: { optMin: 32, optMax: 52, heatWearSensitivity: 0.014, coldGripSensitivity: 0.015 },
+    wet: { optMin: 10, optMax: 28, heatWearSensitivity: 0.042, coldGripSensitivity: 0.006 },
+  };
+  const win = windows[input.compound];
+
+  const coldDelta = Math.max(0, win.optMin - trackTemp);
+  const heatDelta = Math.max(0, trackTemp - win.optMax);
+
+  // 4. Water vs Dry Compound Physics (hydroplaning grip loss vs wet-on-dry overheating)
+  let gripMultiplier = 1.0;
+  let wearMultiplier = 1.0;
+  let thermalOffsetC = 0;
+
+  if (input.compound === 'wet') {
+    if (wet >= 0.34) {
+      // Wet tyres evacuate standing water cleanly and stay cool
+      gripMultiplier = 0.97 + Math.min(0.07, (wet - 0.34) * 0.14);
+      wearMultiplier = 0.94;
+      thermalOffsetC = -wet * 10.5 - (speedKmh / 320) * 3.5;
+    } else if (wet >= 0.16) {
+      // Damp crossover zone: wet blocks squirm slightly on drying asphalt
+      gripMultiplier = 0.91;
+      wearMultiplier = 1.28;
+      thermalOffsetC = 6.5 - wet * 14;
+    } else {
+      // Dry track blistering on wet tread blocks
+      const dryness = 1 - wet / 0.16;
+      gripMultiplier = 0.85 - dryness * 0.06;
+      wearMultiplier = 1.45 + dryness * 0.85;
+      thermalOffsetC = 14 + dryness * 11 + Math.max(0, trackTemp - 28) * 0.35;
+    }
+  } else {
+    // Dry Slicks (Soft / Medium / Hard)
+    const waterPenalty = wet > 0.08 ? Math.pow((wet - 0.08) / 0.92, 1.15) * 0.44 : 0;
+    const coldPenalty = Math.min(0.18, coldDelta * win.coldGripSensitivity);
+    const heatPenalty = Math.min(0.14, heatDelta * 0.009);
+    gripMultiplier = Math.max(0.55, 1.0 - waterPenalty - coldPenalty - heatPenalty);
+
+    // Rain / wet asphalt aggressively cools slicks; high track heat accelerates rubber shear wear
+    const evaporativeCool = wet * (9.5 + (speedKmh / 300) * 4.5);
+    const heatLoad = heatDelta * 0.85 - coldDelta * 0.45;
+    thermalOffsetC = heatLoad - evaporativeCool;
+
+    const heatWearBonus = heatDelta * win.heatWearSensitivity;
+    const coldGrainingBonus = coldDelta > 4 ? (coldDelta - 4) * 0.015 : 0;
+    const waterCoolingWearRelief = wet > 0.2 ? -0.08 : 0;
+    wearMultiplier = Math.max(0.85, Math.min(2.2, 1.0 + heatWearBonus + coldGrainingBonus + waterCoolingWearRelief));
+  }
+
+  // 5. Real-Time Optimal Compound & Strategy Crossover Analysis
+  let optimalCompound: TyreCompound;
+  if (wet >= 0.36 || rainIntensity >= 0.65) {
+    optimalCompound = 'wet';
+  } else if (input.remainingLaps <= 3 && trackTemp <= 44) {
+    optimalCompound = 'soft';
+  } else if (trackTemp >= 44 && input.remainingLaps >= 4) {
+    optimalCompound = 'hard';
+  } else if (trackTemp <= 23) {
+    optimalCompound = 'soft';
+  } else {
+    optimalCompound = input.remainingLaps >= 7 ? 'hard' : 'medium';
+  }
+
+  let regime: WeatherTyreRegime = 'optimal';
+  let crossoverUrgent = false;
+  let strategyRecommendation: string | null = null;
+  const wetPct = Math.round(wet * 100);
+
+  if (wet >= 0.38 && input.compound !== 'wet') {
+    regime = 'wet_crossover';
+    crossoverUrgent = true;
+    strategyRecommendation = `Rain crossover (${wetPct}% wetness): dry slicks losing grip — pit for WETS.`;
+  } else if (wet <= 0.14 && input.compound === 'wet') {
+    regime = 'drying_crossover';
+    crossoverUrgent = true;
+    strategyRecommendation = `Track drying (${wetPct}%): wet tyres overheating — pit for ${optimalCompound.toUpperCase()} slicks.`;
+  } else if (heatDelta >= 4 && input.compound !== 'hard') {
+    regime = 'extreme_heat';
+    crossoverUrgent = input.compound === 'soft' && heatDelta >= 7;
+    strategyRecommendation = `High asphalt heat (${trackTemp.toFixed(0)}°C): ${input.compound.toUpperCase()} thermal deg +${Math.round((wearMultiplier - 1) * 100)}% — consider ${optimalCompound.toUpperCase()}.`;
+  } else if (coldDelta >= 5) {
+    regime = 'cold_track';
+    crossoverUrgent = false;
+    strategyRecommendation = `Cold track (${trackTemp.toFixed(0)}°C): warm-up grip deficit — push corners or run SOFTs.`;
+  }
+
+  return {
+    weather: input.weather,
+    trackTemperatureC: Number(trackTemp.toFixed(1)),
+    trackTempTrend,
+    trackWetnessPct: wetPct,
+    rainIntensity,
+    gripMultiplier: Number(gripMultiplier.toFixed(3)),
+    wearMultiplier: Number(wearMultiplier.toFixed(3)),
+    thermalOffsetC: Number(thermalOffsetC.toFixed(1)),
+    optimalCompound,
+    crossoverUrgent,
+    regime,
+    strategyRecommendation,
+  };
+}
+
+export interface OnlineServerRegionSpec {
+  id: OnlineServerRegion;
+  label: string;
+  hubCity: string;
+  basePingMs: number;
+  populationWeight: number;
+}
+
+export const ONLINE_SERVER_REGIONS: OnlineServerRegionSpec[] = [
+  { id: 'auto', label: 'Auto Optimal', hubCity: 'Lowest Ping Cluster', basePingMs: 22, populationWeight: 1.15 },
+  { id: 'na_east', label: 'NA East', hubCity: 'Ashburn, VA', basePingMs: 24, populationWeight: 1.05 },
+  { id: 'na_west', label: 'NA West', hubCity: 'Oregon / San Jose', basePingMs: 36, populationWeight: 0.92 },
+  { id: 'eu_west', label: 'EU West', hubCity: 'London / Dublin', basePingMs: 28, populationWeight: 1.18 },
+  { id: 'eu_central', label: 'EU Central', hubCity: 'Frankfurt', basePingMs: 30, populationWeight: 1.22 },
+  { id: 'asia_east', label: 'Asia East', hubCity: 'Tokyo / Singapore', basePingMs: 48, populationWeight: 0.96 },
+  { id: 'oceania', label: 'Oceania', hubCity: 'Sydney', basePingMs: 68, populationWeight: 0.68 },
+  { id: 'south_america', label: 'South America', hubCity: 'São Paulo', basePingMs: 74, populationWeight: 0.74 },
+];
+
+export interface OnlineMatchmakingProfile {
+  effectiveRegion: OnlineServerRegion;
+  regionLabel: string;
+  hubCity: string;
+  estimatedPingMs: number;
+  pingWithinCap: boolean;
+  poolMultiplier: number;
+  estimatedQueueSec: number;
+  readinessLabel: string;
+}
+
+export function applyOnlineAssistCapPreset(
+  preset: OnlineAssistCapPreset
+): Pick<
+  OnlineGameplaySettings,
+  | 'assistCapPreset'
+  | 'allowBrakingAssist'
+  | 'allowSteeringAssist'
+  | 'allowAbsAssist'
+  | 'maxTractionControl'
+  | 'maxRacingLine'
+  | 'transmissionRule'
+  | 'allowPitErsAssist'
+> {
+  if (preset === 'full_assists') {
+    return {
+      assistCapPreset: 'full_assists',
+      allowBrakingAssist: true,
+      allowSteeringAssist: true,
+      allowAbsAssist: true,
+      maxTractionControl: 'full',
+      maxRacingLine: 'full',
+      transmissionRule: 'any',
+      allowPitErsAssist: true,
+    };
+  }
+  if (preset === 'esports_no_assists') {
+    return {
+      assistCapPreset: 'esports_no_assists',
+      allowBrakingAssist: false,
+      allowSteeringAssist: false,
+      allowAbsAssist: false,
+      maxTractionControl: 'off',
+      maxRacingLine: 'off',
+      transmissionRule: 'manual_only',
+      allowPitErsAssist: false,
+    };
+  }
+  return {
+    assistCapPreset: preset === 'custom' ? 'custom' : 'limited_pro',
+    allowBrakingAssist: false,
+    allowSteeringAssist: false,
+    allowAbsAssist: true,
+    maxTractionControl: 'medium',
+    maxRacingLine: 'corners',
+    transmissionRule: 'any',
+    allowPitErsAssist: true,
+  };
+}
+
+export function evaluateOnlineMatchmakingProfile(
+  online: OnlineGameplaySettings = DEFAULT_ONLINE_GAMEPLAY_SETTINGS
+): OnlineMatchmakingProfile {
+  const regionSpec =
+    ONLINE_SERVER_REGIONS.find((r) => r.id === online.serverRegion) ?? ONLINE_SERVER_REGIONS[0];
+
+  const crossPlayBoost = online.crossPlayEnabled ? 2.65 : 1.0;
+  const inputFactor = online.inputMatchmaking === 'any' ? 1.0 : online.inputMatchmaking === 'controller_only' ? 0.72 : 0.34;
+  const skillFactor = online.skillBand === 'open' ? 1.35 : online.skillBand === 'standard' ? 1.0 : 0.62;
+  const safetyFactor =
+    online.safetyFilter === 'any'
+      ? 1.25
+      : online.safetyFilter === 'b_plus'
+        ? 1.0
+        : online.safetyFilter === 'a_only'
+          ? 0.78
+          : 0.48;
+  const failoverFactor = online.allowRegionFailover ? 1.22 : 1.0;
+  const poolMultiplier = Number(
+    (
+      regionSpec.populationWeight *
+      crossPlayBoost *
+      inputFactor *
+      skillFactor *
+      safetyFactor *
+      failoverFactor
+    ).toFixed(2)
+  );
+
+  const priorityPingDelta =
+    online.matchmakingPriority === 'low_ping'
+      ? -4
+      : online.matchmakingPriority === 'fast_fill'
+        ? 8
+        : online.matchmakingPriority === 'skill_matched'
+          ? 6
+          : 0;
+  const failoverPingDelta =
+    online.allowRegionFailover && !online.crossPlayEnabled ? 12 : online.allowRegionFailover ? 4 : 0;
+  const estimatedPingMs = Math.max(14, Math.round(regionSpec.basePingMs + priorityPingDelta + failoverPingDelta));
+  const pingWithinCap = estimatedPingMs <= online.maxPingMs;
+
+  const baseQueueSec =
+    online.matchmakingPriority === 'fast_fill'
+      ? 7
+      : online.matchmakingPriority === 'low_ping'
+        ? 14
+        : online.matchmakingPriority === 'skill_matched'
+          ? 18
+          : 11;
+  const pingConstraintPenalty = online.maxPingMs < 60 ? 1.45 : online.maxPingMs < 85 ? 1.15 : 0.92;
+  const estimatedQueueSec = Math.max(
+    4,
+    Math.min(75, Math.round((baseQueueSec / Math.max(0.28, poolMultiplier * 0.55)) * pingConstraintPenalty))
+  );
+
+  let readinessLabel = 'Optimal Cross-Play Pool';
+  if (!pingWithinCap) {
+    readinessLabel = online.allowRegionFailover
+      ? 'Ping Above Cap — Failover Ready'
+      : 'Ping Exceeds Max Cap';
+  } else if (!online.crossPlayEnabled && poolMultiplier < 0.9) {
+    readinessLabel = 'Narrow Pool — Enable Cross-Play';
+  } else if (online.matchmakingPriority === 'low_ping') {
+    readinessLabel = 'Low-Latency Regional Lock';
+  } else if (online.matchmakingPriority === 'skill_matched') {
+    readinessLabel = 'Competitive Skill-Matched Queue';
+  } else if (online.matchmakingPriority === 'fast_fill') {
+    readinessLabel = 'Rapid Grid Fill Active';
+  }
+
+  return {
+    effectiveRegion: regionSpec.id,
+    regionLabel: regionSpec.label,
+    hubCity: regionSpec.hubCity,
+    estimatedPingMs,
+    pingWithinCap,
+    poolMultiplier,
+    estimatedQueueSec,
+    readinessLabel,
+  };
+}
+
+export interface EffectiveSessionAssists {
+  onlineEnforced: boolean;
+  transmission: TransmissionMode;
+  brakingAssist: BrakingAssistLevel;
+  steeringAssist: boolean;
+  absAssist: boolean;
+  tractionControlMode: TractionControlMode;
+  racingLine: RacingLineMode;
+  ersAssist: boolean;
+  drsAssist: boolean;
+  pitAssist: boolean;
+}
+
+export function resolveEffectiveSessionAssists(settings: GameSettings): EffectiveSessionAssists {
+  const baseTransmission: TransmissionMode = settings.transmission ?? 'auto';
+  const baseBraking: BrakingAssistLevel = settings.brakingAssist ?? 'low';
+  const baseSteering = Boolean(settings.steeringAssist);
+  const baseAbs = settings.absAssist !== false;
+  const baseTc: TractionControlMode =
+    settings.tractionControlMode ?? (settings.tcAssist ? 'full' : 'off');
+  const baseLine: RacingLineMode = settings.racingLine ?? 'corners';
+  const baseErs = settings.ersAssist !== false;
+  const baseDrs = settings.drsAssist !== false;
+  const basePit = settings.pitAssist !== false;
+
+  const online = settings.onlineGameplay;
+  if (!online || !online.applyOnlineRulesToSession) {
+    return {
+      onlineEnforced: false,
+      transmission: baseTransmission,
+      brakingAssist: baseBraking,
+      steeringAssist: baseSteering,
+      absAssist: baseAbs,
+      tractionControlMode: baseTc,
+      racingLine: baseLine,
+      ersAssist: baseErs,
+      drsAssist: baseDrs,
+      pitAssist: basePit,
+    };
+  }
+
+  const tcRank: Record<TractionControlMode, number> = { off: 0, medium: 1, full: 2 };
+  const clampedTc: TractionControlMode =
+    tcRank[baseTc] <= tcRank[online.maxTractionControl] ? baseTc : online.maxTractionControl;
+
+  const lineRank: Record<RacingLineMode, number> = { off: 0, corners: 1, full: 2 };
+  const clampedLine: RacingLineMode =
+    lineRank[baseLine] <= lineRank[online.maxRacingLine] ? baseLine : online.maxRacingLine;
+
+  return {
+    onlineEnforced: true,
+    transmission: online.transmissionRule === 'manual_only' ? 'manual' : baseTransmission,
+    brakingAssist: online.allowBrakingAssist ? baseBraking : 'off',
+    steeringAssist: online.allowSteeringAssist ? baseSteering : false,
+    absAssist: online.allowAbsAssist ? baseAbs : false,
+    tractionControlMode: clampedTc,
+    racingLine: clampedLine,
+    ersAssist: online.allowPitErsAssist ? baseErs : false,
+    drsAssist: online.allowPitErsAssist ? baseDrs : false,
+    pitAssist: online.allowPitErsAssist ? basePit : false,
+  };
+}
+
+
 
 

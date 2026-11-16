@@ -10,7 +10,7 @@ interface MarshalingFlagOverlayProps {
   wrongWay?: boolean;
 }
 
-type ManualFlagOverride = 'auto' | 'yellow' | 'red' | 'blue' | 'checkered';
+type ManualFlagOverride = 'auto' | 'yellow' | 'red' | 'blue' | 'safety_car' | 'vsc' | 'checkered';
 
 interface FlagVisualConfig {
   code: string;
@@ -66,6 +66,32 @@ const FLAG_CONFIGS: Record<Exclude<TrackFlagType, 'none'>, FlagVisualConfig> = {
     textAccentClass: 'text-sky-300',
     directiveFallback: 'FASTER CAR APPROACHING · HOLD PREDICTABLE LINE & ALLOW PASS',
   },
+  safety_car: {
+    code: 'FIA-SC',
+    title: 'SAFETY CAR DEPLOYED',
+    badgeText: 'PACK NEUTRALIZED',
+    primaryHex: '#F97316',
+    secondaryHex: '#C2410C',
+    borderClass: 'border-orange-500/95',
+    glowShadow: '0 0 38px rgba(249, 115, 22, 0.5), inset 0 0 20px rgba(249, 115, 22, 0.2)',
+    bgGradient: 'linear-gradient(135deg, rgba(46, 18, 4, 0.96) 0%, rgba(20, 10, 4, 0.97) 60%, rgba(52, 22, 6, 0.95) 100%)',
+    headerBg: 'rgba(249, 115, 22, 0.22)',
+    textAccentClass: 'text-orange-300',
+    directiveFallback: 'FULL COURSE YELLOW · NO OVERTAKING · FORM UP BEHIND SAFETY CAR DELTA',
+  },
+  vsc: {
+    code: 'FIA-VSC',
+    title: 'VIRTUAL SAFETY CAR',
+    badgeText: 'DELTA SPEED ACTIVE',
+    primaryHex: '#F59E0B',
+    secondaryHex: '#D97706',
+    borderClass: 'border-amber-400/90',
+    glowShadow: '0 0 32px rgba(245, 158, 11, 0.42), inset 0 0 16px rgba(245, 158, 11, 0.16)',
+    bgGradient: 'linear-gradient(135deg, rgba(38, 28, 4, 0.95) 0%, rgba(18, 14, 4, 0.96) 65%, rgba(44, 32, 6, 0.94) 100%)',
+    headerBg: 'rgba(245, 158, 11, 0.18)',
+    textAccentClass: 'text-amber-300',
+    directiveFallback: 'MAINTAIN POSITIVE DELTA TIME · NO OVERTAKING · SLOW DOWN TO TARGET SPEED',
+  },
   checkered: {
     code: 'FIA-CHK',
     title: 'CHECKERED FLAG',
@@ -108,6 +134,26 @@ const FLAG_CONFIGS: Record<Exclude<TrackFlagType, 'none'>, FlagVisualConfig> = {
 };
 
 function renderAnimatedFlagMatrix(flag: Exclude<TrackFlagType, 'none'>) {
+  if (flag === 'safety_car' || flag === 'vsc') {
+    return (
+      <div
+        className="relative w-14 h-11 rounded border overflow-hidden shrink-0 flex flex-col items-center justify-center p-1 bg-slate-950 animate-pulse"
+        style={{
+          borderColor: flag === 'safety_car' ? '#F97316' : '#F59E0B',
+          boxShadow: `0 0 18px ${flag === 'safety_car' ? '#F97316' : '#F59E0B'}88`,
+        }}
+      >
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-full bg-amber-400 animate-ping" />
+          <div className="w-3 h-3 rounded-full bg-orange-500 animate-ping" style={{ animationDelay: '250ms' }} />
+        </div>
+        <span className="text-[9px] font-display font-black text-white mt-1">
+          {flag === 'safety_car' ? 'SC' : 'VSC'}
+        </span>
+      </div>
+    );
+  }
+
   if (flag === 'checkered') {
     return (
       <div className="relative w-14 h-11 rounded border border-white/40 overflow-hidden shadow-inner bg-slate-950 shrink-0">
@@ -280,6 +326,28 @@ export const MarshalingFlagOverlay: React.FC<MarshalingFlagOverlayProps> = ({
           driverCode: 'NOR',
         };
       }
+      if (manualOverride === 'safety_car') {
+        return {
+          flag: 'safety_car',
+          reason: 'SAFETY CAR DEPLOYED — FORM UP BEHIND LEADER DELTA',
+          distanceMeters: 145,
+          sector: currentSector,
+          marshalPost: simulatedPost,
+          subDirective: 'FULL COURSE YELLOW · NO OVERTAKING · MAINTAIN SAFE DELTA',
+          driverCode: 'SC',
+        };
+      }
+      if (manualOverride === 'vsc') {
+        return {
+          flag: 'vsc',
+          reason: 'VIRTUAL SAFETY CAR ACTIVE — RESPECT POSITIVE DELTA TIME',
+          distanceMeters: 90,
+          sector: currentSector,
+          marshalPost: simulatedPost,
+          subDirective: 'VSC DELTA ACTIVE · REDUCE SPEED BY 30% · NO OVERTAKING',
+          driverCode: 'VSC',
+        };
+      }
       return {
         flag: 'checkered',
         reason: `LAP ${lap}/${totalLaps} FINISH LINE — CHECKERED FLAG WAVING`,
@@ -319,14 +387,21 @@ export const MarshalingFlagOverlay: React.FC<MarshalingFlagOverlayProps> = ({
 
   return (
     <div className="flex flex-col items-center gap-1.5 pointer-events-auto select-none">
-      {/* Subtle Screen-Edge Emergency Strobe Vignette during Red Flag */}
-      {activeFlag === 'red' && (
+      {/* Dynamic Screen-Edge Emergency Strobe Vignette reflecting hazard severity and proximity */}
+      {(activeFlag === 'red' || activeFlag === 'safety_car' || activeFlag === 'vsc' || activeFlag === 'yellow') && (
         <div
           aria-hidden="true"
           className="fixed inset-0 pointer-events-none z-0 animate-pulse"
           style={{
-            boxShadow: 'inset 0 0 90px rgba(239, 68, 68, 0.34)',
-            animationDuration: '650ms',
+            boxShadow:
+              activeFlag === 'red'
+                ? 'inset 0 0 110px rgba(239, 68, 68, 0.45)'
+                : activeFlag === 'safety_car'
+                  ? 'inset 0 0 100px rgba(249, 115, 22, 0.4)'
+                  : activeFlag === 'vsc'
+                    ? 'inset 0 0 90px rgba(245, 158, 11, 0.35)'
+                    : 'inset 0 0 80px rgba(250, 204, 21, 0.3)',
+            animationDuration: activeFlag === 'red' ? '420ms' : activeFlag === 'safety_car' ? '520ms' : '720ms',
           }}
         />
       )}
@@ -457,12 +532,12 @@ export const MarshalingFlagOverlay: React.FC<MarshalingFlagOverlayProps> = ({
       )}
 
       {/* Compact FIA Marshal Signal Control Strip (Allows instant testing of Yellow / Red / Blue / Checkered or Auto Live Incidents) */}
-      <div className="flex items-center gap-1 bg-slate-950/88 border border-white/15 rounded px-1.5 py-0.5 shadow-lg">
+      <div className="hidden items-center gap-1 bg-slate-950/88 border border-white/15 rounded px-1.5 py-0.5 shadow-lg">
         <button
           type="button"
           onClick={() => setShowControlStrip((prev) => !prev)}
           title="Toggle FIA Marshal Flag Test Controls"
-          className="flex items-center gap-1 text-[8px] font-mono-telemetry font-bold uppercase tracking-wider text-slate-300 hover:text-white cursor-pointer px-1 py-0.5"
+          className="hidden items-center gap-1 text-[8px] font-mono-telemetry font-bold uppercase tracking-wider text-slate-300 hover:text-white cursor-pointer px-1 py-0.5"
         >
           <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
           <span>FIA FLAGS</span>
@@ -483,6 +558,8 @@ export const MarshalingFlagOverlay: React.FC<MarshalingFlagOverlayProps> = ({
               [
                 { id: 'auto', label: 'AUTO', activeClass: 'bg-emerald-500 text-slate-950 border-emerald-300' },
                 { id: 'yellow', label: 'YLW', activeClass: 'bg-yellow-400 text-slate-950 border-yellow-200' },
+                { id: 'safety_car', label: 'SC', activeClass: 'bg-orange-500 text-white border-orange-300' },
+                { id: 'vsc', label: 'VSC', activeClass: 'bg-amber-400 text-slate-950 border-amber-200' },
                 { id: 'red', label: 'RED', activeClass: 'bg-red-500 text-white border-red-300' },
                 { id: 'blue', label: 'BLU', activeClass: 'bg-sky-400 text-slate-950 border-sky-200' },
                 { id: 'checkered', label: 'CHK', activeClass: 'bg-white text-slate-950 border-amber-300' },

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Flag, Fuel, Layers, Play, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Flag, Flame, Fuel, Layers, Play, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import {
   buildDefaultPitStrategy,
   normalizePitStrategyPlan,
@@ -56,6 +56,19 @@ export const PitStrategyModal: React.FC<PitStrategyModalProps> = ({
     optimalWindowStart,
     Math.min(normalized.totalLaps - 1, Math.ceil(normalized.totalLaps * 0.65))
   );
+
+  const weatherPitMeta = useMemo(() => {
+    if (weather === 'heavy_rain' || weather === 'blizzard') {
+      return { label: 'Severe Weather / Wet (+4.2s tyre change penalty)', extraSec: 4.2, color: 'text-sky-400' };
+    }
+    if (weather === 'rain' || weather === 'snow') {
+      return { label: 'Wet Track Transition (+2.5s penalty)', extraSec: 2.5, color: 'text-sky-300' };
+    }
+    if (weather === 'fog' || weather === 'night') {
+      return { label: 'Low Visibility / Night (+1.0s penalty)', extraSec: 1.0, color: 'text-amber-300' };
+    }
+    return { label: 'Optimal Dry Grip (Standard Baseline)', extraSec: 0.0, color: 'text-emerald-300' };
+  }, [weather]);
 
   const updateLaps = (nextLaps: number) => {
     const clamped = Math.max(1, Math.min(30, Math.round(nextLaps)));
@@ -482,6 +495,51 @@ export const PitStrategyModal: React.FC<PitStrategyModalProps> = ({
               <Plus className="w-3.5 h-3.5" />
               <span>Add Pit Stop</span>
             </button>
+          </div>
+
+          {/* Live Estimated Pit Loss Visual Indicator Card */}
+          <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3.5 flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400">
+                  <Flame className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <div className="text-xs font-display font-bold text-white uppercase tracking-wider">
+                    Live Estimated Pit Loss Analysis
+                  </div>
+                  <div className="text-[10px] text-slate-300 font-mono-telemetry">
+                    Weather Condition: <span className={weatherPitMeta.color}>{weather.replace('_', ' ').toUpperCase()}</span> · {weatherPitMeta.label}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-mono-telemetry font-black text-amber-300 tabular-nums">
+                  {projection.estimatedPitTimeTotalSec}s
+                </div>
+                <div className="text-[8px] text-slate-400 uppercase font-mono-telemetry">
+                  Total Time Lost ({normalized.stops.length} Stop{normalized.stops.length === 1 ? '' : 's'})
+                </div>
+              </div>
+            </div>
+
+            {/* Breakdown Visual Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] font-mono-telemetry pt-1 border-t border-amber-400/20">
+              <div className="bg-black/40 rounded p-1.5 flex items-center justify-between">
+                <span className="text-slate-400">Base Transit Loss:</span>
+                <strong className="text-white">{(normalized.stops.length * 20.0).toFixed(1)}s</strong>
+              </div>
+              <div className="bg-black/40 rounded p-1.5 flex items-center justify-between">
+                <span className="text-slate-400">Weather Penalty:</span>
+                <strong className={weatherPitMeta.color}>
+                  +{(normalized.stops.length * weatherPitMeta.extraSec).toFixed(1)}s
+                </strong>
+              </div>
+              <div className="bg-black/40 rounded p-1.5 flex items-center justify-between">
+                <span className="text-slate-400">Race Laps Scaler:</span>
+                <strong className="text-cyan-300">{normalized.totalLaps} Laps</strong>
+              </div>
+            </div>
           </div>
 
           {normalized.stops.length === 0 ? (

@@ -307,6 +307,42 @@
   transform: translate3d(0, 1px, 0) scale(0.97);
 }
 
+[data-hud-theme='sunlight_contrast'] .f1-osd-panel,
+[data-hud-theme='sunlight_contrast'] .hud-themed-card {
+  background-color: rgba(3, 5, 10, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.48) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.94), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+[data-hud-theme='sunlight_contrast'] .f1-cockpit-switch {
+  background: linear-gradient(180deg, rgba(16, 20, 28, 0.98) 0%, rgba(4, 6, 10, 0.99) 100%);
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+[data-hud-theme='night_amber'] .f1-osd-panel,
+[data-hud-theme='night_amber'] .hud-themed-card {
+  background-color: rgba(16, 11, 6, 0.94) !important;
+  border-color: rgba(245, 158, 11, 0.42) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(251, 191, 36, 0.14);
+}
+
+[data-hud-theme='night_amber'] .f1-cockpit-switch {
+  background: linear-gradient(180deg, rgba(28, 19, 10, 0.96) 0%, rgba(14, 9, 5, 0.98) 100%);
+  border-color: rgba(245, 158, 11, 0.36);
+}
+
+[data-hud-theme='telemetry_cyan'] .f1-osd-panel,
+[data-hud-theme='telemetry_cyan'] .hud-themed-card {
+  background-color: rgba(6, 15, 24, 0.94) !important;
+  border-color: rgba(34, 211, 238, 0.46) !important;
+  box-shadow: 0 12px 28px rgba(2, 12, 24, 0.88), inset 0 1px 0 rgba(56, 189, 248, 0.2);
+}
+
+[data-hud-theme='telemetry_cyan'] .f1-cockpit-switch {
+  background: linear-gradient(180deg, rgba(12, 27, 42, 0.96) 0%, rgba(6, 14, 22, 0.98) 100%);
+  border-color: rgba(34, 211, 238, 0.4);
+}
+
 
 @keyframes pit-window-open-pop {
   0% {

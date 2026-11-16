@@ -6,19 +6,43 @@ import {
   GRAPHICS_COLOR_CODE_PROFILES,
 } from '../data/graphicsCodePalette';
 import {
+  applyOnlineAssistCapPreset,
+  evaluateOnlineMatchmakingProfile,
+  ONLINE_SERVER_REGIONS,
+} from '../physics/simulationCalculus';
+import {
   AdaptiveTriggersLevel,
   AmbientOcclusionQuality,
   AntiAliasingMode,
   BrakingAssistLevel,
   CameraMode,
   CarDamageMode,
+  DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
   DifficultyLevel,
   GameSettings,
   GraphicsColorCodeMode,
   GraphicsQuality,
   HapticFeedbackLevel,
   HdrOutputMode,
+  HudColorScheme,
+  HudScaleMode,
+  MobileButtonLayout,
+  MobileButtonScale,
+  MobileButtonSpacing,
+  MobileControlStyle,
   MotionBlurQuality,
+  OnlineAssistCapPreset,
+  OnlineCarPerformanceMode,
+  OnlineCollisionMode,
+  OnlineCornerCuttingMode,
+  OnlineGameplaySettings,
+  OnlineGridOrderMode,
+  OnlineInputMatchmaking,
+  OnlineMatchmakingPriority,
+  OnlineSafetyFilter,
+  OnlineSkillBand,
+  OnlineTransmissionRule,
+  OnlineVoiceChatMode,
   ParticleDensityQuality,
   Ps5GraphicsMode,
   RacerStanding,
@@ -32,8 +56,11 @@ import {
 } from '../types/racing';
 import { formatLapTime } from './RacingHUD';
 
+export type SettingsTab = 'all' | 'online' | 'graphics' | 'assists' | 'camera' | 'dualsense';
+
 interface PauseModalProps {
   mode: 'pause' | 'settings';
+  initialTab?: SettingsTab;
   settings: GameSettings;
   onUpdateSettings: (patch: Partial<GameSettings>) => void;
   onResume: () => void;
@@ -41,19 +68,33 @@ interface PauseModalProps {
   onExitToTitle: () => void;
 }
 
-type SettingsTab = 'all' | 'graphics' | 'assists' | 'camera' | 'dualsense';
-
 export const PauseSettingsModal: React.FC<PauseModalProps> = ({
   mode,
+  initialTab = 'all',
   settings,
   onUpdateSettings,
   onResume,
   onRestart,
   onExitToTitle,
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('all');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [showCodeCsv, setShowCodeCsv] = useState(false);
   const [copiedCodeCsv, setCopiedCodeCsv] = useState(false);
+
+  const onlineSettings: OnlineGameplaySettings = {
+    ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+    ...(settings.onlineGameplay ?? {}),
+  };
+  const matchmakingProfile = evaluateOnlineMatchmakingProfile(onlineSettings);
+
+  const updateOnline = (patch: Partial<OnlineGameplaySettings>) => {
+    onUpdateSettings({
+      onlineGameplay: {
+        ...onlineSettings,
+        ...patch,
+      },
+    });
+  };
 
   const colorCodeMode: GraphicsColorCodeMode = settings.graphicsColorCode ?? 'palette_lut';
   const colorCodeIntensity =
@@ -77,10 +118,86 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
   const cameraShake = settings.cameraShakeScale ?? 100;
   const lookToApex = settings.lookToApex !== false;
 
+  const showOnline = activeTab === 'all' || activeTab === 'online';
   const showGraphics = activeTab === 'all' || activeTab === 'graphics';
   const showAssists = activeTab === 'all' || activeTab === 'assists';
   const showCamera = activeTab === 'all' || activeTab === 'camera';
   const showDualsense = activeTab === 'all' || activeTab === 'dualsense';
+
+  const applyOnlinePreset = (preset: 'ranked' | 'low_ping' | 'casual' | 'esports') => {
+    if (preset === 'ranked') {
+      updateOnline({
+        matchmakingPriority: 'skill_matched',
+        skillBand: 'strict',
+        safetyFilter: 'a_only',
+        maxPingMs: 90,
+        crossPlayEnabled: true,
+        inputMatchmaking: 'any',
+        allowRegionFailover: true,
+        applyOnlineRulesToSession: true,
+        carPerformance: 'equal',
+        cornerCutting: 'strict',
+        collisionMode: 'lap1_ghost',
+        ghostLappedCars: true,
+        gridOrder: 'qualifying',
+        parcFermeLock: true,
+        ...applyOnlineAssistCapPreset('limited_pro'),
+      });
+    } else if (preset === 'low_ping') {
+      updateOnline({
+        matchmakingPriority: 'low_ping',
+        skillBand: 'standard',
+        safetyFilter: 'b_plus',
+        maxPingMs: 65,
+        crossPlayEnabled: true,
+        inputMatchmaking: 'any',
+        serverRegion: 'auto',
+        allowRegionFailover: false,
+        applyOnlineRulesToSession: true,
+        carPerformance: 'equal',
+        cornerCutting: 'regular',
+        collisionMode: 'lap1_ghost',
+        ghostLappedCars: true,
+        ...applyOnlineAssistCapPreset('limited_pro'),
+      });
+    } else if (preset === 'casual') {
+      updateOnline({
+        matchmakingPriority: 'fast_fill',
+        skillBand: 'open',
+        safetyFilter: 'any',
+        maxPingMs: 130,
+        crossPlayEnabled: true,
+        inputMatchmaking: 'any',
+        allowRegionFailover: true,
+        applyOnlineRulesToSession: true,
+        carPerformance: 'equal',
+        cornerCutting: 'relaxed',
+        collisionMode: 'lap1_ghost',
+        ghostLappedCars: true,
+        gridOrder: 'reverse_grid',
+        parcFermeLock: false,
+        ...applyOnlineAssistCapPreset('full_assists'),
+      });
+    } else {
+      updateOnline({
+        matchmakingPriority: 'skill_matched',
+        skillBand: 'strict',
+        safetyFilter: 's_license',
+        maxPingMs: 75,
+        crossPlayEnabled: true,
+        inputMatchmaking: 'any',
+        allowRegionFailover: false,
+        applyOnlineRulesToSession: true,
+        carPerformance: 'equal',
+        cornerCutting: 'strict',
+        collisionMode: 'full',
+        ghostLappedCars: false,
+        gridOrder: 'qualifying',
+        parcFermeLock: true,
+        ...applyOnlineAssistCapPreset('esports_no_assists'),
+      });
+    }
+  };
 
   const applyPs5Preset = (preset: 'ultra_8k_graphics' | 'extreme_graphics' | 'rt_pro' | 'perf_120' | 'sim_pro' | 'broadcast') => {
     if (preset === 'ultra_8k_graphics') {
@@ -206,18 +323,19 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 bg-white/5 p-1 rounded-xl">
             {(
               [
-                ['all', 'All PS5 Settings'],
+                ['all', 'All Settings'],
+                ['online', 'Online Gameplay'],
                 ['graphics', 'Graphics & RT'],
                 ['assists', 'Assists & Sim'],
                 ['camera', 'Camera & FOV'],
-                ['dualsense', 'DualSense & 3D Audio'],
+                ['dualsense', 'DualSense & Mobile'],
               ] as [SettingsTab, string][]
             ).map(([tabId, label]) => (
               <button
                 key={tabId}
                 type="button"
                 onClick={() => setActiveTab(tabId)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${
                   activeTab === tabId
                     ? 'bg-red-600 text-white'
                     : 'text-slate-300 hover:text-white hover:bg-white/5'
@@ -281,6 +399,640 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
 
         {/* Settings Controls */}
         <div className="flex flex-col gap-4">
+          {showOnline && (
+            <div className="flex flex-col gap-3.5 rounded-xl border border-cyan-500/25 bg-white/[0.02] p-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-cyan-400">
+                    Online Gameplay · Matchmaking, Cross-Play, Regions &amp; Rules
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5 tabular-nums">
+                    {matchmakingProfile.regionLabel} ({matchmakingProfile.hubCity}) · Est. {matchmakingProfile.estimatedPingMs} ms · Pool {matchmakingProfile.poolMultiplier.toFixed(2)}x · Queue ~{matchmakingProfile.estimatedQueueSec}s
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyOnlinePreset('ranked')}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 hover:bg-cyan-500/30 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Ranked Balanced
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyOnlinePreset('low_ping')}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/30 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Low-Ping Lock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyOnlinePreset('casual')}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white/5 border border-white/15 text-slate-200 hover:bg-white/10 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Casual Open
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyOnlinePreset('esports')}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-amber-500/20 border border-amber-400/40 text-amber-200 hover:bg-amber-500/30 cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Esports Pure
+                  </button>
+                </div>
+              </div>
+
+              {/* Matchmaking Readiness Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-white/10 bg-black/30 p-2.5 text-xs">
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400">Readiness</span>
+                  <span
+                    className={`font-semibold truncate ${
+                      matchmakingProfile.pingWithinCap ? 'text-emerald-300' : 'text-amber-300'
+                    }`}
+                  >
+                    {matchmakingProfile.readinessLabel}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400">Est. Ping / Cap</span>
+                  <span className="font-mono font-bold text-white tabular-nums">
+                    {matchmakingProfile.estimatedPingMs} ms / {onlineSettings.maxPingMs} ms
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400">Cross-Play Pool</span>
+                  <span className="font-mono font-bold text-cyan-300 tabular-nums">
+                    {matchmakingProfile.poolMultiplier.toFixed(2)}x ({onlineSettings.crossPlayEnabled ? 'All Platforms' : 'Single Platform'})
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-slate-400">Est. Match Wait</span>
+                  <span className="font-mono font-bold text-amber-300 tabular-nums">
+                    ~{matchmakingProfile.estimatedQueueSec} sec
+                  </span>
+                </div>
+              </div>
+
+              {/* Matchmaking Optimization */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Matchmaking Optimization Priority</div>
+                  <div className="text-xs text-slate-400">
+                    Optimize lobby search for lowest latency, closest skill rating, or fast grid fill
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(
+                    [
+                      ['balanced', 'Balanced'],
+                      ['low_ping', 'Low Ping'],
+                      ['skill_matched', 'Skill (SBMM)'],
+                      ['fast_fill', 'Fast Fill'],
+                    ] as [OnlineMatchmakingPriority, string][]
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => updateOnline({ matchmakingPriority: id })}
+                      className={`px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                        onlineSettings.matchmakingPriority === id
+                          ? 'bg-cyan-400 text-slate-950 font-bold'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Skill Band, Safety Filter &amp; Ping Cap</div>
+                  <div className="text-xs text-slate-400 tabular-nums">
+                    Max acceptable latency: {onlineSettings.maxPingMs} ms
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['strict', 'Strict SR'],
+                        ['standard', 'Standard'],
+                        ['open', 'Open'],
+                      ] as [OnlineSkillBand, string][]
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => updateOnline({ skillBand: id })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          onlineSettings.skillBand === id
+                            ? 'bg-sky-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['any', 'Safety: Any'],
+                        ['b_plus', 'B+'],
+                        ['a_only', 'A+'],
+                        ['s_license', 'S-Tier'],
+                      ] as [OnlineSafetyFilter, string][]
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => updateOnline({ safetyFilter: id })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          onlineSettings.safetyFilter === id
+                            ? 'bg-emerald-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-300 tabular-nums">
+                    <span>Cap</span>
+                    <input
+                      type="range"
+                      min="40"
+                      max="180"
+                      step="5"
+                      value={onlineSettings.maxPingMs}
+                      onChange={(e) => updateOnline({ maxPingMs: parseInt(e.target.value, 10) })}
+                      className="w-24 accent-cyan-400 cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Cross-Platform Play & Input Matchmaking */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
+                <div>
+                  <div className="text-sm font-semibold text-white">Cross-Platform Play &amp; Input Matching</div>
+                  <div className="text-xs text-slate-400">
+                    Connect PS5™, Xbox, PC &amp; Mobile lobbies and filter steering peripheral groups
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateOnline({ crossPlayEnabled: !onlineSettings.crossPlayEnabled })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.crossPlayEnabled
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Cross-Play {onlineSettings.crossPlayEnabled ? 'ON' : 'OFF'}
+                  </button>
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['any', 'All Inputs'],
+                        ['controller_only', 'Pad / Touch'],
+                        ['wheel_only', 'Wheel Only'],
+                      ] as [OnlineInputMatchmaking, string][]
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => updateOnline({ inputMatchmaking: id })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          onlineSettings.inputMatchmaking === id
+                            ? 'bg-cyan-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['lobby', 'Lobby Mic'],
+                        ['party_only', 'Party'],
+                        ['muted', 'Muted'],
+                      ] as [OnlineVoiceChatMode, string][]
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => updateOnline({ voiceChat: id })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          onlineSettings.voiceChat === id
+                            ? 'bg-amber-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Server Region Preferences */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Server Region Preference</div>
+                    <div className="text-xs text-slate-400">
+                      Select primary matchmaking datacenter cluster or allow failover if queue times rise
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateOnline({ allowRegionFailover: !onlineSettings.allowRegionFailover })}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.allowRegionFailover
+                        ? 'border-sky-400 bg-sky-500/20 text-sky-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Region Failover {onlineSettings.allowRegionFailover ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {ONLINE_SERVER_REGIONS.map((region) => {
+                    const active = onlineSettings.serverRegion === region.id;
+                    return (
+                      <button
+                        key={region.id}
+                        type="button"
+                        onClick={() => updateOnline({ serverRegion: region.id })}
+                        className={`px-2.5 py-2 rounded-lg border text-left transition-colors cursor-pointer ${
+                          active
+                            ? 'border-cyan-400 bg-cyan-500/20 text-white'
+                            : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 text-xs font-semibold">
+                          <span className="truncate">{region.label}</span>
+                          <span className="font-mono text-[11px] text-cyan-300 tabular-nums shrink-0">
+                            {region.basePingMs}ms
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate mt-0.5">{region.hubCity}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Online Race Rules */}
+              <div className="flex flex-col gap-2.5 pt-2 border-t border-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Online Race Rules &amp; Lobby Enforcement</div>
+                    <div className="text-xs text-slate-400">
+                      Apply car performance equalization, track limits, collision ghosting &amp; grid order to sessions
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateOnline({ applyOnlineRulesToSession: !onlineSettings.applyOnlineRulesToSession })
+                    }
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.applyOnlineRulesToSession
+                        ? 'border-red-400 bg-red-500/20 text-red-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Enforce in Session {onlineSettings.applyOnlineRulesToSession ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Car Performance &amp; Corner Cutting</div>
+                    <div className="text-xs text-slate-400">
+                      Equal 2026 chassis spec vs constructor ratings, plus FIA track-limit strictness
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(
+                        [
+                          ['equal', 'Equal Spec'],
+                          ['realistic', 'Realistic'],
+                        ] as [OnlineCarPerformanceMode, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => updateOnline({ carPerformance: id })}
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.carPerformance === id
+                              ? 'bg-cyan-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(
+                        [
+                          ['relaxed', 'Relaxed'],
+                          ['regular', 'Regular'],
+                          ['strict', 'Strict'],
+                        ] as [OnlineCornerCuttingMode, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => updateOnline({ cornerCutting: id })}
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.cornerCutting === id
+                              ? 'bg-amber-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          Cuts: {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Collisions, Ghosting &amp; Starting Grid</div>
+                    <div className="text-xs text-slate-400">
+                      Turn 1 ghost protection, lapped/incident car ghosting, and starting grid order
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(
+                        [
+                          ['full', 'Full Contact'],
+                          ['lap1_ghost', 'Lap 1 Ghost'],
+                          ['ghost_all', 'All Ghost'],
+                        ] as [OnlineCollisionMode, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => updateOnline({ collisionMode: id })}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.collisionMode === id
+                              ? 'bg-red-500 text-white font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateOnline({ ghostLappedCars: !onlineSettings.ghostLappedCars })}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                        onlineSettings.ghostLappedCars
+                          ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200'
+                          : 'border-white/15 bg-white/5 text-slate-300'
+                      }`}
+                    >
+                      Ghost Spun/Lapped {onlineSettings.ghostLappedCars ? 'ON' : 'OFF'}
+                    </button>
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(
+                        [
+                          ['qualifying', 'Quali Grid'],
+                          ['reverse_grid', 'Reverse'],
+                          ['random', 'Random'],
+                        ] as [OnlineGridOrderMode, string][]
+                      ).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => updateOnline({ gridOrder: id })}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.gridOrder === id
+                              ? 'bg-sky-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateOnline({ parcFermeLock: !onlineSettings.parcFermeLock })}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                        onlineSettings.parcFermeLock
+                          ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                          : 'border-white/15 bg-white/5 text-slate-300'
+                      }`}
+                    >
+                      Parc Fermé {onlineSettings.parcFermeLock ? 'LOCKED' : 'OPEN'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Online Assist Options */}
+              <div className="flex flex-col gap-2.5 pt-2 border-t border-white/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Online Assist Options &amp; Lobby Caps</div>
+                    <div className="text-xs text-slate-400">
+                      Set allowed driving assists for online lobbies and competitive tiers
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['full_assists', 'Full Assists'],
+                        ['limited_pro', 'Pro Limited'],
+                        ['esports_no_assists', 'Esports Pure'],
+                        ['custom', 'Custom'],
+                      ] as [OnlineAssistCapPreset, string][]
+                    ).map(([presetId, label]) => (
+                      <button
+                        key={presetId}
+                        type="button"
+                        onClick={() => {
+                          if (presetId === 'custom') {
+                            updateOnline({ assistCapPreset: 'custom' });
+                          } else {
+                            updateOnline(applyOnlineAssistCapPreset(presetId));
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          onlineSettings.assistCapPreset === presetId
+                            ? 'bg-emerald-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateOnline({
+                        assistCapPreset: 'custom',
+                        allowBrakingAssist: !onlineSettings.allowBrakingAssist,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.allowBrakingAssist
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Braking Assist: {onlineSettings.allowBrakingAssist ? 'Allowed' : 'Banned'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateOnline({
+                        assistCapPreset: 'custom',
+                        allowSteeringAssist: !onlineSettings.allowSteeringAssist,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.allowSteeringAssist
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Steering Assist: {onlineSettings.allowSteeringAssist ? 'Allowed' : 'Banned'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateOnline({
+                        assistCapPreset: 'custom',
+                        allowAbsAssist: !onlineSettings.allowAbsAssist,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.allowAbsAssist
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    ABS: {onlineSettings.allowAbsAssist ? 'Allowed' : 'Banned'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateOnline({
+                        assistCapPreset: 'custom',
+                        allowPitErsAssist: !onlineSettings.allowPitErsAssist,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      onlineSettings.allowPitErsAssist
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Pit / ERS / DRS Assist: {onlineSettings.allowPitErsAssist ? 'Allowed' : 'Manual'}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400">Max TC:</span>
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(['off', 'medium', 'full'] as TractionControlMode[]).map((tc) => (
+                        <button
+                          key={tc}
+                          type="button"
+                          onClick={() =>
+                            updateOnline({ assistCapPreset: 'custom', maxTractionControl: tc })
+                          }
+                          className={`px-2 py-1 rounded-md text-xs font-semibold uppercase cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.maxTractionControl === tc
+                              ? 'bg-emerald-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {tc}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400">Racing Line:</span>
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(
+                        [
+                          ['off', 'Off'],
+                          ['corners', 'Corners'],
+                          ['full', 'Full'],
+                        ] as [RacingLineMode, string][]
+                      ).map(([rl, label]) => (
+                        <button
+                          key={rl}
+                          type="button"
+                          onClick={() => updateOnline({ assistCapPreset: 'custom', maxRacingLine: rl })}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.maxRacingLine === rl
+                              ? 'bg-cyan-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-400">Gearbox:</span>
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                      {(
+                        [
+                          ['any', 'Any'],
+                          ['manual_only', 'Manual Only'],
+                        ] as [OnlineTransmissionRule, string][]
+                      ).map(([rule, label]) => (
+                        <button
+                          key={rule}
+                          type="button"
+                          onClick={() =>
+                            updateOnline({ assistCapPreset: 'custom', transmissionRule: rule })
+                          }
+                          className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            onlineSettings.transmissionRule === rule
+                              ? 'bg-amber-400 text-slate-950 font-bold'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showGraphics && (
             <div className="flex flex-col gap-3.5 rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
               <div className="flex items-center justify-between">
@@ -1278,6 +2030,64 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* Adaptive HUD Scale & Lighting Color Schemes */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
+                <div>
+                  <div className="text-sm font-semibold text-white">Adaptive HUD Scale & Lighting Theme</div>
+                  <div className="text-xs text-slate-400">
+                    Viewport-aware scaling & high-contrast themes for daylight, night, or wet tracks
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['auto', 'Auto'],
+                        ['compact', 'Compact'],
+                        ['standard', 'Standard'],
+                        ['large', 'Large'],
+                      ] as [HudScaleMode, string][]
+                    ).map(([sc, label]) => (
+                      <button
+                        key={sc}
+                        type="button"
+                        onClick={() => onUpdateSettings({ hudScaleMode: sc })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer ${
+                          (settings.hudScaleMode ?? 'auto') === sc
+                            ? 'bg-amber-400 text-slate-950'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['motorsport_dark', 'Dark'],
+                        ['sunlight_contrast', 'Sun'],
+                        ['night_amber', 'Night'],
+                        ['telemetry_cyan', 'Cyan'],
+                      ] as [HudColorScheme, string][]
+                    ).map(([cs, label]) => (
+                      <button
+                        key={cs}
+                        type="button"
+                        onClick={() => onUpdateSettings({ hudColorScheme: cs })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer ${
+                          (settings.hudColorScheme ?? 'motorsport_dark') === cs
+                            ? 'bg-cyan-400 text-slate-950'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1376,6 +2186,251 @@ export const PauseSettingsModal: React.FC<PauseModalProps> = ({
                 >
                   {settings.touchControls ? 'Enabled' : 'Disabled'}
                 </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Mobile Play Style</div>
+                  <div className="text-xs text-slate-400">
+                    Responsive virtual joystick, analog slider, tap paddles, or gyro tilt
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(
+                    [
+                      ['virtual_joystick', 'Virtual Stick'],
+                      ['thumb_slider', 'Analog Slider'],
+                      ['dual_pedals', 'Tap Buttons'],
+                      ['tilt_gyro', 'Gyro Tilt'],
+                    ] as [MobileControlStyle, string][]
+                  ).map(([styleId, label]) => {
+                    const active = (settings.mobileControlStyle ?? 'virtual_joystick') === styleId;
+                    return (
+                      <button
+                        key={styleId}
+                        type="button"
+                        onClick={() => onUpdateSettings({ mobileControlStyle: styleId, touchControls: true })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          active ? 'bg-amber-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Mobile Button Layout</div>
+                  <div className="text-xs text-slate-400">
+                    Customize left/right ergonomics, compact stack, or pro gesture deck
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg">
+                  {(
+                    [
+                      ['standard', 'Standard L/R'],
+                      ['left_handed', 'Left-Handed'],
+                      ['compact_thumb', 'Compact Thumb'],
+                      ['split_pro', 'Pro Gestures'],
+                    ] as [MobileButtonLayout, string][]
+                  ).map(([layoutId, label]) => {
+                    const active = (settings.mobileButtonLayout ?? 'standard') === layoutId;
+                    return (
+                      <button
+                        key={layoutId}
+                        type="button"
+                        onClick={() => onUpdateSettings({ mobileButtonLayout: layoutId, touchControls: true })}
+                        className={`px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          active ? 'bg-sky-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Touch Button Scale & Swipe Gestures</div>
+                  <div className="text-xs text-slate-400">
+                    Swipe up/down for gear shifts & X/Z-Mode aero, horizontal drag to steer
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['compact', 'Compact'],
+                        ['normal', 'Normal'],
+                        ['large', 'Large'],
+                      ] as [MobileButtonScale, string][]
+                    ).map(([scaleId, label]) => {
+                      const active = (settings.mobileButtonScale ?? 'normal') === scaleId;
+                      return (
+                        <button
+                          key={scaleId}
+                          type="button"
+                          onClick={() => onUpdateSettings({ mobileButtonScale: scaleId, touchControls: true })}
+                          className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                            active ? 'bg-emerald-400 text-slate-950 font-bold' : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({ mobileSwipeGestures: !(settings.mobileSwipeGestures ?? true) })
+                    }
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      (settings.mobileSwipeGestures ?? true)
+                        ? 'border-cyan-400 bg-cyan-500/20 text-cyan-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Swipes {(settings.mobileSwipeGestures ?? true) ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-white">Button Spacing & Swipe / Gyro Precision</div>
+                  <div className="text-xs text-slate-400 tabular-nums">
+                    Swipe: {(settings.mobileSwipeSensitivity ?? 1.0).toFixed(2)}x · Gyro: {(settings.mobileGyroSensitivity ?? 1.0).toFixed(2)}x
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg">
+                    {(
+                      [
+                        ['compact', 'Tight'],
+                        ['normal', 'Normal'],
+                        ['wide', 'Wide'],
+                      ] as [MobileButtonSpacing, string][]
+                    ).map(([spId, label]) => (
+                      <button
+                        key={spId}
+                        type="button"
+                        onClick={() => onUpdateSettings({ mobileButtonSpacing: spId, touchControls: true })}
+                        className={`px-2 py-1 rounded-md text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
+                          (settings.mobileButtonSpacing ?? 'normal') === spId
+                            ? 'bg-sky-400 text-slate-950 font-bold'
+                            : 'text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                    <span>Swipe</span>
+                    <input
+                      type="range"
+                      min="0.6"
+                      max="1.6"
+                      step="0.05"
+                      value={settings.mobileSwipeSensitivity ?? 1.0}
+                      onChange={(e) => onUpdateSettings({ mobileSwipeSensitivity: parseFloat(e.target.value), touchControls: true })}
+                      className="w-20 accent-cyan-400 cursor-pointer"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                    <span>Gyro</span>
+                    <input
+                      type="range"
+                      min="0.6"
+                      max="1.6"
+                      step="0.05"
+                      value={settings.mobileGyroSensitivity ?? 1.0}
+                      onChange={(e) => onUpdateSettings({ mobileGyroSensitivity: parseFloat(e.target.value), touchControls: true })}
+                      className="w-20 accent-sky-400 cursor-pointer"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-white/10">
+                <div>
+                  <div className="text-sm font-semibold text-white">F1 Mobile Stick & Pedal Ergonomics</div>
+                  <div className="text-xs text-slate-400">
+                    Dynamic thumb-origin stick, swap Gas/Brake order, quick ERS boost & sequential gear strip
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        mobileFloatingJoystick: !(settings.mobileFloatingJoystick ?? true),
+                        touchControls: true,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      (settings.mobileFloatingJoystick ?? true)
+                        ? 'border-amber-400 bg-amber-500/20 text-amber-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Floating Stick {(settings.mobileFloatingJoystick ?? true) ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        mobileSwapPedals: !(settings.mobileSwapPedals ?? false),
+                        touchControls: true,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      settings.mobileSwapPedals
+                        ? 'border-sky-400 bg-sky-500/20 text-sky-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Swap Pedals {settings.mobileSwapPedals ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        mobileShowGearStrip: !(settings.mobileShowGearStrip ?? true),
+                        touchControls: true,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      (settings.mobileShowGearStrip ?? true)
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    Swipe Shifter {(settings.mobileShowGearStrip ?? true) ? 'ON' : 'OFF'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdateSettings({
+                        mobileShowErsButton: !(settings.mobileShowErsButton ?? true),
+                        touchControls: true,
+                      })
+                    }
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${
+                      (settings.mobileShowErsButton ?? true)
+                        ? 'border-fuchsia-400 bg-fuchsia-500/20 text-fuchsia-200'
+                        : 'border-white/15 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    ERS Button {(settings.mobileShowErsButton ?? true) ? 'ON' : 'OFF'}
+                  </button>
+                </div>
               </div>
             </div>
           )}

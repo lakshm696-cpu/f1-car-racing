@@ -16,6 +16,8 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import {
+  F1_2026_DEV_FOCUSES,
+  F1_2026_SPONSORS,
   FORMULA_DRIVERS,
   FORMULA_TEAMS,
   PAINT_SWATCHES,
@@ -25,9 +27,11 @@ import {
 } from '../data/racingData';
 import { GRAPHICS_CODE_ENTRIES } from '../data/graphicsCodePalette';
 import {
+  CareerProgress,
   CarUpgrades,
   FormulaTeam,
   GarageCameraPreset,
+  PowerUnitWear,
   TyreCompound,
   WheelFinish,
 } from '../types/racing';
@@ -40,12 +44,17 @@ interface GarageOverlayProps {
   selectedCompound: TyreCompound;
   upgrades: CarUpgrades;
   credits: number;
+  career?: CareerProgress;
   onSelectTeam: (team: FormulaTeam) => void;
   onSelectPaint: (hex: string) => void;
   onSelectNumber: (num: string) => void;
   onSelectWheel: (wheel: WheelFinish) => void;
   onSelectCompound: (compound: TyreCompound) => void;
   onPurchaseUpgrade: (key: keyof CarUpgrades, level: number, cost: number) => void;
+  onUpdateCareerTeam?: (patch: Partial<CareerProgress>) => void;
+  onOverhaulPuComponent?: (component: keyof PowerUnitWear, costCr: number) => void;
+  onEarnResourcePoints?: (delta: number) => void;
+  onInvestEngineering?: (rpCost: number, staffGain: number, costCapM: number) => void;
   onCameraPreset: (preset: GarageCameraPreset) => void;
   onZoom: (delta: number) => void;
   onToggleLights: () => boolean;
@@ -73,12 +82,17 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
   selectedCompound,
   upgrades,
   credits,
+  career,
   onSelectTeam,
   onSelectPaint,
   onSelectNumber,
   onSelectWheel,
   onSelectCompound,
   onPurchaseUpgrade,
+  onUpdateCareerTeam,
+  onOverhaulPuComponent,
+  onEarnResourcePoints,
+  onInvestEngineering,
   onCameraPreset,
   onZoom,
   onToggleLights,
@@ -88,12 +102,46 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<DockTab>('constructor');
   const [practiceTab, setPracticeTab] = useState<PracticeSubTab>('strategy');
-  const [resourcePoints, setResourcePoints] = useState<number>(296);
-  const [workforceCount, setWorkforceCount] = useState<number>(135);
+  const [localRp, setLocalRp] = useState<number>(296);
+  const [localWorkforce, setLocalWorkforce] = useState<number>(135);
   const [collapsed, setCollapsed] = useState(false);
   const [showSpecs, setShowSpecs] = useState(false);
   const [lightsOn, setLightsOn] = useState(true);
   const [activePreset, setActivePreset] = useState<GarageCameraPreset>('overview');
+
+  const resourcePoints = career?.resourcePoints ?? localRp;
+  const workforceCount = career?.workforceCount ?? localWorkforce;
+  const devFocus = career?.developmentFocus ?? 'balanced';
+  const staffAlloc = career?.staffAllocation ?? { aero: 45, powertrain: 45, strategy: 45 };
+  const sponsorId = career?.sponsorId ?? F1_2026_SPONSORS[0].id;
+  const costCapSpentM = career?.costCapSpentM ?? 42.5;
+  const costCapLimitM = career?.costCapLimitM ?? 135;
+  const seasonRound = career?.seasonRound ?? 1;
+  const puWear = career?.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 };
+
+  const adjustStaffDept = (dept: 'aero' | 'powertrain' | 'strategy', delta: number) => {
+    const current = staffAlloc[dept];
+    const totalAllocated = staffAlloc.aero + staffAlloc.powertrain + staffAlloc.strategy;
+    const pool = Math.max(workforceCount, totalAllocated);
+    const remaining = pool - totalAllocated;
+    if (delta > 0 && remaining <= 0) return;
+    const nextVal = Math.max(15, current + delta);
+    if (nextVal === current) return;
+    onUpdateCareerTeam?.({
+      staffAllocation: {
+        ...staffAlloc,
+        [dept]: nextVal,
+      },
+    });
+  };
+
+  const handleEarnRp = (delta: number) => {
+    if (onEarnResourcePoints) {
+      onEarnResourcePoints(delta);
+    } else {
+      setLocalRp((p) => Math.min(862, p + delta));
+    }
+  };
 
   const topSpeed = Math.min(100, selectedTeam.baseTopSpeed + (upgrades.engineLevel - 1) * 3);
   const accel = Math.min(100, selectedTeam.baseAcceleration + (upgrades.engineLevel - 1) * 3);
@@ -240,7 +288,7 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
             </div>
             <div className="flex justify-between text-slate-300">
               <span>Powertrain</span>
-              <span className="font-semibold text-white">1.6L V6 Hybrid + ERS</span>
+              <span className="font-semibold text-white">1.6L V6 + 350kW MGU-K (50/50)</span>
             </div>
             <div className="flex justify-between text-slate-300">
               <span>Gearbox</span>
@@ -248,11 +296,11 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
             </div>
             <div className="flex justify-between text-slate-300">
               <span>Dry Weight</span>
-              <span className="font-semibold text-white">798 kg (FIA Spec)</span>
+              <span className="font-semibold text-white">768 kg (FIA 2026 Spec)</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span>Brake System</span>
-              <span className="font-semibold text-white">Carbon-Ceramic 328mm</span>
+              <span>Active Aero</span>
+              <span className="font-semibold text-cyan-300">X-Mode / Z-Mode Wing</span>
             </div>
           </div>
         </div>
@@ -283,7 +331,7 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
                     { id: 'constructor', label: `Constructors (${FORMULA_TEAMS.length})` },
                     { id: 'livery', label: 'Livery, Wheels & #' },
                     { id: 'upgrades', label: '5-Part Upgrades' },
-                    { id: 'engineering', label: 'F1® 25 Engineering Phase 2' },
+                    { id: 'engineering', label: '2026 Team Mgmt & R&D' },
                     { id: 'practice', label: 'Practice Programmes' },
                   ] as const
                 ).map((tab) => (
@@ -551,161 +599,222 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
               </div>
             )}
 
-            {/* TAB 4: F1 25 ENGINEERING PHASE 2 HUB (from Screenshot 11) */}
+            {/* TAB 4: F1 2026 TEAM MANAGEMENT, COST CAP, PU WEAR & R&D LAB */}
             {activeTab === 'engineering' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                {/* Left Column: Engineering Phase 2 Badge + 5 Department Actions */}
-                <div className="lg:col-span-4 rounded-xl border border-red-500/35 bg-black/50 p-3 flex flex-col justify-between gap-2.5">
+                {/* Left Column: 2026 Cost Cap, Dev Focus & Sponsor Contracts */}
+                <div className="lg:col-span-5 rounded-xl border border-red-500/35 bg-black/55 p-3 flex flex-col justify-between gap-2.5">
                   <div className="flex items-center justify-between border-b border-white/10 pb-2">
                     <div>
                       <div className="text-[10px] font-semibold text-red-400 uppercase tracking-wider">
-                        ENGINEERING FACILITY
+                        F1® 2026 TEAM HQ · ROUND {seasonRound}/24
                       </div>
-                      <div className="font-display font-black text-base text-white">
-                        PHASE 2 · WORKFORCE {workforceCount}/347
+                      <div className="font-display font-black text-sm text-white">
+                        COST CAP &amp; WORKFORCE ({workforceCount}/347 STAFF)
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-red-600 text-white font-mono-telemetry font-bold text-[10px]">
-                      ACTIVE
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-mono-telemetry font-bold text-[10px] tabular-nums">
+                      ${costCapSpentM.toFixed(1)}M / ${costCapLimitM}M
                     </span>
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    {[
-                      {
-                        title: 'RESEARCH',
-                        sub: 'Discover next-gen 2026 aerodynamic & hybrid concepts',
-                        pts: 60,
-                      },
-                      {
-                        title: 'DEVELOPMENT',
-                        sub: 'Manufacture discovered parts in the wind tunnel',
-                        pts: 85,
-                      },
-                      {
-                        title: 'ASSIGN UPGRADES',
-                        sub: 'Fit manufactured upgrades to Car #1 & Car #2',
-                        pts: 40,
-                      },
-                      {
-                        title: 'COMPONENT MANAGEMENT',
-                        sub: 'Inspect ICE, MGU-K, Turbocharger & Gearbox wear',
-                        pts: 0,
-                      },
-                      {
-                        title: 'FACILITY IMPROVEMENTS',
-                        sub: 'Expand Engineering Workforce towards Phase 3 (347 staff)',
-                        pts: 100,
-                      },
-                    ].map((dept) => (
-                      <button
-                        key={dept.title}
-                        type="button"
-                        onClick={() => {
-                          if (dept.pts > 0 && resourcePoints >= dept.pts) {
-                            setResourcePoints((p) => p - dept.pts);
-                            setWorkforceCount((w) => Math.min(347, w + 12));
-                          } else {
-                            setResourcePoints((p) => p + 90);
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-white/12 bg-white/[0.03] hover:border-red-500/60 hover:bg-red-600/15 text-left flex items-center justify-between transition-colors cursor-pointer"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-display font-bold text-xs text-white tracking-wide">
-                            {dept.title}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate">{dept.sub}</div>
-                        </div>
-                        <span className="font-mono-telemetry text-[10px] font-bold text-cyan-300 shrink-0 ml-2">
-                          {dept.pts > 0 ? `${dept.pts} RP` : 'INSPECT'}
-                        </span>
-                      </button>
-                    ))}
+                  {/* Cost Cap Bar */}
+                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        costCapSpentM / costCapLimitM > 0.85 ? 'bg-amber-400' : 'bg-emerald-400'
+                      }`}
+                      style={{ width: `${Math.min(100, (costCapSpentM / costCapLimitM) * 100)}%` }}
+                    />
+                  </div>
+
+                  {/* 2026 Development Focus Selector */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      2026 R&amp;D Aero &amp; Powertrain Focus
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {F1_2026_DEV_FOCUSES.map((focus) => {
+                        const active = devFocus === focus.id;
+                        return (
+                          <button
+                            key={focus.id}
+                            type="button"
+                            onClick={() => onUpdateCareerTeam?.({ developmentFocus: focus.id })}
+                            className={`px-2.5 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                              active
+                                ? 'border-cyan-400 bg-cyan-500/15 text-white'
+                                : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25'
+                            }`}
+                          >
+                            <div className="font-display font-bold text-[11px] truncate">{focus.label}</div>
+                            <div className="text-[9px] text-cyan-300/90 truncate">{focus.effectText}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Title Sponsor Contract */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Title Sponsor Contract (Per-Race Incentive)
+                    </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {F1_2026_SPONSORS.map((sp) => {
+                        const active = sponsorId === sp.id;
+                        return (
+                          <button
+                            key={sp.id}
+                            type="button"
+                            onClick={() => onUpdateCareerTeam?.({ sponsorId: sp.id })}
+                            className={`p-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                              active
+                                ? 'border-amber-400 bg-amber-500/15 text-white'
+                                : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/25'
+                            }`}
+                          >
+                            <div className="font-display font-bold text-[10px] truncate">{sp.name}</div>
+                            <div className="text-[9px] text-amber-300 font-mono-telemetry tabular-nums">
+                              +{sp.raceBaseBonusCr} (+{sp.objectiveBonusCr})
+                            </div>
+                            <div className="text-[8px] text-slate-400 truncate">{sp.objectiveLabel}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                {/* Right Column: Cleanroom Facility Overview & R&D Department Progress */}
-                <div className="lg:col-span-8 rounded-xl border border-white/12 bg-gradient-to-br from-slate-900/90 to-black/80 p-3.5 flex flex-col justify-between gap-3">
+                {/* Right Column: Staff Department Allocation, PU Wear Inspection & Facility Hire */}
+                <div className="lg:col-span-7 rounded-xl border border-white/12 bg-gradient-to-br from-slate-900/90 to-black/80 p-3 flex flex-col justify-between gap-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <div className="text-xs font-display font-bold text-white uppercase tracking-wider">
-                        {selectedTeam.name} R&amp;D Cleanroom &amp; Dyno Status
+                        {selectedTeam.name} Department Allocation &amp; 2026 Power Unit Pool
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        Simultaneous upgrades unlocked via Driver Recognition · Wind Tunnel Calibration: Optimal
+                        Unassigned Pool:{' '}
+                        <span className="text-white font-mono-telemetry font-bold">
+                          {Math.max(0, workforceCount - (staffAlloc.aero + staffAlloc.powertrain + staffAlloc.strategy))} staff
+                        </span>{' '}
+                        · Higher Strategy staffing cuts Pit Stop transit times
                       </div>
                     </div>
-                    <div className="px-3 py-1 rounded-lg bg-cyan-500/15 border border-cyan-400/40 text-xs font-mono-telemetry font-bold text-cyan-300">
-                      Available RP: {resourcePoints} / 862
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={resourcePoints < 80 || costCapSpentM + 2.5 > costCapLimitM || workforceCount >= 347}
+                        onClick={() => {
+                          if (onInvestEngineering) {
+                            onInvestEngineering(80, 15, 2.5);
+                          } else {
+                            setLocalRp((p) => Math.max(0, p - 80));
+                            setLocalWorkforce((w) => Math.min(347, w + 15));
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-mono-telemetry font-bold border transition-colors whitespace-nowrap ${
+                          resourcePoints >= 80 && costCapSpentM + 2.5 <= costCapLimitM && workforceCount < 347
+                            ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-200 hover:bg-cyan-500/30 cursor-pointer'
+                            : 'border-white/10 bg-white/5 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        Hire +15 Staff (80 RP · $2.5M)
+                      </button>
+                      <div className="px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-400/40 text-[11px] font-mono-telemetry font-bold text-cyan-300 tabular-nums">
+                        {resourcePoints} RP
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {[
-                      {
-                        dept: 'Aerodynamics',
-                        lvl: upgrades.aeroLevel,
-                        key: 'aeroLevel' as const,
-                        stat: `${downforce} PTS`,
-                        color: '#38BDF8',
-                      },
-                      {
-                        dept: 'Powertrain',
-                        lvl: upgrades.engineLevel,
-                        key: 'engineLevel' as const,
-                        stat: `${topSpeed} PTS`,
-                        color: '#EF4444',
-                      },
-                      {
-                        dept: 'Chassis & Weight',
-                        lvl: upgrades.suspensionLevel,
-                        key: 'suspensionLevel' as const,
-                        stat: `${grip} PTS`,
-                        color: '#A855F7',
-                      },
-                      {
-                        dept: 'Durability & Brakes',
-                        lvl: upgrades.brakeLevel,
-                        key: 'brakeLevel' as const,
-                        stat: `${braking} PTS`,
-                        color: '#10B981',
-                      },
-                    ].map((d) => (
-                      <div
-                        key={d.dept}
-                        className="rounded-xl border border-white/10 bg-black/45 p-2.5 flex flex-col gap-1.5"
-                      >
+                  {/* Department Staff Steppers */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'aero', label: 'Active Aero Ops', hint: '+Corner Downforce', color: '#38BDF8', count: staffAlloc.aero },
+                        { id: 'powertrain', label: '350kW MGU-K', hint: '+Top End & Harvest', color: '#EF4444', count: staffAlloc.powertrain },
+                        { id: 'strategy', label: 'Pit & Tyre Crew', hint: 'Faster Pit Stops', color: '#10B981', count: staffAlloc.strategy },
+                      ] as const
+                    ).map((dept) => (
+                      <div key={dept.id} className="rounded-xl border border-white/10 bg-black/45 p-2 flex flex-col gap-1">
                         <div className="flex items-center justify-between text-[11px] font-bold text-white">
-                          <span>{d.dept}</span>
-                          <span className="font-mono-telemetry text-xs" style={{ color: d.color }}>
-                            {d.stat}
+                          <span className="truncate">{dept.label}</span>
+                          <span className="font-mono-telemetry tabular-nums" style={{ color: dept.color }}>
+                            {dept.count}
                           </span>
                         </div>
-                        <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${35 + d.lvl * 21}%`, backgroundColor: d.color }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 mt-0.5">
-                          <span>Stage {d.lvl}/3</span>
-                          <span className="text-emerald-400 font-semibold">Secret Spec Ready</span>
+                        <div className="text-[9px] text-slate-400">{dept.hint}</div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => adjustStaffDept(dept.id, -5)}
+                            className="flex-1 py-0.5 rounded bg-white/8 hover:bg-white/15 text-[10px] font-mono-telemetry font-bold text-slate-200 cursor-pointer"
+                          >
+                            -5
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => adjustStaffDept(dept.id, 5)}
+                            className="flex-1 py-0.5 rounded bg-white/8 hover:bg-white/15 text-[10px] font-mono-telemetry font-bold text-slate-200 cursor-pointer"
+                          >
+                            +5
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
+                  {/* 2026 Power Unit Component Wear & Overhaul */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {(
+                      [
+                        { key: 'ice', label: 'V6 ICE (50%)', pct: puWear.ice, cost: 900 },
+                        { key: 'mguk', label: '350kW MGU-K', pct: puWear.mguk, cost: 850 },
+                        { key: 'battery', label: 'Energy Store', pct: puWear.battery, cost: 750 },
+                        { key: 'gearbox', label: '8-Spd Gearbox', pct: puWear.gearbox, cost: 800 },
+                      ] as const
+                    ).map((part) => {
+                      const needsOverhaul = part.pct < 98;
+                      const canOverhaul = needsOverhaul && credits >= part.cost && costCapSpentM + 1.8 <= costCapLimitM;
+                      const healthColor = part.pct > 75 ? '#10B981' : part.pct > 55 ? '#F59E0B' : '#EF4444';
+                      return (
+                        <div key={part.key} className="rounded-xl border border-white/10 bg-black/50 p-2 flex flex-col justify-between gap-1.5">
+                          <div className="flex items-center justify-between text-[10px] font-bold text-white">
+                            <span className="truncate">{part.label}</span>
+                            <span className="font-mono-telemetry tabular-nums" style={{ color: healthColor }}>
+                              {part.pct}%
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${part.pct}%`, backgroundColor: healthColor }} />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!canOverhaul}
+                            onClick={() => onOverhaulPuComponent?.(part.key, part.cost)}
+                            className={`w-full py-1 rounded text-[9px] font-mono-telemetry font-bold transition-colors ${
+                              canOverhaul
+                                ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 cursor-pointer'
+                                : 'bg-white/8 text-slate-500 cursor-not-allowed'
+                            }`}
+                          >
+                            {needsOverhaul ? `Overhaul · ${part.cost} CR` : '100% FRESH'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-300">
                     <span>
-                      Facility Perk: <strong className="text-white">-15% R&amp;D Failure Rate</strong> · Simultaneous Dept Upgrades: <strong className="text-emerald-400">5 Active</strong>
+                      Reg Spec: <strong className="text-white">50/50 Hybrid · Active Aero · 768kg Chassis</strong>
                     </span>
                     <button
                       type="button"
                       onClick={() => setActiveTab('practice')}
                       className="text-cyan-300 hover:text-white font-semibold cursor-pointer"
                     >
-                      Earn Resource Points in Practice Programmes →
+                      Earn Resource Points in Practice →
                     </button>
                   </div>
                 </div>
@@ -752,7 +861,7 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
                     <div className="grid grid-cols-2 gap-2.5">
                       <button
                         type="button"
-                        onClick={() => setResourcePoints((p) => Math.min(862, p + 172))}
+                        onClick={() => handleEarnRp(172)}
                         className="rounded-xl border border-white/15 bg-white/[0.03] hover:border-emerald-400/60 p-3 flex flex-col items-center gap-1 cursor-pointer transition-colors"
                       >
                         <div className="w-8 h-8 rounded-lg border border-white/30 flex items-center justify-center font-mono-telemetry font-bold text-white">
@@ -765,7 +874,7 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setResourcePoints((p) => Math.min(862, p + 115))}
+                        onClick={() => handleEarnRp(115)}
                         className="rounded-xl border border-white/15 bg-white/[0.03] hover:border-fuchsia-400/60 p-3 flex flex-col items-center gap-1 cursor-pointer transition-colors"
                       >
                         <div className="w-8 h-8 rounded-lg border border-white/30 flex items-center justify-center font-mono-telemetry font-bold text-white">
@@ -778,7 +887,7 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
                     </div>
                   </div>
 
-                  {/* Development Catalysts (Aero Drag · Battery · Weight Reduction) */}
+                  {/* Development Catalysts (Aero Drag · 350kW MGU-K · Weight Reduction) */}
                   <div className="lg:col-span-7 rounded-xl border border-red-500/35 bg-black/45 p-3 flex flex-col gap-2">
                     <div className="text-[11px] font-display font-bold uppercase tracking-wider text-slate-200 text-center border-b border-white/10 pb-1.5">
                       DEVELOPMENT CATALYSTS (CATALIZZATORI DI SVILUPPO)
@@ -787,20 +896,20 @@ export const GarageOverlay: React.FC<GarageOverlayProps> = ({
                       <div className="rounded-xl border border-sky-400/30 bg-sky-500/10 p-2.5 flex flex-col items-center text-center gap-1">
                         <Wind className="w-7 h-7 text-sky-400" />
                         <div className="font-display font-bold text-xs text-white uppercase">
-                          AERO DRAG
+                          ACTIVE X-MODE
                         </div>
                         <div className="text-[10px] text-slate-300 leading-tight">
-                          Activate DRS in all zones during practice laps
+                          Deploy low-drag X-Mode in all straight zones during practice laps
                         </div>
                       </div>
 
                       <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-2.5 flex flex-col items-center text-center gap-1">
                         <BatteryCharging className="w-7 h-7 text-amber-400" />
                         <div className="font-display font-bold text-xs text-white uppercase">
-                          BATTERY ERS
+                          350KW MGU-K
                         </div>
                         <div className="text-[10px] text-slate-300 leading-tight">
-                          Complete a full sector without lockups or off-tracks
+                          Trigger Manual Override Mode cleanly without lockups
                         </div>
                       </div>
 

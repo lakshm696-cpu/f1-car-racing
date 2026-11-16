@@ -1,13 +1,41 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Radio, Volume2, X } from 'lucide-react';
+import { AlertTriangle, CloudRain, Flag, Radio, Wrench, X } from 'lucide-react';
 import { RacingAudio } from '../audio/RacingAudio';
-import { HudTelemetry } from '../types/racing';
+import { ErsDeploymentMode, HudColorScheme, HudTelemetry, TyreCompound } from '../types/racing';
+
+type EngineerCueType =
+  | 'pit_window'
+  | 'crossover'
+  | 'track_limits'
+  | 'tyre_cliff'
+  | 'fuel_low'
+  | 'ers_full'
+  | 'aero_x'
+  | 'aero_z';
 
 interface EngineerRadioProps {
   hud: HudTelemetry;
   audio?: RacingAudio;
   driverName?: string;
   teamName?: string;
+  active?: boolean;
+  hudColorScheme?: HudColorScheme;
+  onRequestPitBox?: (compound: TyreCompound) => void;
+  onSetErsMode?: (mode: ErsDeploymentMode) => void;
+  onAdjustBrakeBias?: (deltaPct: number) => void;
+}
+
+type PromptActionType = 'pit_box' | 'crossover' | 'track_limits' | 'ers_mode';
+
+interface RadioActionButton {
+  label: string;
+  hotkey?: string;
+  variant: 'primary' | 'amber' | 'sky' | 'neutral';
+  action:
+    | { type: 'pit'; compound: TyreCompound }
+    | { type: 'ers'; mode: ErsDeploymentMode }
+    | { type: 'bias'; delta: number }
+    | { type: 'ack' };
 }
 
 interface RadioMessage {
@@ -15,22 +43,37 @@ interface RadioMessage {
   sender: string;
   text: string;
   timestamp: string;
-  category: 'strategy' | 'gap' | 'tyres' | 'weather' | 'fuel' | 'ers' | 'general';
+  category: 'strategy' | 'gap' | 'tyres' | 'weather' | 'fuel' | 'ers' | 'limits' | 'general';
+  promptType?: PromptActionType;
+  suggestedCompound?: TyreCompound | null;
+  actions?: RadioActionButton[];
 }
 
 export function EngineerRadio({
   hud,
   audio,
   driverName = 'Driver',
-  teamName = 'Scuderia',
+  teamName: _teamName = 'Scuderia',
+  active = true,
+  hudColorScheme = 'motorsport_dark',
+  onRequestPitBox,
+  onSetErsMode,
+  onAdjustBrakeBias,
 }: EngineerRadioProps) {
   const [activeMessage, setActiveMessage] = useState<RadioMessage | null>(null);
-  const [messageHistory, setMessageHistory] = useState<RadioMessage[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
   const lastTriggeredEvent = useRef<string>('');
   const hideTimerRef = useRef<number | null>(null);
 
-  const triggerRadioCall = (text: string, category: RadioMessage['category']) => {
+  const triggerRadioCall = (
+    text: string,
+    category: RadioMessage['category'],
+    options?: {
+      suggestedCompound?: TyreCompound | null;
+      promptType?: PromptActionType;
+      cueType?: EngineerCueType;
+      actions?: RadioActionButton[];
+    }
+  ) => {
     const eventKey = `${category}-${text}`;
     if (lastTriggeredEvent.current === eventKey) return;
     lastTriggeredEvent.current = eventKey;
@@ -41,19 +84,23 @@ export function EngineerRadio({
       text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       category,
+      suggestedCompound: options?.suggestedCompound ?? null,
+      promptType: options?.promptType,
+      actions: options?.actions,
     };
 
     setActiveMessage(newMsg);
-    setMessageHistory((prev) => [newMsg, ...prev].slice(0, 15));
 
-    // Play authentic F1 radio handshake beep
     try {
-      audio?.playRadioBeep();
+      if (options?.cueType) {
+        audio?.playEngineerTelemetryCue(options.cueType);
+      } else {
+        audio?.playRadioBeep();
+      }
     } catch {
       // ignore audio error
     }
 
-    // Optional Web Speech API TTS
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -69,12 +116,28 @@ export function EngineerRadio({
     if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
     hideTimerRef.current = window.setTimeout(() => {
       setActiveMessage(null);
-    }, 6200);
+    }, 7400);
+  };
+
+  const executeRadioAction = (btn: RadioActionButton) => {
+    if (btn.action.type === 'pit') {
+      onRequestPitBox?.(btn.action.compound);
+    } else if (btn.action.type === 'ers') {
+      onSetErsMode?.(btn.action.mode);
+    } else if (btn.action.type === 'bias') {
+      onAdjustBrakeBias?.(btn.action.delta);
+    }
+    try {
+      audio?.playUiConfirm();
+    } catch {
+      // ignore
+    }
+    setActiveMessage(null);
   };
 
   // Monitor telemetry to trigger contextual engineer messages
   useEffect(() => {
-    if (hud.countdownState !== 'racing') return;
+    if (!active || hud.countdownState !== 'racing') return;
 
     // Lap change triggers
     if (hud.lap === 1 && hud.currentLapMs < 4000) {
@@ -90,85 +153,421 @@ export function EngineerRadio({
       }
     } else if (hud.position > 1 && hud.gapAheadSeconds !== null) {
       if (hud.gapAheadSeconds < 1.2 && hud.drsAvailable) {
-        triggerRadioCall(`DRS enabled! Gap ahead is ${hud.gapAheadSeconds.toFixed(1)}s. Prepare your attack into the braking zone.`, 'gap');
+        triggerRadioCall(
+          `X-Mode active aero armed! Gap ahead is ${hud.gapAheadSeconds.toFixed(1)}s. Hit MOM Override into the braking zone.`,
+          'gap',
+          { cueType: 'aero_x' }
+        );
       } else if (hud.gapAheadSeconds > 5.0 && Math.random() < 0.15) {
         triggerRadioCall(`Gap to car ahead is ${hud.gapAheadSeconds.toFixed(1)}s. Keep pushing, rhythm is strong.`, 'gap');
       }
     }
 
-    // Hardcore Pit Strategy & Tactical Radio Callouts
+    // Interactive Compound Crossover Strategy Prompt (Rain / Drying / Heat Crossover)
+    if (hud.weatherTyreImpact?.crossoverUrgent) {
+      const optCmp = hud.weatherTyreImpact.optimalCompound;
+      triggerRadioCall(
+        hud.weatherTyreImpact.strategyRecommendation ??
+          `Track grip at ${Math.round(hud.weatherTyreImpact.gripMultiplier * 100)}% (${Math.round(hud.trackWetnessPct)}% wet). Switch to ${optCmp.toUpperCase()} tyres now!`,
+        'weather',
+        {
+          suggestedCompound: optCmp,
+          promptType: 'crossover',
+          cueType: 'crossover',
+          actions: [
+            {
+              label: `CROSSOVER → ${optCmp.toUpperCase()}`,
+              hotkey: 'F',
+              variant: 'sky',
+              action: { type: 'pit', compound: optCmp },
+            },
+            {
+              label: 'HOLD CURRENT',
+              variant: 'neutral',
+              action: { type: 'ack' },
+            },
+          ],
+        }
+      );
+    } else if (hud.liveWeather === 'rain' && hud.trackWetnessPct > 55 && hud.tyreCompound !== 'wet') {
+      triggerRadioCall(
+        `Rain intensity increasing (${Math.round(hud.trackWetnessPct)}% wet). Wet compound crossover open — shift bias rearward or box for WETS.`,
+        'weather',
+        {
+          suggestedCompound: 'wet',
+          promptType: 'crossover',
+          cueType: 'crossover',
+          actions: [
+            {
+              label: 'BOX FOR WET',
+              hotkey: 'F',
+              variant: 'sky',
+              action: { type: 'pit', compound: 'wet' },
+            },
+            {
+              label: 'BIAS -1%',
+              variant: 'amber',
+              action: { type: 'bias', delta: -1 },
+            },
+          ],
+        }
+      );
+    }
+
+    // Hardcore Pit Strategy & Undercut Tactical Radio Callouts
     if (hud.pitStrategy?.tacticalRadioCall) {
-      triggerRadioCall(hud.pitStrategy.tacticalRadioCall, 'strategy');
+      const rec = hud.pitStrategy.recommendedCompound;
+      triggerRadioCall(hud.pitStrategy.tacticalRadioCall, 'strategy', {
+        suggestedCompound: rec,
+        promptType: 'pit_box',
+        cueType: 'pit_window',
+        actions: [
+          {
+            label: `BOX NOW (${rec.toUpperCase()})`,
+            hotkey: 'F',
+            variant: 'primary',
+            action: { type: 'pit', compound: rec },
+          },
+          {
+            label: 'EXTEND +1 LAP',
+            variant: 'neutral',
+            action: { type: 'ack' },
+          },
+        ],
+      });
+    } else if (hud.inPitWindow && !hud.queuedCompound && hud.lap < hud.totalLaps) {
+      const rec = hud.weatherTyreImpact?.optimalCompound ?? hud.pitStrategy?.recommendedCompound ?? 'medium';
+      triggerRadioCall(
+        `Pit window is open, ${driverName}. Clean air predicted at P${hud.pitStrategy?.predictedExitPosition ?? hud.position}. Confirm box for ${rec.toUpperCase()}?`,
+        'strategy',
+        {
+          suggestedCompound: rec,
+          promptType: 'pit_box',
+          cueType: 'pit_window',
+          actions: [
+            {
+              label: `CONFIRM BOX (${rec.toUpperCase()})`,
+              hotkey: 'F',
+              variant: 'primary',
+              action: { type: 'pit', compound: rec },
+            },
+            {
+              label: 'STAY OUT',
+              variant: 'neutral',
+              action: { type: 'ack' },
+            },
+          ],
+        }
+      );
     }
 
     // Fuel saving advisories
     if (hud.fuelPct <= 22 && hud.fuelPct > 18) {
-      triggerRadioCall(`Fuel level getting low (${hud.fuelPct}%). Lift and coast into heavy braking zones to save fuel.`, 'fuel');
+      triggerRadioCall(`Fuel level getting low (${hud.fuelPct}%). Lift and coast into heavy braking zones to save fuel.`, 'fuel', {
+        cueType: 'fuel_low',
+      });
     } else if (hud.fuelPct <= 10) {
-      triggerRadioCall(`Critical fuel state! Engine mode lean, save fuel immediately or risk running dry.`, 'fuel');
+      triggerRadioCall(`Critical fuel state! Switch ERS to Harvest and lift earlier into braking zones.`, 'fuel', {
+        promptType: 'ers_mode',
+        cueType: 'fuel_low',
+        actions: [
+          {
+            label: 'SET ERS HARVEST',
+            hotkey: 'F',
+            variant: 'sky',
+            action: { type: 'ers', mode: 'harvest' },
+          },
+          {
+            label: 'COPY',
+            variant: 'neutral',
+            action: { type: 'ack' },
+          },
+        ],
+      });
     }
 
-    // ERS battery charge advisories
-    if (hud.ersCharge <= 15) {
-      triggerRadioCall(`Battery charge low (${Math.round(hud.ersCharge)}%). Harvesting energy, conserve deployment.`, 'ers');
-    } else if (hud.ersCharge >= 95 && hud.drsAvailable) {
-      triggerRadioCall(`Battery full! ERS overtake deploy max available.`, 'ers');
+    // 2026 MGU-K 350kW Battery, ERS Mode & Manual Override advisories
+    if (hud.ersCharge <= 15 && hud.ersMode !== 'harvest') {
+      triggerRadioCall(`350kW MGU-K battery low (${Math.round(hud.ersCharge)}%). Switch ERS to Harvest on braking zones.`, 'ers', {
+        promptType: 'ers_mode',
+        cueType: 'fuel_low',
+        actions: [
+          {
+            label: 'ERS → HARVEST',
+            hotkey: 'F',
+            variant: 'sky',
+            action: { type: 'ers', mode: 'harvest' },
+          },
+          {
+            label: 'KEEP BALANCED',
+            variant: 'neutral',
+            action: { type: 'ack' },
+          },
+        ],
+      });
+    } else if (hud.ersCharge >= 95 && hud.drsAvailable && hud.ersMode !== 'overtake') {
+      triggerRadioCall(`Battery 100%! Engage Overtake ERS & X-Mode down this straight.`, 'ers', {
+        promptType: 'ers_mode',
+        cueType: 'ers_full',
+        actions: [
+          {
+            label: 'ERS → OVERTAKE',
+            hotkey: 'F',
+            variant: 'amber',
+            action: { type: 'ers', mode: 'overtake' },
+          },
+          {
+            label: 'SAVE ENERGY',
+            variant: 'neutral',
+            action: { type: 'ack' },
+          },
+        ],
+      });
     }
 
-    // Tyre condition warnings, microscopic contact patch micro-slip & graining probability
+    // 4-Corner Asymmetric Tyre Wear & Contact Patch Coaching
+    const corners: [string, number][] = [
+      ['Front Left', hud.wheelWearPct?.[0] ?? hud.tyreWearPct],
+      ['Front Right', hud.wheelWearPct?.[1] ?? hud.tyreWearPct],
+      ['Rear Left', hud.wheelWearPct?.[2] ?? hud.tyreWearPct],
+      ['Rear Right', hud.wheelWearPct?.[3] ?? hud.tyreWearPct],
+    ];
+    let minCorner = corners[0];
+    let maxCorner = corners[0];
+    for (const c of corners) {
+      if (c[1] < minCorner[1]) minCorner = c;
+      if (c[1] > maxCorner[1]) maxCorner = c;
+    }
+    const cornerSpread = maxCorner[1] - minCorner[1];
+    const frontAvg = (corners[0][1] + corners[1][1]) * 0.5;
+    const rearAvg = (corners[2][1] + corners[3][1]) * 0.5;
+
     if (hud.pitStrategy?.tyreDegradationStage === 'cliff' || hud.tyreWearPct <= 18) {
-      triggerRadioCall(`Tyres are past the cliff, lap times dropping significantly. Box this lap, box now!`, 'tyres');
+      const targetCmp = hud.pitStrategy?.recommendedCompound ?? 'medium';
+      triggerRadioCall(
+        `Tyres are past the cliff, lap times dropping significantly. Box this lap for ${targetCmp.toUpperCase()}!`,
+        'tyres',
+        {
+          suggestedCompound: targetCmp,
+          promptType: 'pit_box',
+          cueType: 'tyre_cliff',
+          actions: [
+            {
+              label: `BOX FOR ${targetCmp.toUpperCase()}`,
+              hotkey: 'F',
+              variant: 'primary',
+              action: { type: 'pit', compound: targetCmp },
+            },
+            {
+              label: 'PUSH 1 MORE',
+              variant: 'neutral',
+              action: { type: 'ack' },
+            },
+          ],
+        }
+      );
     } else if (hud.tyreContactPatch && hud.tyreContactPatch.grainingProbabilityPct >= 62) {
       triggerRadioCall(
-        `High graining probability (${hud.tyreContactPatch.grainingProbabilityPct}%) in Sector ${hud.currentSector} at ${hud.trackTemperature}°C track temp. Smooth your steering inputs to reduce contact patch micro-slip.`,
+        `High graining probability (${hud.tyreContactPatch.grainingProbabilityPct}%) in Sector ${hud.currentSector} at ${hud.trackTemperature}°C. Smooth steering inputs.`,
+        'tyres',
+        { cueType: 'tyre_cliff' }
+      );
+    } else if (cornerSpread >= 9 && minCorner[1] <= 74) {
+      const axleHint =
+        rearAvg + 5 < frontAvg
+          ? 'Modulate throttle on exit to protect rear traction.'
+          : 'Clean brake release into corners to save the loaded front corner.';
+      triggerRadioCall(
+        `${minCorner[0]} tyre wearing fastest (${Math.round(minCorner[1])}% remaining). ${axleHint}`,
         'tyres'
       );
     } else if (hud.tyreWearPct <= 38 && hud.tyreWearPct > 34) {
       triggerRadioCall(`Tyre wear at 62%. Surface degradation increasing, watch traction on apex exit.`, 'tyres');
     }
 
-    // Weather & Track flags
-    if (hud.liveWeather === 'rain' && hud.trackWetnessPct > 55) {
-      triggerRadioCall(`Rain intensity increasing. Track wetness at ${Math.round(hud.trackWetnessPct)}%. Adapt brake bias forward.`, 'weather');
+    // Interactive FIA Track Limits Warnings & Penalty Prompts
+    if ((hud.trackLimitWarnings ?? 0) === 2 && (hud.timePenaltySec ?? 0) === 0) {
+      triggerRadioCall(
+        `Track limits 2 of 3, ${driverName}. Watch apex exits — shift brake bias -1% for cleaner entry if locking up.`,
+        'limits',
+        {
+          promptType: 'track_limits',
+          cueType: 'track_limits',
+          actions: [
+            {
+              label: 'BIAS -1% STABILITY',
+              hotkey: 'F',
+              variant: 'amber',
+              action: { type: 'bias', delta: -1 },
+            },
+            {
+              label: 'COPY · STAY CLEAN',
+              variant: 'neutral',
+              action: { type: 'ack' },
+            },
+          ],
+        }
+      );
+    } else if ((hud.trackLimitWarnings ?? 0) === 3 && (hud.timePenaltySec ?? 0) === 0) {
+      triggerRadioCall(
+        `Black and white flag for track limits, ${driverName}! Next off-track incur +5s time penalty.`,
+        'limits',
+        {
+          promptType: 'track_limits',
+          cueType: 'track_limits',
+          actions: [
+            {
+              label: 'ERS HARVEST · CLEAN LAP',
+              hotkey: 'F',
+              variant: 'amber',
+              action: { type: 'ers', mode: 'harvest' },
+            },
+            {
+              label: 'UNDERSTOOD',
+              variant: 'neutral',
+              action: { type: 'ack' },
+            },
+          ],
+        }
+      );
+    } else if ((hud.timePenaltySec ?? 0) >= 5) {
+      triggerRadioCall(
+        `Stewards issued a +${hud.timePenaltySec}s time penalty for track limits. Box for fresh tyres or push to cover the gap.`,
+        'limits',
+        {
+          promptType: 'track_limits',
+          cueType: 'track_limits',
+          actions: [
+            {
+              label: 'ERS OVERTAKE PUSH',
+              hotkey: 'F',
+              variant: 'primary',
+              action: { type: 'ers', mode: 'overtake' },
+            },
+            {
+              label: 'ACKNOWLEDGED',
+              variant: 'neutral',
+              action: { type: 'ack' },
+            },
+          ],
+        }
+      );
     }
 
     if (hud.trackFlag.flag === 'yellow') {
       triggerRadioCall(`Yellow flag in Sector ${hud.currentSector}. Slow down, hazard ahead.`, 'general');
     }
   }, [
+    active,
+    driverName,
+    hud.countdownState,
     hud.lap,
+    hud.totalLaps,
     hud.position,
     hud.tyreWearPct,
+    hud.tyreCompound,
+    hud.wheelWearPct,
     hud.fuelPct,
     hud.ersCharge,
+    hud.ersMode,
     hud.liveWeather,
     hud.trackWetnessPct,
     hud.trackTemperature,
+    hud.weatherTyreImpact?.crossoverUrgent,
+    hud.weatherTyreImpact?.strategyRecommendation,
+    hud.weatherTyreImpact?.optimalCompound,
+    hud.weatherTyreImpact?.gripMultiplier,
     hud.currentSector,
     hud.tyreContactPatch?.grainingProbabilityPct,
     hud.trackFlag.flag,
     hud.pitStrategy?.tacticalRadioCall,
+    hud.pitStrategy?.recommendedCompound,
+    hud.pitStrategy?.tyreDegradationStage,
+    hud.pitStrategy?.predictedExitPosition,
+    hud.inPitWindow,
+    hud.queuedCompound,
     hud.gapAheadSeconds,
+    hud.drsAvailable,
+    hud.trackLimitWarnings,
+    hud.timePenaltySec,
   ]);
+
+  // Quick Keyboard Reply [F] for the primary interactive prompt button
+  useEffect(() => {
+    if (!active || !activeMessage) return;
+    const primaryAction =
+      activeMessage.actions?.[0] ??
+      (activeMessage.suggestedCompound && onRequestPitBox
+        ? ({
+            label: `BOX CONFIRMED (${activeMessage.suggestedCompound.toUpperCase()})`,
+            hotkey: 'F',
+            variant: 'primary',
+            action: { type: 'pit', compound: activeMessage.suggestedCompound },
+          } as RadioActionButton)
+        : null);
+    if (!primaryAction) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'KeyF') {
+        executeRadioAction(primaryAction);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, activeMessage, onRequestPitBox, onSetErsMode, onAdjustBrakeBias, audio]);
+
+  const headerIcon =
+    activeMessage?.category === 'weather' ? (
+      <CloudRain className="w-4 h-4 text-cyan-300" />
+    ) : activeMessage?.category === 'limits' ? (
+      <Flag className="w-4 h-4 text-amber-300" />
+    ) : activeMessage?.category === 'strategy' || activeMessage?.category === 'tyres' ? (
+      <Wrench className="w-4 h-4 text-emerald-300" />
+    ) : activeMessage?.category === 'fuel' ? (
+      <AlertTriangle className="w-4 h-4 text-amber-300" />
+    ) : (
+      <Radio className="w-4 h-4 text-sky-400" />
+    );
+
+  const actionList: RadioActionButton[] =
+    activeMessage?.actions ??
+    (activeMessage?.suggestedCompound && onRequestPitBox
+      ? [
+          {
+            label: `BOX CONFIRMED (${activeMessage.suggestedCompound.toUpperCase()})`,
+            hotkey: 'F',
+            variant: 'primary',
+            action: { type: 'pit', compound: activeMessage.suggestedCompound },
+          },
+          {
+            label: 'STAY OUT',
+            variant: 'neutral',
+            action: { type: 'ack' },
+          },
+        ]
+      : []);
 
   return (
     <>
       {/* Live Radio Pop-Up Toast */}
-      {activeMessage && (
-        <div className="absolute top-20 left-6 z-50 w-80 md:w-96 bg-slate-950/90 backdrop-blur-md border border-sky-500/40 rounded-xl p-3.5 shadow-2xl animate-hud-enter-tl text-slate-100">
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 animate-pulse">
-                <Radio className="w-4 h-4" />
+      {active && activeMessage && (
+        <div
+          data-hud-theme={hudColorScheme}
+          className="hud-themed-card fixed top-16 sm:top-20 left-3 right-3 sm:left-6 sm:right-auto z-50 sm:w-88 md:w-96 bg-slate-950/92 backdrop-blur-md border border-sky-500/45 rounded-xl p-3 sm:p-3.5 shadow-2xl animate-hud-enter-tl text-slate-100"
+        >
+          <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-white/10">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center shrink-0">
+                {headerIcon}
               </div>
-              <div>
-                <div className="text-xs font-bold tracking-wider text-sky-400 font-display uppercase">
+              <div className="min-w-0">
+                <div className="text-[11px] sm:text-xs font-bold tracking-wider text-sky-400 font-display uppercase truncate">
                   TEAM RADIO • {activeMessage.sender}
                 </div>
-                <div className="text-[10px] text-slate-400 font-mono">{activeMessage.timestamp}</div>
+                <div className="text-[9px] sm:text-[10px] text-slate-400 font-mono">{activeMessage.timestamp}</div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <div className="flex items-end gap-0.5 h-3">
                 <div className="w-0.5 h-full bg-sky-400 animate-bounce rounded-full" />
                 <div className="w-0.5 h-2/3 bg-sky-400 animate-bounce rounded-full [animation-delay:150ms]" />
@@ -177,63 +576,49 @@ export function EngineerRadio({
               <button
                 type="button"
                 onClick={() => setActiveMessage(null)}
-                className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+                aria-label="Dismiss radio transmission"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
-          <p className="text-xs md:text-sm font-medium text-slate-200 leading-relaxed">
+          <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed">
             "{activeMessage.text}"
           </p>
+          {actionList.length > 0 && (
+            <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+              {actionList.map((btn, idx) => {
+                const variantClass =
+                  btn.variant === 'primary'
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/35 border-emerald-400/65 text-emerald-200'
+                    : btn.variant === 'sky'
+                      ? 'bg-cyan-500/20 hover:bg-cyan-500/35 border-cyan-400/65 text-cyan-200'
+                      : btn.variant === 'amber'
+                        ? 'bg-amber-500/20 hover:bg-amber-500/35 border-amber-400/65 text-amber-200'
+                        : 'bg-white/5 hover:bg-white/15 border-white/15 text-slate-300';
+                return (
+                  <button
+                    key={`${btn.label}-${idx}`}
+                    type="button"
+                    onClick={() => executeRadioAction(btn)}
+                    className={`${
+                      idx === 0 ? 'flex-1' : ''
+                    } min-h-[36px] px-2.5 py-1.5 rounded-lg border text-[10px] font-display font-bold tracking-wider uppercase cursor-pointer whitespace-nowrap shrink-0 flex items-center justify-between gap-1.5 transition-colors ${variantClass}`}
+                  >
+                    <span>{btn.label}</span>
+                    {btn.hotkey && (
+                      <span className="px-1 rounded bg-black/50 text-[9px] font-mono-telemetry">
+                        {btn.hotkey}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
-
-      {/* Floating Radio History Toggle Button */}
-      <div className="absolute top-20 right-6 z-40">
-        <button
-          type="button"
-          onClick={() => setShowHistory(!showHistory)}
-          className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-md border border-white/10 hover:border-sky-400/50 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-lg cursor-pointer"
-          title="Team Radio Log"
-        >
-          <Volume2 className="w-4 h-4 text-sky-400" />
-          <span className="hidden sm:inline font-display uppercase tracking-wider">Radio Log</span>
-        </button>
-
-        {showHistory && (
-          <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto bg-slate-950/95 backdrop-blur-xl border border-white/15 rounded-2xl p-4 shadow-2xl z-50 text-slate-100 divide-y divide-white/10">
-            <div className="flex items-center justify-between pb-3 mb-2">
-              <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-sky-400" />
-                <span className="text-xs font-bold tracking-wider font-display uppercase text-white">
-                  Pit Wall Radio Transmissions
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowHistory(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {messageHistory.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500">No radio transmissions yet.</div>
-            ) : (
-              messageHistory.map((msg) => (
-                <div key={msg.id} className="py-2.5 first:pt-0 last:pb-0">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono mb-1">
-                    <span className="text-sky-400 font-bold">{msg.sender}</span>
-                    <span>{msg.timestamp}</span>
-                  </div>
-                  <p className="text-xs text-slate-200 italic">"{msg.text}"</p>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
     </>
   );
 }

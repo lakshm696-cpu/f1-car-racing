@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DriverSelectionOverlay } from './components/DriverSelectionOverlay';
 import { GarageOverlay } from './components/GarageOverlay';
-import { PauseSettingsModal } from './components/PauseResultsModal';
+import { PauseSettingsModal, SettingsTab } from './components/PauseResultsModal';
 import { PodiumOverlay } from './components/PodiumOverlay';
 import { EngineerRadio } from './components/EngineerRadio';
 import { TelemetryOverlay } from './components/TelemetryOverlay';
@@ -14,7 +14,7 @@ import { Activity } from 'lucide-react';
 import { RacingHUD } from './components/RacingHUD';
 import { PitStrategyModal } from './components/PitStrategyModal';
 import { TitleOverlay } from './components/TitleOverlay';
-import { CIRCUIT_TRACKS, FORMULA_DRIVERS, FORMULA_TEAMS, WHEEL_FINISHES } from './data/racingData';
+import { CIRCUIT_TRACKS, F1_2026_SPONSORS, FORMULA_DRIVERS, FORMULA_TEAMS, WHEEL_FINISHES } from './data/racingData';
 import { buildDefaultPitStrategy, normalizePitStrategyPlan } from './physics/simulationCalculus';
 import { RacingEngine } from './three/RacingEngine';
 import { getCircuitEnvironmentConfig } from './three/circuitEnvironments';
@@ -22,6 +22,8 @@ import {
   CareerProgress,
   CarUpgrades,
   CircuitTrack,
+  DEFAULT_HUD_WIDGETS,
+  DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
   DriverProfile,
   FormulaTeam,
   GameMode,
@@ -29,7 +31,9 @@ import {
   GameSettings,
   GraphicsQuality,
   HudTelemetry,
+  OnlineGameplaySettings,
   PodiumCameraShot,
+  PowerUnitWear,
   PreRacePitStrategy,
   RacerStanding,
   RivalEncounter,
@@ -42,6 +46,7 @@ import {
 
 const CAREER_STORAGE_KEY = 'ufr26_career_v1';
 const UPGRADES_STORAGE_KEY = 'ufr26_upgrades_v1';
+const ONLINE_STORAGE_KEY = 'ufr26_online_v1';
 
 const DEFAULT_CAREER: CareerProgress = {
   credits: 6000,
@@ -50,9 +55,19 @@ const DEFAULT_CAREER: CareerProgress = {
   racesCompleted: 0,
   rivalryScores: {},
   activeRivalId: null,
+  resourcePoints: 296,
+  techLevel: 929,
   polePositions: 0,
   podiumFinishes: 0,
   claimedAchievements: [],
+  developmentFocus: 'balanced',
+  staffAllocation: { aero: 45, powertrain: 45, strategy: 45 },
+  sponsorId: 'apex_cloud',
+  costCapSpentM: 42.5,
+  costCapLimitM: 135,
+  seasonRound: 1,
+  workforceCount: 135,
+  puWear: { ice: 94, mguk: 96, battery: 95, gearbox: 94 },
 };
 
 const DEFAULT_UPGRADES: CarUpgrades = {
@@ -78,11 +93,19 @@ function loadSavedCareer(): CareerProgress {
       rivalryScores: parsed.rivalryScores ?? {},
       activeRivalId: typeof parsed.activeRivalId === 'string' ? parsed.activeRivalId : null,
       selectedAcademyId: parsed.selectedAcademyId,
-      resourcePoints: typeof parsed.resourcePoints === 'number' ? parsed.resourcePoints : undefined,
-      techLevel: typeof parsed.techLevel === 'number' ? parsed.techLevel : undefined,
+      resourcePoints: typeof parsed.resourcePoints === 'number' ? parsed.resourcePoints : 296,
+      techLevel: typeof parsed.techLevel === 'number' ? parsed.techLevel : 929,
       polePositions: typeof parsed.polePositions === 'number' ? parsed.polePositions : 0,
       podiumFinishes: typeof parsed.podiumFinishes === 'number' ? parsed.podiumFinishes : 0,
       claimedAchievements: Array.isArray(parsed.claimedAchievements) ? parsed.claimedAchievements : [],
+      developmentFocus: parsed.developmentFocus ?? 'balanced',
+      staffAllocation: parsed.staffAllocation ?? { aero: 45, powertrain: 45, strategy: 45 },
+      sponsorId: typeof parsed.sponsorId === 'string' ? parsed.sponsorId : 'apex_cloud',
+      costCapSpentM: typeof parsed.costCapSpentM === 'number' ? parsed.costCapSpentM : 42.5,
+      costCapLimitM: typeof parsed.costCapLimitM === 'number' ? parsed.costCapLimitM : 135,
+      seasonRound: typeof parsed.seasonRound === 'number' ? parsed.seasonRound : 1,
+      workforceCount: typeof parsed.workforceCount === 'number' ? parsed.workforceCount : 135,
+      puWear: parsed.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 },
     };
   } catch {
     return DEFAULT_CAREER;
@@ -104,6 +127,21 @@ function loadSavedUpgrades(): CarUpgrades {
     };
   } catch {
     return DEFAULT_UPGRADES;
+  }
+}
+
+function loadSavedOnlineGameplay(): OnlineGameplaySettings {
+  if (typeof window === 'undefined') return { ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS };
+  try {
+    const raw = window.localStorage.getItem(ONLINE_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<OnlineGameplaySettings>;
+    return {
+      ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+      ...parsed,
+    };
+  } catch {
+    return { ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS };
   }
 }
 
@@ -200,6 +238,17 @@ const INITIAL_HUD: HudTelemetry = {
     gripPenaltyMultiplier: 1.0,
     wearRateMultiplier: 1.0,
   },
+  activeAeroMode: 'z_mode',
+  manualOverrideAvailable: false,
+  manualOverrideActive: false,
+  mgukPowerKw: 0,
+  wheelWearPct: [97, 96, 98, 97],
+  ersMode: 'balanced',
+  brakeBiasPct: 57,
+  dualsenseConnected: false,
+  dualsenseName: null,
+  throttleInputPct: 0,
+  brakeInputPct: 0,
 };
 
 function detectHardwareProfile(): {
@@ -286,6 +335,7 @@ export default function App() {
 
   const [screen, setScreen] = useState<GameScreen>('title');
   const [showTitleSettings, setShowTitleSettings] = useState(false);
+  const [titleSettingsTab, setTitleSettingsTab] = useState<SettingsTab>('all');
   const [showPitStrategy, setShowPitStrategy] = useState(false);
   const [egoHudMode, setEgoHudMode] = useState(true);
 
@@ -309,6 +359,18 @@ export default function App() {
       steeringSensitivity: 1.0,
       difficulty: 'pro',
       touchControls: typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0),
+      mobileControlStyle: 'virtual_joystick',
+      mobileButtonLayout: 'standard',
+      mobileButtonScale: 'normal',
+      mobileButtonSpacing: 'normal',
+      mobileButtonOpacity: 0.92,
+      mobileSwipeGestures: true,
+      mobileSwipeSensitivity: 1.0,
+      mobileGyroSensitivity: 1.0,
+      mobileSwapPedals: false,
+      mobileFloatingJoystick: true,
+      mobileShowErsButton: true,
+      mobileShowGearStrip: true,
       muted: false,
       cameraMode: 'chase',
       weather: initialEnv.defaultWeather,
@@ -355,9 +417,13 @@ export default function App() {
     raceObjectives: true,
     launchClutchAssist: true,
     reflexLowLatency: 'boost',
+    hudColorScheme: 'motorsport_dark',
+    hudScaleMode: 'auto',
+    hudWidgets: { ...DEFAULT_HUD_WIDGETS },
     graphicsColorCode: 'palette_lut',
     graphicsColorCodeIntensity: 0.42,
     pitStrategyPlan: buildDefaultPitStrategy(3, initialEnv.defaultWeather, 'medium'),
+    onlineGameplay: loadSavedOnlineGameplay(),
     };
   });
 
@@ -444,19 +510,43 @@ export default function App() {
               playerRes.position === 1 ||
               (playerRes.bestLapMs !== null && playerRes.bestLapMs <= fastestOverallMs);
 
+            const sponsor =
+              F1_2026_SPONSORS.find((s) => s.id === (prev.sponsorId ?? 'apex_cloud')) ??
+              F1_2026_SPONSORS[0];
+            const sponsorObjectiveMet = playerRes.position <= sponsor.minFinishPos;
+            const sponsorPayout =
+              sponsor.raceBaseBonusCr + (sponsorObjectiveMet ? sponsor.objectiveBonusCr : 0);
+            const currentPu = prev.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 };
+            const isBalanced = (prev.developmentFocus ?? 'balanced') === 'balanced';
+            const wearSave = isBalanced ? 1 : 0;
+
             const nextCareer: CareerProgress = {
-              credits: prev.credits + prize,
+              ...prev,
+              credits: prev.credits + prize + sponsorPayout,
               championshipPoints: prev.championshipPoints + playerRes.pointsAwarded,
               totalVictories: prev.totalVictories + (playerRes.position === 1 ? 1 : 0),
               racesCompleted: prev.racesCompleted + 1,
               rivalryScores: nextRivalry,
               activeRivalId: topRivalId,
               selectedAcademyId: prev.selectedAcademyId,
-              resourcePoints: (prev.resourcePoints ?? 296) + 172,
+              resourcePoints: Math.min(862, (prev.resourcePoints ?? 296) + 172 + sponsor.rpBonusPerRace),
               techLevel: (prev.techLevel ?? 929) + (playerRes.position <= 3 ? 5 : 2),
               polePositions: (prev.polePositions ?? 0) + (earnedPoleOrFastest ? 1 : 0),
               podiumFinishes: (prev.podiumFinishes ?? 0) + (playerRes.position <= 3 ? 1 : 0),
               claimedAchievements: prev.claimedAchievements ?? [],
+              seasonRound: ((prev.seasonRound ?? 1) % 24) + 1,
+              costCapSpentM: Number(
+                Math.min(
+                  prev.costCapLimitM ?? 135,
+                  (prev.costCapSpentM ?? 42.5) + 1.2
+                ).toFixed(1)
+              ),
+              puWear: {
+                ice: Math.max(35, currentPu.ice - (5 - wearSave)),
+                mguk: Math.max(35, currentPu.mguk - (4 - wearSave)),
+                battery: Math.max(35, currentPu.battery - (4 - wearSave)),
+                gearbox: Math.max(35, currentPu.gearbox - (5 - wearSave)),
+              },
             };
             try {
               window.localStorage.setItem(CAREER_STORAGE_KEY, JSON.stringify(nextCareer));
@@ -506,6 +596,11 @@ export default function App() {
       wheelFinish: selectedWheel,
       compound: selectedCompound,
       upgrades,
+      teamManagement: {
+        developmentFocus: career.developmentFocus ?? 'balanced',
+        staffAllocation: career.staffAllocation ?? { aero: 45, powertrain: 45, strategy: 45 },
+        puWear: career.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 },
+      },
       gameMode,
       activeRivalId: career.activeRivalId === selectedDriver.id ? null : career.activeRivalId,
       settings,
@@ -519,6 +614,9 @@ export default function App() {
     selectedWheel,
     selectedCompound,
     upgrades,
+    career.developmentFocus,
+    career.staffAllocation,
+    career.puWear,
     gameMode,
     career.activeRivalId,
     settings,
@@ -554,12 +652,25 @@ export default function App() {
 
   const updateSettings = useCallback((patch: Partial<GameSettings>) => {
     setSettings((prev) => {
-      const next = { ...prev, ...patch };
+      const next: GameSettings = {
+        ...prev,
+        ...patch,
+        onlineGameplay: patch.onlineGameplay
+          ? { ...(prev.onlineGameplay ?? DEFAULT_ONLINE_GAMEPLAY_SETTINGS), ...patch.onlineGameplay }
+          : prev.onlineGameplay,
+      };
       if (patch.totalLaps !== undefined && patch.pitStrategyPlan === undefined && prev.pitStrategyPlan) {
         next.pitStrategyPlan = normalizePitStrategyPlan({
           ...prev.pitStrategyPlan,
           totalLaps: patch.totalLaps,
         });
+      }
+      if (patch.onlineGameplay && typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(ONLINE_STORAGE_KEY, JSON.stringify(next.onlineGameplay));
+        } catch {
+          // ignore storage quota errors
+        }
       }
       return next;
     });
@@ -706,6 +817,63 @@ export default function App() {
     []
   );
 
+  const handleUpdateCareerTeam = useCallback((patch: Partial<CareerProgress>) => {
+    setCareer((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const handleOverhaulPuComponent = useCallback((component: keyof PowerUnitWear, costCr: number) => {
+    setCareer((prev) => {
+      if (prev.credits < costCr) return prev;
+      const limit = prev.costCapLimitM ?? 135;
+      const spent = prev.costCapSpentM ?? 42.5;
+      if (spent + 1.8 > limit) return prev;
+      const pu = prev.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 };
+      return {
+        ...prev,
+        credits: prev.credits - costCr,
+        costCapSpentM: Number((spent + 1.8).toFixed(1)),
+        puWear: { ...pu, [component]: 100 },
+      };
+    });
+  }, []);
+
+  const handleEarnResourcePoints = useCallback((delta: number) => {
+    setCareer((prev) => ({
+      ...prev,
+      resourcePoints: Math.min(862, Math.max(0, (prev.resourcePoints ?? 296) + delta)),
+    }));
+  }, []);
+
+  const handleInvestEngineering = useCallback(
+    (rpCost: number, staffGain: number, costCapM: number) => {
+      setCareer((prev) => {
+        const currentRp = prev.resourcePoints ?? 296;
+        const limit = prev.costCapLimitM ?? 135;
+        const spent = prev.costCapSpentM ?? 42.5;
+        if (currentRp < rpCost || spent + costCapM > limit) return prev;
+        const currentStaff = prev.workforceCount ?? 135;
+        const nextWorkforce = Math.min(347, currentStaff + staffGain);
+        const alloc = prev.staffAllocation ?? { aero: 45, powertrain: 45, strategy: 45 };
+        const added = nextWorkforce - currentStaff;
+        const perDept = Math.floor(added / 3);
+        const rem = added - perDept * 3;
+        return {
+          ...prev,
+          resourcePoints: currentRp - rpCost,
+          workforceCount: nextWorkforce,
+          techLevel: (prev.techLevel ?? 929) + 4,
+          costCapSpentM: Number((spent + costCapM).toFixed(1)),
+          staffAllocation: {
+            aero: alloc.aero + perDept + rem,
+            powertrain: alloc.powertrain + perDept,
+            strategy: alloc.strategy + perDept,
+          },
+        };
+      });
+    },
+    []
+  );
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#090B0F]">
       {/* Isolated WebGL Viewport Container */}
@@ -726,6 +894,7 @@ export default function App() {
           dynamicTimeOfDay={settings.dynamicTimeOfDay ?? false}
           totalLaps={settings.totalLaps}
           pitStrategyPlan={settings.pitStrategyPlan}
+          onlineGameplay={settings.onlineGameplay ?? DEFAULT_ONLINE_GAMEPLAY_SETTINGS}
           muted={settings.muted}
           egoHudMode={egoHudMode}
           onToggleEgoHudMode={() => setEgoHudMode((prev) => !prev)}
@@ -750,7 +919,15 @@ export default function App() {
           onOpenDrivers={openDrivers}
           onOpenGarage={openGarage}
           onOpenPitStrategy={() => setShowPitStrategy(true)}
-          onOpenSettings={() => setShowTitleSettings(true)}
+          onOpenSettings={() => {
+            setTitleSettingsTab('all');
+            setShowTitleSettings(true);
+          }}
+          onOpenOnlineSettings={() => {
+            setTitleSettingsTab('online');
+            setShowTitleSettings(true);
+          }}
+          onSelectDevFocus={(focus) => handleUpdateCareerTeam({ developmentFocus: focus })}
           onClaimAchievement={handleClaimAchievement}
           onJumpTitleScene={(sceneNum) => engineRef.current?.jumpToTitleScene(sceneNum)}
           onStartRace={startRace}
@@ -761,6 +938,7 @@ export default function App() {
       {screen === 'title' && showTitleSettings && (
         <PauseSettingsModal
           mode="settings"
+          initialTab={titleSettingsTab}
           settings={settings}
           onUpdateSettings={updateSettings}
           onResume={() => setShowTitleSettings(false)}
@@ -809,6 +987,7 @@ export default function App() {
           selectedCompound={selectedCompound}
           upgrades={upgrades}
           credits={career.credits}
+          career={career}
           onSelectTeam={handleSelectTeam}
           onSelectPaint={setCustomPrimaryHex}
           onSelectNumber={setCustomNumber}
@@ -823,6 +1002,10 @@ export default function App() {
             }));
           }}
           onPurchaseUpgrade={handlePurchaseUpgrade}
+          onUpdateCareerTeam={handleUpdateCareerTeam}
+          onOverhaulPuComponent={handleOverhaulPuComponent}
+          onEarnResourcePoints={handleEarnResourcePoints}
+          onInvestEngineering={handleInvestEngineering}
           onCameraPreset={(p) => engineRef.current?.setGarageCameraPreset(p)}
           onZoom={(d) => engineRef.current?.adjustGarageZoom(d)}
           onToggleLights={() => engineRef.current?.toggleGarageLights() ?? true}
@@ -840,6 +1023,18 @@ export default function App() {
         trackName={selectedTrack.name}
         transmission={settings.transmission}
         touchControls={settings.touchControls}
+        mobileControlStyle={settings.mobileControlStyle ?? 'virtual_joystick'}
+        mobileButtonLayout={settings.mobileButtonLayout ?? 'standard'}
+        mobileButtonScale={settings.mobileButtonScale ?? 'normal'}
+        mobileButtonSpacing={settings.mobileButtonSpacing ?? 'normal'}
+        mobileButtonOpacity={settings.mobileButtonOpacity ?? 0.92}
+        mobileSwipeGestures={settings.mobileSwipeGestures ?? true}
+        mobileSwipeSensitivity={settings.mobileSwipeSensitivity ?? 1.0}
+        mobileGyroSensitivity={settings.mobileGyroSensitivity ?? 1.0}
+        mobileSwapPedals={settings.mobileSwapPedals ?? false}
+        mobileFloatingJoystick={settings.mobileFloatingJoystick ?? true}
+        mobileShowErsButton={settings.mobileShowErsButton ?? true}
+        mobileShowGearStrip={settings.mobileShowGearStrip ?? true}
         muted={settings.muted}
         virtualMirror={settings.virtualMirror ?? true}
         haloCenterHud={settings.haloCenterHud ?? true}
@@ -847,13 +1042,148 @@ export default function App() {
         speedUnits={settings.speedUnits ?? 'kmh'}
         raceObjectives={settings.raceObjectives ?? true}
         launchClutchAssist={settings.launchClutchAssist ?? true}
+        hudColorScheme={settings.hudColorScheme ?? 'motorsport_dark'}
+        hudScaleMode={settings.hudScaleMode ?? 'auto'}
+        hudWidgets={settings.hudWidgets ?? DEFAULT_HUD_WIDGETS}
+        onSelectHudColorScheme={(scheme) => updateSettings({ hudColorScheme: scheme })}
+        onSelectHudScaleMode={(mode) => updateSettings({ hudScaleMode: mode })}
+        onToggleHudWidget={(widget) =>
+          updateSettings({
+            hudWidgets: {
+              ...(settings.hudWidgets ?? DEFAULT_HUD_WIDGETS),
+              [widget]: !((settings.hudWidgets ?? DEFAULT_HUD_WIDGETS)[widget] ?? true),
+            },
+          })
+        }
+        onApplyHudWidgetPreset={(preset) =>
+          updateSettings({
+            hudWidgets:
+              preset === 'minimal'
+                ? {
+                    leaderboard: false,
+                    timingTower: true,
+                    pitStrategy: false,
+                    miniMap: true,
+                    weatherOverlay: false,
+                    tyrePanel: false,
+                    haloCluster: true,
+                    gForceRadar: false,
+                    damageDiagram: false,
+                  }
+                : { ...DEFAULT_HUD_WIDGETS },
+          })
+        }
         onToggleTouchControls={() => updateSettings({ touchControls: !settings.touchControls })}
+        onSelectMobileControlStyle={(style) =>
+          updateSettings({ mobileControlStyle: style, touchControls: true })
+        }
+        onSelectMobileButtonLayout={(layout) =>
+          updateSettings({ mobileButtonLayout: layout, touchControls: true })
+        }
+        onSelectMobileButtonScale={(scale) =>
+          updateSettings({ mobileButtonScale: scale, touchControls: true })
+        }
+        onSelectMobileButtonSpacing={(spacing) =>
+          updateSettings({ mobileButtonSpacing: spacing, touchControls: true })
+        }
+        onChangeMobileButtonOpacity={(opacity) =>
+          updateSettings({ mobileButtonOpacity: opacity, touchControls: true })
+        }
+        onToggleMobileSwipeGestures={() =>
+          updateSettings({ mobileSwipeGestures: !(settings.mobileSwipeGestures ?? true) })
+        }
+        onChangeMobileSwipeSensitivity={(sens) =>
+          updateSettings({ mobileSwipeSensitivity: sens, touchControls: true })
+        }
+        onChangeMobileGyroSensitivity={(sens) =>
+          updateSettings({ mobileGyroSensitivity: sens, touchControls: true })
+        }
+        onToggleMobileSwapPedals={() =>
+          updateSettings({ mobileSwapPedals: !(settings.mobileSwapPedals ?? false), touchControls: true })
+        }
+        onToggleMobileFloatingJoystick={() =>
+          updateSettings({ mobileFloatingJoystick: !(settings.mobileFloatingJoystick ?? true), touchControls: true })
+        }
+        onToggleMobileShowErsButton={() =>
+          updateSettings({ mobileShowErsButton: !(settings.mobileShowErsButton ?? true), touchControls: true })
+        }
+        onToggleMobileShowGearStrip={() =>
+          updateSettings({ mobileShowGearStrip: !(settings.mobileShowGearStrip ?? true), touchControls: true })
+        }
+        onApplyMobilePreset={(preset) => {
+          if (preset === 'f1_classic') {
+            updateSettings({
+              touchControls: true,
+              mobileControlStyle: 'virtual_joystick',
+              mobileButtonLayout: 'standard',
+              mobileButtonScale: 'normal',
+              mobileButtonSpacing: 'normal',
+              mobileButtonOpacity: 0.92,
+              mobileFloatingJoystick: true,
+              mobileSwapPedals: false,
+              mobileShowErsButton: true,
+              mobileShowGearStrip: true,
+              mobileSwipeGestures: true,
+            });
+          } else if (preset === 'thumb_pro') {
+            updateSettings({
+              touchControls: true,
+              mobileControlStyle: 'virtual_joystick',
+              mobileButtonLayout: 'split_pro',
+              mobileButtonScale: 'large',
+              mobileButtonSpacing: 'wide',
+              mobileButtonOpacity: 0.95,
+              mobileFloatingJoystick: true,
+              mobileSwapPedals: false,
+              mobileShowErsButton: true,
+              mobileShowGearStrip: true,
+              mobileSwipeGestures: true,
+            });
+          } else if (preset === 'lefty') {
+            updateSettings({
+              touchControls: true,
+              mobileControlStyle: 'virtual_joystick',
+              mobileButtonLayout: 'left_handed',
+              mobileButtonScale: 'normal',
+              mobileButtonSpacing: 'normal',
+              mobileFloatingJoystick: true,
+              mobileSwapPedals: true,
+              mobileShowErsButton: true,
+              mobileShowGearStrip: true,
+            });
+          } else {
+            updateSettings({
+              touchControls: true,
+              mobileControlStyle: 'tilt_gyro',
+              mobileButtonLayout: 'compact_thumb',
+              mobileButtonScale: 'compact',
+              mobileButtonSpacing: 'compact',
+              mobileButtonOpacity: 0.85,
+              mobileShowErsButton: false,
+              mobileShowGearStrip: false,
+              mobileSwipeGestures: true,
+            });
+          }
+        }}
         onToggleMute={() => updateSettings({ muted: !settings.muted })}
         onCycleCamera={() => engineRef.current?.cycleCameraMode()}
-        onPause={screen === 'title' ? () => setShowTitleSettings(true) : handlePauseToggle}
+        onPause={
+          screen === 'title'
+            ? () => {
+                setTitleSettingsTab('all');
+                setShowTitleSettings(true);
+              }
+            : handlePauseToggle
+        }
         onTouchInput={(ctrl, pressed) => engineRef.current?.setTouchInput(ctrl, pressed)}
+        onTouchSteerAxis={(axis) => engineRef.current?.setTouchSteerAxis(axis)}
+        onTouchPedalAxis={(throttle, brake) => engineRef.current?.setTouchPedalAxis(throttle, brake)}
+        onSetMobileAeroMode={(mode) => engineRef.current?.setMobileAeroMode(mode)}
+        onTriggerMobileHaptic={(ev, intensity) => engineRef.current?.triggerMobileHaptic(ev, intensity)}
         onManualShift={(dir) => engineRef.current?.manualShift(dir)}
         onRequestTyreSwitch={(compound) => engineRef.current?.requestTyreSwitch(compound)}
+        onSetErsMode={(mode) => engineRef.current?.setErsMode(mode)}
+        onAdjustBrakeBias={(delta) => engineRef.current?.adjustBrakeBias(delta)}
       />
 
       {/* Real-Time Pit Wall Engineer Radio & Audio/Text Transmissions */}
@@ -862,6 +1192,11 @@ export default function App() {
         audio={engineRef.current?.getAudio()}
         driverName={selectedDriver.name}
         teamName={selectedTeam.name}
+        active={screen === 'playing' || screen === 'paused'}
+        hudColorScheme={settings.hudColorScheme ?? 'motorsport_dark'}
+        onRequestPitBox={(compound) => engineRef.current?.requestTyreSwitch(compound)}
+        onSetErsMode={(mode) => engineRef.current?.setErsMode(mode)}
+        onAdjustBrakeBias={(delta) => engineRef.current?.adjustBrakeBias(delta)}
       />
 
       {/* Real-Time D3 Telemetry & Driving Coach Modal */}
@@ -869,11 +1204,12 @@ export default function App() {
         hud={hud}
         isOpen={showTelemetryModal}
         onClose={() => setShowTelemetryModal(false)}
+        trackName={selectedTrack.name}
       />
 
       {/* Floating Telemetry Coach Button during race */}
       {(screen === 'playing' || screen === 'paused') && (
-        <div className="fixed top-20 right-36 z-40 pointer-events-auto">
+        <div className="hidden fixed top-20 right-36 z-40 pointer-events-auto">
           <button
             type="button"
             onClick={() => setShowTelemetryModal(true)}

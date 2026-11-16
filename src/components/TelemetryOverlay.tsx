@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { Activity, Flame, Gauge, TrendingUp, X } from 'lucide-react';
+import { Activity, Flame, Gauge, TrendingUp, X, MapPin } from 'lucide-react';
 import { HudTelemetry, TyreCompound } from '../types/racing';
 import { TyreTemperatureOverlay } from './TyreTemperatureOverlay';
 
@@ -9,6 +9,7 @@ interface TelemetryOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   compound?: TyreCompound;
+  trackName?: string;
 }
 
 interface TelemetrySample {
@@ -18,8 +19,44 @@ interface TelemetrySample {
   speed: number;
 }
 
-export function TelemetryOverlay({ hud, isOpen, onClose, compound = 'soft' }: TelemetryOverlayProps) {
-  const [activeTab, setActiveTab] = useState<'pedals' | 'tyres'>('pedals');
+function getGripHeatmapColors(gripPct: number): {
+  bandColor: string;
+  lineColor: string;
+  labelColor: string;
+  stateLabel: string;
+} {
+  if (gripPct >= 88) {
+    return {
+      bandColor: '#10B981',
+      lineColor: '#34D399',
+      labelColor: 'text-emerald-300',
+      stateLabel: 'HIGH GRIP',
+    };
+  }
+  if (gripPct >= 72) {
+    return {
+      bandColor: '#F59E0B',
+      lineColor: '#FACC15',
+      labelColor: 'text-amber-300',
+      stateLabel: 'MED GRIP',
+    };
+  }
+  return {
+    bandColor: '#EF4444',
+    lineColor: '#FB923C',
+    labelColor: 'text-red-400',
+    stateLabel: 'LOW GRIP / MARBLES',
+  };
+}
+
+export function TelemetryOverlay({
+  hud,
+  isOpen,
+  onClose,
+  compound = 'soft',
+  trackName = 'Grand Prix Circuit',
+}: TelemetryOverlayProps) {
+  const [activeTab, setActiveTab] = useState<'pedals' | 'tyres' | 'grip'>('pedals');
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [history, setHistory] = useState<TelemetrySample[]>([]);
 
@@ -120,6 +157,7 @@ export function TelemetryOverlay({ hud, isOpen, onClose, compound = 'soft' }: Te
   if (!isOpen) return null;
 
   const latest = history[history.length - 1] ?? { throttle: 0, brake: 0, speed: hud.speedKmh };
+  const sectorGrip = hud.sectorGripPct ?? [96, 93, 95];
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-hud-banner-pop">
@@ -134,7 +172,7 @@ export function TelemetryOverlay({ hud, isOpen, onClose, compound = 'soft' }: Te
               <div className="text-sm font-bold tracking-wider font-display uppercase text-white">
                 Live Telemetry & Driving Coach
               </div>
-              <div className="text-xs text-slate-400">Real-time D3 line chart analysis of driver inputs</div>
+              <div className="text-xs text-slate-400">Real-time D3 line charts & surface grip heatmaps</div>
             </div>
           </div>
           <button
@@ -147,24 +185,34 @@ export function TelemetryOverlay({ hud, isOpen, onClose, compound = 'soft' }: Te
         </div>
 
         {/* Navigation Tabs */}
-        <div className="grid grid-cols-2 gap-2 bg-white/5 p-1 rounded-xl">
+        <div className="grid grid-cols-3 gap-1.5 bg-white/5 p-1 rounded-xl">
           <button
             type="button"
             onClick={() => setActiveTab('pedals')}
-            className={`py-2 rounded-lg text-xs font-display font-bold uppercase transition-all cursor-pointer ${
+            className={`py-2 rounded-lg text-[11px] font-display font-bold uppercase transition-all cursor-pointer ${
               activeTab === 'pedals' ? 'bg-sky-500 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
             }`}
           >
-            Pedal Inputs & Speed
+            Pedals & Speed
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('tyres')}
-            className={`py-2 rounded-lg text-xs font-display font-bold uppercase transition-all cursor-pointer ${
+            className={`py-2 rounded-lg text-[11px] font-display font-bold uppercase transition-all cursor-pointer ${
               activeTab === 'tyres' ? 'bg-sky-500 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
             }`}
           >
-            Tyre Temperatures
+            Tyre Temps
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('grip')}
+            className={`py-2 rounded-lg text-[11px] font-display font-bold uppercase transition-all cursor-pointer flex items-center justify-center gap-1 ${
+              activeTab === 'grip' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>Circuit Grip</span>
           </button>
         </div>
 
@@ -218,10 +266,139 @@ export function TelemetryOverlay({ hud, isOpen, onClose, compound = 'soft' }: Te
               </span>
             </div>
           </>
-        ) : (
+        ) : activeTab === 'tyres' ? (
           <TyreTemperatureOverlay hud={hud} compound={compound} />
+        ) : (
+          /* Circuit Surface Grip Heatmap View */
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between bg-black/40 border border-white/10 rounded-xl p-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <div className="text-xs font-bold text-white font-display uppercase">{trackName}</div>
+                  <div className="text-[10px] text-slate-400 font-mono-telemetry">Surface Rubbering & Marbles Heatmap</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs font-bold text-emerald-300 font-mono-telemetry">
+                  AVG GRIP: {Math.round((sectorGrip[0] + sectorGrip[1] + sectorGrip[2]) / 3)}%
+                </div>
+                <div className="text-[9px] text-slate-400 font-mono">SECTOR EVOLUTION ACTIVE</div>
+              </div>
+            </div>
+
+            {/* Interactive Heatmap Circuit Map */}
+            <div className="relative flex items-center justify-center bg-black/60 border border-white/10 rounded-xl p-4">
+              <svg viewBox="0 0 100 100" className="w-48 h-44 overflow-visible">
+                <defs>
+                  <filter id="telemetry-heatmap-glow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="2" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+
+                {/* Track Casing */}
+                {hud.miniMapPath && (
+                  <>
+                    <path
+                      d={hud.miniMapPath}
+                      fill="none"
+                      stroke="rgba(15, 23, 42, 0.95)"
+                      strokeWidth="8.2"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d={hud.miniMapPath}
+                      fill="none"
+                      stroke="rgba(255, 255, 255, 0.2)"
+                      strokeWidth="5"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </>
+                )}
+
+                {/* Per-Sector Heatmap & Racing Line */}
+                {hud.miniMapSectorPaths && [0, 1, 2].map((secIdx) => {
+                  const gripVal = sectorGrip[secIdx] ?? 95;
+                  const colors = getGripHeatmapColors(gripVal);
+                  const isActive = hud.currentSector === secIdx + 1;
+                  const secPath = hud.miniMapSectorPaths?.[secIdx];
+                  const linePath = hud.miniMapRacingLinePaths?.[secIdx];
+
+                  if (!secPath) return null;
+
+                  return (
+                    <g key={`telemetry-grip-sec-${secIdx}`}>
+                      <path
+                        d={secPath}
+                        fill="none"
+                        stroke={colors.bandColor}
+                        strokeOpacity={isActive ? 0.65 : 0.42}
+                        strokeWidth={isActive ? 6.2 : 5.0}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        filter="url(#telemetry-heatmap-glow)"
+                      />
+                      <path
+                        d={linePath || secPath}
+                        fill="none"
+                        stroke={colors.lineColor}
+                        strokeOpacity={isActive ? 1.0 : 0.88}
+                        strokeWidth={isActive ? 2.4 : 1.8}
+                        strokeDasharray={gripVal >= 88 ? undefined : '3 2'}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                      />
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            {/* Sector Grip Breakdown Cards */}
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((secIdx) => {
+                const gripVal = sectorGrip[secIdx] ?? 95;
+                const colors = getGripHeatmapColors(gripVal);
+                const isActive = hud.currentSector === secIdx + 1;
+
+                return (
+                  <div
+                    key={`sec-card-${secIdx}`}
+                    className={`rounded-xl border p-2.5 flex flex-col gap-1 transition-all ${
+                      isActive
+                        ? 'bg-emerald-500/15 border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                        : 'bg-white/5 border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono-telemetry font-bold">
+                      <span className={isActive ? 'text-emerald-300' : 'text-slate-300'}>
+                        SECTOR {secIdx + 1}
+                      </span>
+                      {isActive && (
+                        <span className="px-1 rounded bg-emerald-500 text-slate-950 font-black text-[8px]">
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-lg font-display font-black text-white tabular-nums">
+                      {gripVal.toFixed(1)}%
+                    </div>
+                    <div className={`text-[9px] font-mono-telemetry font-bold ${colors.labelColor}`}>
+                      {colors.stateLabel}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
-}
+};

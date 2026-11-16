@@ -2236,6 +2236,130 @@ export function buildCircuitEnvironment(
     eurekaGroup.add(eSpire);
     group.add(eurekaGroup);
     disposables.push(eurekaBlueMat, eurekaGoldMat, eBodyGeo, eCrownGeo, eSpireGeo);
+  } else if (biome === 'madrid') {
+    // Madrid IFEMA Glass Exhibition Halls + Banked Valdebebas Amphitheatre + Madrid Skyline
+    const ifemaGroup = new THREE.Group();
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      map: textures.skyscraperGlassMap,
+      emissiveMap: textures.skyscraperEmissiveMap,
+      emissive: 0xfdba74,
+      emissiveIntensity: isNight || isSunset ? 1.1 : 0.25,
+      color: 0xe2e8f0,
+      metalness: 0.78,
+      roughness: 0.16,
+    });
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.65, roughness: 0.3 });
+    const hallGeo = new THREE.BoxGeometry(44, 14, 24);
+    const trussGeo = new THREE.BoxGeometry(46, 2.2, 4.5);
+    disposables.push(glassMat, steelMat, hallGeo, trussGeo);
+
+    for (const [hx, hz, rotY] of [
+      [-95, -55, 0.12],
+      [-95, 25, 0.05],
+      [295, -80, -0.35],
+    ]) {
+      const hg = new THREE.Group();
+      hg.position.set(hx, terrainHeightAt(hx, hz), hz);
+      hg.rotation.y = rotY;
+      const hall = new THREE.Mesh(hallGeo, glassMat);
+      hall.position.y = 7;
+      hg.add(hall);
+      const truss = new THREE.Mesh(trussGeo, steelMat);
+      truss.position.y = 15;
+      hg.add(truss);
+      ifemaGroup.add(hg);
+    }
+
+    // Valdebebas Banked Bowl Canopy Arch
+    const archGeo = new THREE.TorusGeometry(34, 2.4, 8, 28, Math.PI);
+    const arch = new THREE.Mesh(archGeo, steelMat);
+    arch.position.set(220, terrainHeightAt(220, -185), -185);
+    ifemaGroup.add(arch);
+    disposables.push(archGeo);
+    group.add(ifemaGroup);
+
+    addSkyscraperCluster(20, -185, -95, -240, 220, 32, 82, isNight || isSunset);
+  } else if (biome === 'shanghai') {
+    // Shanghai International Lotus Media Tower + Twin Sweeping Bridge Grandstand Roofs
+    const shGroup = new THREE.Group();
+    const concreteMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.42 });
+    const neonGlassMat = new THREE.MeshPhysicalMaterial({
+      map: textures.skyscraperGlassMap,
+      emissiveMap: textures.skyscraperEmissiveMap,
+      emissive: 0x38bdf8,
+      emissiveIntensity: isNight || isSunset ? 1.5 : 0.35,
+      metalness: 0.84,
+      roughness: 0.14,
+    });
+    const wingGeo = new THREE.BoxGeometry(58, 4.2, 16);
+    const pylonGeo = new THREE.CylinderGeometry(1.6, 2.4, 24, 10);
+    const lotusOrbGeo = new THREE.SphereGeometry(7.2, 14, 12);
+    const spireGeo = new THREE.CylinderGeometry(0.45, 2.2, 92, 10);
+    disposables.push(concreteMat, neonGlassMat, wingGeo, pylonGeo, lotusOrbGeo, spireGeo);
+
+    // Sweeping Bridge Overpass Hospitality Wing across back section
+    for (const side of [-1, 1]) {
+      const p = new THREE.Mesh(pylonGeo, concreteMat);
+      p.position.set(110 + side * 24, 12, -190);
+      shGroup.add(p);
+    }
+    const bridgeWing = new THREE.Mesh(wingGeo, neonGlassMat);
+    bridgeWing.position.set(110, 25, -190);
+    shGroup.add(bridgeWing);
+
+    // Iconic Pudong-inspired Lotus Media Spire
+    const lotusTower = new THREE.Group();
+    lotusTower.position.set(315, terrainHeightAt(315, -40), -40);
+    const spire = new THREE.Mesh(spireGeo, concreteMat);
+    spire.position.y = 46;
+    lotusTower.add(spire);
+    const orbLow = new THREE.Mesh(lotusOrbGeo, neonGlassMat);
+    orbLow.position.y = 32;
+    lotusTower.add(orbLow);
+    const orbHigh = new THREE.Mesh(lotusOrbGeo, neonGlassMat);
+    orbHigh.scale.setScalar(0.74);
+    orbHigh.position.y = 66;
+    lotusTower.add(orbHigh);
+    shGroup.add(lotusTower);
+    group.add(shGroup);
+
+    addSkyscraperCluster(24, 290, 420, -250, 220, 36, 98, isNight || isSunset);
+  } else if (biome === 'interlagos') {
+    // Interlagos São Paulo Terraced Hillside Stands & Paddock Gantry + Horizon High-Rises
+    const brGroup = new THREE.Group();
+    const concreteMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.72 });
+    const greenMat = new THREE.MeshStandardMaterial({
+      color: 0x16a34a,
+      emissive: 0x22c55e,
+      emissiveIntensity: isNight ? 0.55 : 0.08,
+      roughness: 0.45,
+    });
+    const yellowMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 });
+    const standGeo = new THREE.BoxGeometry(52, 8.5, 16);
+    const roofGeo = new THREE.BoxGeometry(54, 1.4, 18);
+    disposables.push(concreteMat, greenMat, yellowMat, standGeo, roofGeo);
+
+    for (const [sx, sz, yaw, accent] of [
+      [-68, -40, 0.1, greenMat],
+      [-68, 55, 0.0, yellowMat],
+      [185, -190, -0.5, greenMat],
+      [285, 65, -1.35, yellowMat],
+    ] as const) {
+      const sg = new THREE.Group();
+      sg.position.set(sx, terrainHeightAt(sx, sz), sz);
+      sg.rotation.y = yaw;
+      const base = new THREE.Mesh(standGeo, concreteMat);
+      base.position.y = 4.2;
+      sg.add(base);
+      const roof = new THREE.Mesh(roofGeo, accent);
+      roof.position.y = 10.2;
+      sg.add(roof);
+      brGroup.add(sg);
+    }
+    group.add(brGroup);
+
+    // Dense São Paulo Paulista-style residential high-rises on the distant ridge
+    addSkyscraperCluster(24, -185, -90, -260, 230, 26, 72, isNight || isSunset);
   }
 
   // ============================================================================

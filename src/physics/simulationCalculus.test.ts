@@ -1,13 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+  GameSettings,
+} from '../types/racing';
+import {
+  applyOnlineAssistCapPreset,
   buildDefaultPitStrategy,
+  calculate2026ActiveAero,
+  calculate2026PowerUnitDeployment,
   calculateGForces,
   calculateCockpitGOffset,
   calculatePitStrategy,
   calculateTrackSurfaceEvolution,
+  calculateWheelWearDeltas,
+  evaluateAiPitStrategy,
+  evaluateDynamicWeatherTyreImpact,
+  evaluateOnlineMatchmakingProfile,
   evaluateRacingLineSurfaceGrip,
   normalizePitStrategyPlan,
+  resolveEffectiveSessionAssists,
   simulateStrategyProjection,
 } from './simulationCalculus';
 
@@ -189,4 +201,299 @@ test('calculateTrackSurfaceEvolution and evaluateRacingLineSurfaceGrip model rac
   assert.ok(offLine.lineEvolutionGripMultiplier < 0.9, 'Off-line marbles should reduce grip');
   assert.ok(offLine.localSurfaceGripPct < onLine.localSurfaceGripPct);
 });
+
+test('calculate2026PowerUnitDeployment tapers standard 350kW MGU-K above 290 km/h while MOM sustains high-speed deployment', () => {
+  const standardHighSpeed = calculate2026PowerUnitDeployment({
+    speedKmh: 332,
+    throttleIn: 1,
+    brakeIn: 0,
+    ersCharge: 85,
+    overrideRequested: false,
+    overrideAvailable: true,
+  });
+  const momHighSpeed = calculate2026PowerUnitDeployment({
+    speedKmh: 332,
+    throttleIn: 1,
+    brakeIn: 0,
+    ersCharge: 85,
+    overrideRequested: true,
+    overrideAvailable: true,
+  });
+  assert.ok(momHighSpeed.mgukPowerKw > standardHighSpeed.mgukPowerKw);
+  assert.equal(momHighSpeed.mgukPowerKw, 350);
+  assert.ok(momHighSpeed.driveBoostMultiplier > standardHighSpeed.driveBoostMultiplier);
+});
+
+test('calculate2026ActiveAero engages X-Mode on straights and Z-Mode in corners', () => {
+  const straightAero = calculate2026ActiveAero({
+    inAeroZone: true,
+    disabledByWeather: false,
+    speedKmh: 280,
+    absSteerRad: 0.04,
+  });
+  const cornerAero = calculate2026ActiveAero({
+    inAeroZone: false,
+    disabledByWeather: false,
+    speedKmh: 165,
+    absSteerRad: 0.35,
+  });
+  const lockedZMode = calculate2026ActiveAero({
+    inAeroZone: true,
+    disabledByWeather: false,
+    speedKmh: 280,
+    absSteerRad: 0.04,
+    manualZModeLock: true,
+  });
+  assert.equal(straightAero.mode, 'x_mode');
+  assert.ok(straightAero.dragMultiplier < cornerAero.dragMultiplier);
+  assert.equal(cornerAero.mode, 'z_mode');
+  assert.ok(cornerAero.downforceGripMultiplier > straightAero.downforceGripMultiplier);
+  assert.equal(lockedZMode.mode, 'z_mode');
+  assert.equal(lockedZMode.downforceGripMultiplier, cornerAero.downforceGripMultiplier);
+});
+
+test('calculateWheelWearDeltas loads outer front tyres harder under left-hand cornering & braking', () => {
+  const deltas = calculateWheelWearDeltas({
+    lateralVelMs: 4.5,
+    gLat: 3.4, // Left turn -> loads outer right side (FR, RR)
+    gLong: -3.2, // Braking -> loads fronts (FL, FR)
+    speedMs: 55,
+    offTrack: false,
+    lockupWear: 0.3,
+    debrisAbrasion: 0,
+    compound: 'soft',
+    trackWetnessRatio: 0,
+    wheelWearPct: [80, 80, 80, 80],
+    wheelSurfaceTempC: [98, 109, 94, 102],
+    contactPatchWearMult: 1.0,
+    tyreVerticalLoadFactor: 1.04,
+    dt: 0.05,
+  });
+  assert.ok(deltas[1] > deltas[0], 'FR tyre should degrade faster than FL under left-hand cornering');
+  assert.ok(deltas[1] > deltas[2], 'FR outer front under braking+cornering should degrade faster than inner rear');
+});
+
+test('evaluateAiPitStrategy triggers weather crossover and strategic undercut stops', () => {
+  const rainSwitch = evaluateAiPitStrategy({
+    archetype: 'overcut_long',
+    currentLap: 3,
+    totalLaps: 6,
+    tyreWearPct: 82,
+    currentCompound: 'medium',
+    trackWetnessRatio: 0.55,
+    pitStopsCompleted: 0,
+    gapAheadSec: null,
+  });
+  assert.equal(rainSwitch.shouldPit, true);
+  assert.equal(rainSwitch.nextCompound, 'wet');
+  assert.equal(rainSwitch.reason, 'weather_crossover');
+
+  const undercutStop = evaluateAiPitStrategy({
+    archetype: 'undercut_1stop',
+    currentLap: 3,
+    totalLaps: 8,
+    tyreWearPct: 68,
+    currentCompound: 'soft',
+    trackWetnessRatio: 0.05,
+    pitStopsCompleted: 0,
+    gapAheadSec: 1.1,
+  });
+  assert.equal(undercutStop.shouldPit, true);
+  assert.equal(undercutStop.reason, 'undercut');
+});
+
+test('evaluateDynamicWeatherTyreImpact models rain crossover, extreme track heat, drying overheating, and cold asphalt', () => {
+  // 1. Heavy rain hits slick tyres -> sharp grip drop + urgent wet crossover
+  const slickInRain = evaluateDynamicWeatherTyreImpact({
+    weather: 'heavy_rain',
+    compound: 'medium',
+    trackWetnessRatio: 0.68,
+    trackTemperatureC: 17,
+    prevTrackTemperatureC: 21,
+    speedMs: 58,
+    remainingLaps: 6,
+  });
+  assert.ok(slickInRain.gripMultiplier < 0.75, 'Dry slicks should lose major grip in heavy rain');
+  assert.equal(slickInRain.optimalCompound, 'wet');
+  assert.equal(slickInRain.regime, 'wet_crossover');
+  assert.equal(slickInRain.crossoverUrgent, true);
+  assert.equal(slickInRain.trackTempTrend, 'cooling');
+
+  // 2. Wet tyres thrive in standing water with evaporative cooling
+  const wetInRain = evaluateDynamicWeatherTyreImpact({
+    weather: 'rain',
+    compound: 'wet',
+    trackWetnessRatio: 0.65,
+    trackTemperatureC: 18,
+    speedMs: 65,
+    remainingLaps: 6,
+  });
+  assert.ok(wetInRain.gripMultiplier > 0.98);
+  assert.ok(wetInRain.thermalOffsetC < 0, 'Wet spray cools tread surface');
+  assert.equal(wetInRain.crossoverUrgent, false);
+
+  // 3. Drying track overheats wet tyres rapidly -> switch back to slicks
+  const wetOnDry = evaluateDynamicWeatherTyreImpact({
+    weather: 'partly_cloudy',
+    compound: 'wet',
+    trackWetnessRatio: 0.05,
+    trackTemperatureC: 34,
+    prevTrackTemperatureC: 31,
+    speedMs: 72,
+    remainingLaps: 7,
+  });
+  assert.ok(wetOnDry.wearMultiplier > 1.8, 'Wet tyres degrade quickly on drying asphalt');
+  assert.ok(wetOnDry.thermalOffsetC > 15);
+  assert.equal(wetOnDry.regime, 'drying_crossover');
+  assert.equal(wetOnDry.crossoverUrgent, true);
+  assert.equal(wetOnDry.trackTempTrend, 'heating');
+
+  // 4. Extreme 50°C asphalt heat accelerates soft wear & recommends Hard compound
+  const softInHeat = evaluateDynamicWeatherTyreImpact({
+    weather: 'day',
+    compound: 'soft',
+    trackWetnessRatio: 0,
+    trackTemperatureC: 50,
+    speedMs: 68,
+    remainingLaps: 8,
+  });
+  assert.ok(softInHeat.wearMultiplier > 1.25);
+  assert.equal(softInHeat.regime, 'extreme_heat');
+  assert.equal(softInHeat.optimalCompound, 'hard');
+  assert.equal(softInHeat.crossoverUrgent, true);
+
+  // 5. Cold track drops hard tyre warm-up grip -> recommends Soft compound
+  const hardOnCold = evaluateDynamicWeatherTyreImpact({
+    weather: 'cloudy',
+    compound: 'hard',
+    trackWetnessRatio: 0,
+    trackTemperatureC: 16,
+    speedMs: 52,
+    remainingLaps: 5,
+  });
+  assert.ok(hardOnCold.gripMultiplier < 0.9);
+  assert.equal(hardOnCold.regime, 'cold_track');
+  assert.equal(hardOnCold.optimalCompound, 'soft');
+});
+
+test('calculate2026PowerUnitDeployment respects harvest vs overtake ERS modes', () => {
+  const harvest = calculate2026PowerUnitDeployment({
+    speedKmh: 240,
+    throttleIn: 1,
+    brakeIn: 0,
+    ersCharge: 55,
+    overrideRequested: false,
+    overrideAvailable: true,
+    ersMode: 'harvest',
+  });
+  const overtake = calculate2026PowerUnitDeployment({
+    speedKmh: 240,
+    throttleIn: 1,
+    brakeIn: 0,
+    ersCharge: 55,
+    overrideRequested: false,
+    overrideAvailable: true,
+    ersMode: 'overtake',
+  });
+  assert.ok(harvest.mgukPowerKw < overtake.mgukPowerKw, 'Harvest mode saves battery vs Overtake mode');
+  assert.ok(harvest.ersDrainPerSec < overtake.ersDrainPerSec, 'Harvest mode drains substantially less ERS');
+  assert.ok(overtake.driveBoostMultiplier > harvest.driveBoostMultiplier, 'Overtake delivers stronger drive boost');
+});
+
+test('evaluateOnlineMatchmakingProfile reflects cross-play pool, region ping, and ping cap checks', () => {
+  const crossPlayAuto = evaluateOnlineMatchmakingProfile({
+    ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+    crossPlayEnabled: true,
+    serverRegion: 'auto',
+    maxPingMs: 90,
+  });
+  const lockedSinglePlatform = evaluateOnlineMatchmakingProfile({
+    ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+    crossPlayEnabled: false,
+    serverRegion: 'oceania',
+    maxPingMs: 50,
+    allowRegionFailover: false,
+  });
+
+  assert.ok(crossPlayAuto.poolMultiplier > lockedSinglePlatform.poolMultiplier * 2);
+  assert.ok(crossPlayAuto.estimatedPingMs < lockedSinglePlatform.estimatedPingMs);
+  assert.equal(crossPlayAuto.pingWithinCap, true);
+  assert.equal(lockedSinglePlatform.pingWithinCap, false);
+  assert.equal(lockedSinglePlatform.readinessLabel, 'Ping Exceeds Max Cap');
+  assert.ok(crossPlayAuto.estimatedQueueSec < lockedSinglePlatform.estimatedQueueSec);
+});
+
+test('applyOnlineAssistCapPreset and resolveEffectiveSessionAssists clamp assists when online rules are active', () => {
+  const esportsCaps = applyOnlineAssistCapPreset('esports_no_assists');
+  const fullPlayerSettings: GameSettings = {
+    transmission: 'auto',
+    steeringSensitivity: 1,
+    difficulty: 'pro',
+    touchControls: false,
+    muted: false,
+    cameraMode: 'chase',
+    weather: 'day',
+    dynamicWeather: false,
+    totalLaps: 5,
+    graphicsQuality: 'high',
+    targetFps: 60,
+    motionBlur: false,
+    absAssist: true,
+    tcAssist: true,
+    steeringAssist: true,
+    brakingAssist: 'high',
+    tractionControlMode: 'full',
+    racingLine: 'full',
+    ersAssist: true,
+    drsAssist: true,
+    pitAssist: true,
+    onlineGameplay: {
+      ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+      ...esportsCaps,
+      applyOnlineRulesToSession: true,
+    },
+  };
+
+  const enforced = resolveEffectiveSessionAssists(fullPlayerSettings);
+  assert.equal(enforced.onlineEnforced, true);
+  assert.equal(enforced.transmission, 'manual');
+  assert.equal(enforced.brakingAssist, 'off');
+  assert.equal(enforced.steeringAssist, false);
+  assert.equal(enforced.absAssist, false);
+  assert.equal(enforced.tractionControlMode, 'off');
+  assert.equal(enforced.racingLine, 'off');
+  assert.equal(enforced.ersAssist, false);
+  assert.equal(enforced.drsAssist, false);
+  assert.equal(enforced.pitAssist, false);
+
+  const limitedPro = resolveEffectiveSessionAssists({
+    ...fullPlayerSettings,
+    onlineGameplay: {
+      ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+      ...applyOnlineAssistCapPreset('limited_pro'),
+      applyOnlineRulesToSession: true,
+    },
+  });
+  assert.equal(limitedPro.tractionControlMode, 'medium');
+  assert.equal(limitedPro.racingLine, 'corners');
+  assert.equal(limitedPro.absAssist, true);
+  assert.equal(limitedPro.transmission, 'auto');
+
+  const bypassed = resolveEffectiveSessionAssists({
+    ...fullPlayerSettings,
+    onlineGameplay: {
+      ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+      ...esportsCaps,
+      applyOnlineRulesToSession: false,
+    },
+  });
+  assert.equal(bypassed.onlineEnforced, false);
+  assert.equal(bypassed.transmission, 'auto');
+  assert.equal(bypassed.brakingAssist, 'high');
+  assert.equal(bypassed.tractionControlMode, 'full');
+  assert.equal(bypassed.racingLine, 'full');
+});
+
+
+
 

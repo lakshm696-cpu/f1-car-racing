@@ -35,18 +35,24 @@ import {
 } from 'lucide-react';
 import {
   CIRCUIT_TRACKS,
+  F1_2026_DEV_FOCUSES,
+  F1_2026_SPONSORS,
   F1_INVITATIONALS,
   F1_WORLD_MAP_PINS,
   F1WorldMapPin,
 } from '../data/racingData';
 import { getCircuitEnvironmentConfig } from '../three/circuitEnvironments';
+import { evaluateOnlineMatchmakingProfile } from '../physics/simulationCalculus';
 import {
   CareerProgress,
   CarUpgrades,
   CircuitTrack,
+  DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+  DevelopmentFocus,
   DriverProfile,
   FormulaTeam,
   GameMode,
+  OnlineGameplaySettings,
   PreRacePitStrategy,
   TimeOfDayMode,
   WeatherMode,
@@ -80,6 +86,9 @@ interface TitleOverlayProps {
   onOpenGarage: () => void;
   onOpenPitStrategy?: () => void;
   onOpenSettings: () => void;
+  onlineGameplay?: OnlineGameplaySettings;
+  onOpenOnlineSettings?: () => void;
+  onSelectDevFocus?: (focus: DevelopmentFocus) => void;
   onClaimAchievement?: (achievementId: string, creditBonus: number, techBonus: number) => void;
   onJumpTitleScene: (scene: 1 | 2 | 3 | 4 | 5) => void;
   onStartRace: () => void;
@@ -145,6 +154,56 @@ const TRAILER_SCENES: {
   },
 ];
 
+interface CircuitLapRecord {
+  time: string;
+  driver: string;
+  team: string;
+  year: number;
+}
+
+const CIRCUIT_LAP_RECORDS: Record<string, CircuitLapRecord> = {
+  monza_apex: { time: '1:18.887', driver: 'Lewis Hamilton', team: 'Mercedes', year: 2020 },
+  marina_harbor: { time: '1:35.867', driver: 'Lewis Hamilton', team: 'Mercedes', year: 2023 },
+  alpine_ring: { time: '1:05.619', driver: 'Carlos Sainz', team: 'McLaren', year: 2020 },
+  monaco_harbor: { time: '1:10.166', driver: 'Lewis Hamilton', team: 'Mercedes', year: 2021 },
+  silverstone_gp: { time: '1:27.097', driver: 'Max Verstappen', team: 'Red Bull Racing', year: 2020 },
+  spa_ardennes: { time: '1:46.286', driver: 'Valtteri Bottas', team: 'Mercedes', year: 2018 },
+  suzuka_circuit: { time: '1:30.983', driver: 'Lewis Hamilton', team: 'Mercedes', year: 2019 },
+  las_vegas_strip: { time: '1:35.490', driver: 'Oscar Piastri', team: 'McLaren', year: 2023 },
+  yas_marina: { time: '1:26.103', driver: 'Max Verstappen', team: 'Red Bull Racing', year: 2021 },
+  bahrain_sakhir: { time: '1:31.447', driver: 'Pedro de la Rosa', team: 'McLaren', year: 2005 },
+  albert_park: { time: '1:19.813', driver: 'Charles Leclerc', team: 'Ferrari', year: 2024 },
+  madrid_madring: { time: '1:24.610', driver: 'Carlos Sainz', team: 'Williams', year: 2026 },
+  shanghai_gp: { time: '1:32.238', driver: 'Michael Schumacher', team: 'Ferrari', year: 2004 },
+  interlagos_gp: { time: '1:10.540', driver: 'Valtteri Bottas', team: 'Mercedes', year: 2018 },
+};
+
+function generateTrackSvgPath(controlPoints: [number, number, number][]): string {
+  if (!controlPoints || controlPoints.length === 0) return 'M 20,50 L 80,50';
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, , z] of controlPoints) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  }
+  const spanX = maxX - minX || 1;
+  const spanZ = maxZ - minZ || 1;
+  const maxSpan = Math.max(spanX, spanZ);
+  const pad = 12;
+  const usable = 100 - pad * 2;
+  const offsetX = pad + (usable - (spanX / maxSpan) * usable) * 0.5;
+  const offsetY = pad + (usable - (spanZ / maxSpan) * usable) * 0.5;
+
+  const pts = controlPoints.map(([x, , z], idx) => {
+    const px = offsetX + ((x - minX) / maxSpan) * usable;
+    const py = offsetY + ((z - minZ) / maxSpan) * usable;
+    return `${idx === 0 ? 'M' : 'L'}${px.toFixed(1)},${py.toFixed(1)}`;
+  });
+  pts.push('Z');
+  return pts.join(' ');
+}
+
 export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   selectedTrack,
   selectedTeam,
@@ -179,6 +238,9 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   onOpenGarage,
   onOpenPitStrategy,
   onOpenSettings,
+  onlineGameplay = DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
+  onOpenOnlineSettings,
+  onSelectDevFocus,
   onClaimAchievement,
   onJumpTitleScene,
   onStartRace,
@@ -189,6 +251,10 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   const [f1WorldTab, setF1WorldTab] = useState<F1WorldTab>('showroom');
   const [achievementFilter, setAchievementFilter] = useState<AchievementFilter>('all');
   const [selectedPin, setSelectedPin] = useState<F1WorldMapPin>(F1_WORLD_MAP_PINS[0]);
+  const onlineProfile = useMemo(
+    () => evaluateOnlineMatchmakingProfile(onlineGameplay),
+    [onlineGameplay]
+  );
 
   useEffect(() => {
     let raf = 0;
@@ -568,11 +634,24 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             <button
               type="button"
               onClick={onOpenPitStrategy}
-              className="px-2.5 py-1.5 rounded-lg border border-amber-400/50 bg-amber-500/15 text-xs font-semibold text-amber-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              className="px-2.5 py-1.5 rounded-lg border border-amber-400/50 bg-amber-500/15 text-xs font-semibold text-amber-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
               <Layers className="w-3.5 h-3.5 text-amber-300" />
               <span>
                 Pit Strategy ({totalLaps}L · {pitStrategyPlan?.stops.length ?? 0}-Stop)
+              </span>
+            </button>
+          )}
+
+          {onOpenOnlineSettings && (
+            <button
+              type="button"
+              onClick={onOpenOnlineSettings}
+              className="px-2.5 py-1.5 rounded-lg border border-emerald-400/45 bg-emerald-500/15 text-xs font-semibold text-emerald-200 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums"
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-300" />
+              <span>
+                Online · {onlineProfile.regionLabel} · {onlineProfile.estimatedPingMs}ms
               </span>
             </button>
           )}
@@ -598,11 +677,11 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             <button
               type="button"
               onClick={onToggleEgoHudMode}
-              title="Switch between In-Game Broadcast HUD and Full F1 25 Menu (H)"
+              title="Switch between In-Game Broadcast HUD and Full F1 26 Menu (H)"
               className="px-2.5 py-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 text-xs font-semibold text-cyan-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
               <Settings2 className="w-3.5 h-3.5" />
-              <span>F1® 25 Menu (H)</span>
+              <span>F1® 26 Menu (H)</span>
             </button>
           )}
         </div>
@@ -699,7 +778,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             {(
               [
                 { id: 'showroom', label: '3D SHOWROOM' },
-                { id: 'series', label: 'SERIES' },
+                { id: 'series', label: 'GAME MODES & 2026' },
                 { id: 'events', label: 'SOLO & MULTIPLAYER EVENTS' },
                 { id: 'invitationals', label: 'INVITATIONALS' },
                 { id: 'achievements', label: 'CAREER ACHIEVEMENTS' },
@@ -821,10 +900,24 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               <span className="hidden sm:inline">OSD (H)</span>
             </button>
 
+            {onOpenOnlineSettings && (
+              <button
+                type="button"
+                onClick={onOpenOnlineSettings}
+                className="px-3 py-2 rounded-xl border border-emerald-400/40 text-xs font-semibold text-emerald-200 hover:text-white flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 tabular-nums"
+                style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
+              >
+                <Globe className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline">
+                  Online ({onlineProfile.regionLabel} · {onlineProfile.estimatedPingMs}ms)
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onOpenSettings}
-              className="px-3 py-2 rounded-xl border border-white/15 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-2 rounded-xl border border-white/15 text-xs font-semibold text-slate-200 hover:text-white flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
             >
               <Settings2 className="w-4 h-4" />
@@ -835,32 +928,241 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
 
         {/* Title Lockup & Active Driver/Team Strip (when in Showroom Mode) */}
         {f1WorldTab === 'showroom' && (
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div
-              className="max-w-xl rounded-2xl border border-white/10 px-4 py-2.5 shadow-xl"
-              style={{ backgroundColor: 'rgba(9, 11, 15, 0.72)' }}
-            >
-              <div className="flex items-center gap-3 mb-1">
-                <svg width="42" height="20" viewBox="0 0 44 24" fill="none" aria-hidden="true">
-                  <path d="M2 18L14 6H42L36 12H18L10 18H2Z" fill="#EF4444" />
-                  <path d="M12 20L20 13H40L35 18H19L15 20H12Z" fill="#F8FAFC" />
-                </svg>
-                <span className="text-xs font-semibold tracking-widest text-amber-400 uppercase">
-                  EA SPORTS™ F1® 25 &amp; 2026 CHAMPIONSHIP · {career.championshipPoints} PTS · {career.credits.toLocaleString()} CR
-                </span>
-              </div>
-              <h1
-                className="font-display font-bold text-3xl sm:text-5xl tracking-tight text-white leading-[1.05]"
-                style={{ textShadow: '0 4px 24px rgba(0,0,0,0.6)' }}
+          <div className="flex flex-col lg:flex-row items-start justify-between gap-4">
+            <div className="flex flex-wrap items-start gap-4">
+              <div
+                className="max-w-xl rounded-2xl border border-white/10 px-4 py-2.5 shadow-xl"
+                style={{ backgroundColor: 'rgba(9, 11, 15, 0.72)' }}
               >
-                Ultimate Formula Racing
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-100 mt-1">
-                {selectedDriver.name} (#{selectedDriver.number}) · {selectedTeam.name} · {selectedTrack.name} ({selectedTrack.lengthKm} km)
-              </p>
-              <p className="text-[11px] font-mono-telemetry text-cyan-300 mt-0.5">
-                Environment: {getCircuitEnvironmentConfig(selectedTrack).displayLabel}
-              </p>
+                <div className="flex items-center gap-3 mb-1">
+                  <svg width="42" height="20" viewBox="0 0 44 24" fill="none" aria-hidden="true">
+                    <path d="M2 18L14 6H42L36 12H18L10 18H2Z" fill="#EF4444" />
+                    <path d="M12 20L20 13H40L35 18H19L15 20H12Z" fill="#F8FAFC" />
+                  </svg>
+                  <span className="text-xs font-semibold tracking-widest text-amber-400 uppercase">
+                    EA SPORTS™ F1® 26 CHAMPIONSHIP · {career.championshipPoints} PTS · {career.credits.toLocaleString()} CR
+                  </span>
+                </div>
+                <h1
+                  className="font-display font-bold text-3xl sm:text-5xl tracking-tight text-white leading-[1.05]"
+                  style={{ textShadow: '0 4px 24px rgba(0,0,0,0.6)' }}
+                >
+                  Ultimate Formula Racing
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-100 mt-1">
+                  {selectedDriver.name} (#{selectedDriver.number}) · {selectedTeam.name} · {selectedTrack.name} ({selectedTrack.lengthKm} km)
+                </p>
+                <p className="text-[11px] font-mono-telemetry text-cyan-300 mt-0.5">
+                  Environment: {getCircuitEnvironmentConfig(selectedTrack).displayLabel}
+                </p>
+
+                {gameMode === 'career' && (() => {
+                  const activeSponsor =
+                    F1_2026_SPONSORS.find((s) => s.id === (career.sponsorId ?? 'apex_cloud')) ??
+                    F1_2026_SPONSORS[0];
+                  const capSpent = career.costCapSpentM ?? 42.5;
+                  const capLimit = career.costCapLimitM ?? 135;
+                  const capPct = Math.min(100, Math.round((capSpent / Math.max(1, capLimit)) * 100));
+                  const pu = career.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 };
+                  const puLowest = Math.min(pu.ice, pu.mguk, pu.battery, pu.gearbox);
+                  return (
+                    <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-2 text-[11px]">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2 text-slate-300 tabular-nums">
+                          <span className="font-mono-telemetry font-bold text-white">
+                            RD {career.seasonRound ?? 1}/24
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <span className="font-mono-telemetry text-emerald-300">
+                            Cap ${capSpent.toFixed(1)}M/${capLimit}M ({capPct}%)
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <span
+                            className={`font-mono-telemetry font-semibold ${
+                              puLowest < 72 ? 'text-amber-300' : 'text-cyan-300'
+                            }`}
+                          >
+                            PU Min {puLowest}%
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <span className="text-amber-300 truncate max-w-[140px]">
+                            {activeSponsor.name}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={onOpenGarage}
+                          className="pointer-events-auto px-2.5 py-0.5 rounded border border-amber-400/45 bg-amber-500/15 hover:bg-amber-500/25 text-[10px] font-semibold text-amber-200 cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          Team &amp; Cost Cap
+                        </button>
+                      </div>
+                      {onSelectDevFocus && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 mr-1">
+                            R&amp;D Focus:
+                          </span>
+                          {F1_2026_DEV_FOCUSES.map((focus) => {
+                            const active = (career.developmentFocus ?? 'balanced') === focus.id;
+                            return (
+                              <button
+                                key={focus.id}
+                                type="button"
+                                onClick={() => onSelectDevFocus(focus.id)}
+                                title={focus.summary}
+                                className={`pointer-events-auto px-2 py-0.5 rounded text-[10px] font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                                  active
+                                    ? 'bg-cyan-400 text-slate-950 font-bold'
+                                    : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'
+                                }`}
+                              >
+                                {focus.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Persistent Track Guide Panel */}
+              <div
+                className="pointer-events-auto rounded-2xl border border-white/15 p-3.5 shadow-2xl backdrop-md flex flex-col gap-2.5 w-72 sm:w-80"
+                style={{ backgroundColor: 'rgba(9, 11, 15, 0.88)' }}
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-red-500" />
+                    <span className="font-display font-bold text-xs tracking-wider text-white uppercase">
+                      CIRCUIT TRACK GUIDE
+                    </span>
+                  </div>
+                  <span
+                    className={`px-1.5 py-0.2 rounded border text-[10px] font-mono-telemetry font-bold ${
+                      selectedTrack.id === 'madrid_madring' ||
+                      selectedTrack.id === 'interlagos_gp' ||
+                      selectedTrack.id === 'shanghai_gp'
+                        ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300'
+                        : 'bg-red-600/20 border-red-500/40 text-red-400'
+                    }`}
+                  >
+                    {selectedTrack.id === 'madrid_madring'
+                      ? '2026 NEW'
+                      : selectedTrack.id === 'interlagos_gp' || selectedTrack.id === 'shanghai_gp'
+                        ? '2026 SPEC'
+                        : 'FIA SPEC'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col">
+                  <h3 className="font-display font-bold text-sm text-white tracking-wide truncate">
+                    {selectedTrack.name}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {selectedTrack.country}
+                  </p>
+                </div>
+
+                {/* SVG Circuit Layout Preview */}
+                <div className="relative w-full h-24 rounded-xl bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden my-0.5 shadow-inner">
+                  <svg
+                    viewBox="0 0 100 100"
+                    className="w-24 h-24 overflow-visible"
+                    aria-label={`${selectedTrack.name} Circuit Layout`}
+                  >
+                    <defs>
+                      <filter id="track-guide-glow" x="-30%" y="-30%" width="160%" height="160%">
+                        <feGaussianBlur stdDeviation="1.2" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
+                    <path
+                      d={generateTrackSvgPath(selectedTrack.controlPoints)}
+                      fill="none"
+                      stroke="rgba(239, 68, 68, 0.4)"
+                      strokeWidth="5.5"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      filter="url(#track-guide-glow)"
+                    />
+                    <path
+                      d={generateTrackSvgPath(selectedTrack.controlPoints)}
+                      fill="none"
+                      stroke="#38BDF8"
+                      strokeWidth="3.0"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                    {selectedTrack.controlPoints[0] && (() => {
+                      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+                      for (const [x, , z] of selectedTrack.controlPoints) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (z < minZ) minZ = z;
+                        if (z > maxZ) maxZ = z;
+                      }
+                      const spanX = maxX - minX || 1;
+                      const spanZ = maxZ - minZ || 1;
+                      const maxSpan = Math.max(spanX, spanZ);
+                      const pad = 12;
+                      const usable = 100 - pad * 2;
+                      const offsetX = pad + (usable - (spanX / maxSpan) * usable) * 0.5;
+                      const offsetY = pad + (usable - (spanZ / maxSpan) * usable) * 0.5;
+                      const [sx, , sz] = selectedTrack.controlPoints[0];
+                      const startX = offsetX + ((sx - minX) / maxSpan) * usable;
+                      const startY = offsetY + ((sz - minZ) / maxSpan) * usable;
+                      return (
+                        <circle cx={startX} cy={startY} r="3.2" fill="#EF4444" stroke="#FFFFFF" strokeWidth="1" />
+                      );
+                    })()}
+                  </svg>
+                  <div className="absolute bottom-1 right-2 text-[9px] font-mono-telemetry text-cyan-300 uppercase tracking-wider bg-black/60 px-1.5 py-0.5 rounded">
+                    {selectedTrack.shortCountry ?? selectedTrack.country}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div className="rounded-lg bg-black/50 border border-white/10 p-1.5">
+                    <div className="text-[9px] text-slate-400 uppercase tracking-wider">Length</div>
+                    <div className="font-mono-telemetry font-bold text-xs text-cyan-300 mt-0.5">
+                      {selectedTrack.lengthKm} <span className="text-[9px] text-slate-400">km</span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-black/50 border border-white/10 p-1.5">
+                    <div className="text-[9px] text-slate-400 uppercase tracking-wider">Corners</div>
+                    <div className="font-mono-telemetry font-bold text-xs text-amber-300 mt-0.5">
+                      {selectedTrack.corners} <span className="text-[9px] text-slate-400">turns</span>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-black/50 border border-white/10 p-1.5">
+                    <div className="text-[9px] text-slate-400 uppercase tracking-wider">X-MODE</div>
+                    <div className="font-mono-telemetry font-bold text-xs text-emerald-300 mt-0.5">
+                      {selectedTrack.drsZones?.length ?? 2} <span className="text-[9px] text-slate-400">zones</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Historical Lap Record */}
+                <div className="rounded-lg border border-amber-500/35 bg-gradient-to-r from-amber-950/30 via-slate-900/80 to-slate-950 p-2.5 flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-amber-400 font-semibold flex items-center gap-1">
+                      <Trophy className="w-3 h-3 text-amber-400" />
+                      <span>Lap Record</span>
+                    </span>
+                    <span className="font-mono-telemetry font-bold text-white text-xs">
+                      {CIRCUIT_LAP_RECORDS[selectedTrack.id]?.time ?? '1:21.450'}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 truncate">
+                    {CIRCUIT_LAP_RECORDS[selectedTrack.id]?.driver ?? 'Max Verstappen'} ({CIRCUIT_LAP_RECORDS[selectedTrack.id]?.team ?? 'Red Bull Racing'}, {CIRCUIT_LAP_RECORDS[selectedTrack.id]?.year ?? 2023})
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* 4-Clip 32s Combined Trailer Selector */}
@@ -1183,7 +1485,262 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         </div>
       )}
 
-      {f1WorldTab !== 'showroom' && f1WorldTab !== 'achievements' && (
+      {f1WorldTab === 'series' && (() => {
+        const featured2026Ids = ['madrid_madring', 'interlagos_gp', 'shanghai_gp'];
+        const featuredTracks = featured2026Ids
+          .map((id) => CIRCUIT_TRACKS.find((t) => t.id === id))
+          .filter((t): t is CircuitTrack => Boolean(t));
+        const activeFocus =
+          F1_2026_DEV_FOCUSES.find((f) => f.id === (career.developmentFocus ?? 'balanced')) ??
+          F1_2026_DEV_FOCUSES[0];
+        const activeSponsor =
+          F1_2026_SPONSORS.find((s) => s.id === (career.sponsorId ?? 'apex_cloud')) ??
+          F1_2026_SPONSORS[0];
+        const capSpent = career.costCapSpentM ?? 42.5;
+        const capLimit = career.costCapLimitM ?? 135;
+        const pu = career.puWear ?? { ice: 94, mguk: 96, battery: 95, gearbox: 94 };
+
+        const modeCards: {
+          id: GameMode;
+          title: string;
+          tag: string;
+          summary: string;
+          highlights: string[];
+        }[] = [
+          {
+            id: 'quick_race',
+            title: '2026 Grand Prix',
+            tag: 'SINGLE EVENT',
+            summary: 'Full 20-car grid race featuring automatic X/Z active aerodynamics and 350kW MOM Override battles.',
+            highlights: ['Adaptive AI Defense & Passes', '4-Corner Asymmetric Wear'],
+          },
+          {
+            id: 'career',
+            title: 'F1® 26 Career Team Ops',
+            tag: 'SEASON & COST CAP',
+            summary: 'Lead constructor R&D focus, manage the $135M FIA Cost Cap, sponsor bonuses, and 4-component PU wear.',
+            highlights: ['Live R&D Focus Allocation', 'PU Overhaul & Cost Cap'],
+          },
+          {
+            id: 'championship',
+            title: '2026 World Championship',
+            tag: 'POINTS SERIES',
+            summary: 'Compete for points across the official 2026 calendar including Madring Madrid and Interlagos.',
+            highlights: ['Official FIA Points Scale', 'Dynamic Weather Crossovers'],
+          },
+          {
+            id: 'time_trial',
+            title: 'Active Aero Hotlap',
+            tag: 'SOLO TELEMETRY',
+            summary: 'Zero-traffic track runs tuned for dialing X-Mode zones, braking points, and peak 4-corner grip.',
+            highlights: ['Track Record Ghosts', 'Thermal Window Practice'],
+          },
+        ];
+
+        return (
+          <div
+            className="pointer-events-auto my-auto w-full max-w-[1360px] mx-auto rounded-2xl border border-cyan-500/35 overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-12 min-h-[430px] max-h-[68vh]"
+            style={{
+              background:
+                'radial-gradient(circle at 75% 25%, rgba(12, 46, 72, 0.92) 0%, rgba(10, 14, 21, 0.97) 75%)',
+            }}
+          >
+            {/* Left: 2026 Game Mode Selector */}
+            <div className="lg:col-span-7 border-b lg:border-b-0 lg:border-r border-white/15 p-5 flex flex-col justify-between bg-[#0E131C]/95 overflow-y-auto">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[11px] font-semibold text-cyan-400 tracking-widest uppercase">
+                      2026 TECHNICAL REGULATIONS
+                    </div>
+                    <h2 className="font-display font-black text-2xl text-white tracking-wide uppercase">
+                      SELECT GAME MODE &amp; SERIES
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setF1WorldTab('showroom')}
+                    className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white cursor-pointer"
+                    title="Back to 3D Showroom"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {modeCards.map((card) => {
+                    const active = gameMode === card.id;
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => onSelectMode(card.id)}
+                        className={`text-left rounded-xl border p-3.5 transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                          active
+                            ? 'border-red-500 bg-gradient-to-br from-red-950/55 via-[#141A26] to-[#0D111A] shadow-[0_0_24px_rgba(239,68,68,0.18)]'
+                            : 'border-white/12 bg-black/35 hover:border-white/30'
+                        }`}
+                      >
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-display font-bold text-base text-white">
+                              {card.title}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono-telemetry font-bold whitespace-nowrap ${
+                                active ? 'bg-red-600 text-white' : 'bg-white/10 text-slate-300'
+                              }`}
+                            >
+                              {active ? 'ACTIVE' : card.tag}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 leading-relaxed">{card.summary}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10 text-[10px] font-mono-telemetry text-cyan-300">
+                          {card.highlights.map((h) => (
+                            <span key={h}>{h}</span>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick Career Team Ops Strip inside Series Hub */}
+              <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-display font-bold text-amber-300 uppercase">
+                      Career Team Ops:
+                    </span>
+                    <span className="font-mono-telemetry text-emerald-300 tabular-nums">
+                      Cost Cap ${capSpent.toFixed(1)}M / ${capLimit}M
+                    </span>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-mono-telemetry text-cyan-300 tabular-nums">
+                      PU ICE {pu.ice}% · MGU-K {pu.mguk}% · ES {pu.battery}%
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    Focus: <strong className="text-white">{activeFocus.label}</strong> ({activeFocus.effectText}) · Sponsor: <strong className="text-amber-200">{activeSponsor.name}</strong>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onOpenGarage}
+                    className="px-3 py-2 rounded-xl border border-amber-400/50 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 font-display font-bold text-xs uppercase tracking-wider cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Manage Team &amp; R&amp;D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onStartRace}
+                    className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 shadow-lg"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Launch Session</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: 2026 Featured Tracks (Madring Madrid, Interlagos, Shanghai) */}
+            <div className="lg:col-span-5 p-5 flex flex-col justify-between gap-3 overflow-y-auto">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold text-amber-400 tracking-widest uppercase">
+                    2026 CALENDAR SPOTLIGHT
+                  </div>
+                  <h3 className="font-display font-black text-xl text-white uppercase">
+                    NEW &amp; UPDATED 2026 CIRCUITS
+                  </h3>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  {featuredTracks.map((trk) => {
+                    const isSelected = selectedTrack.id === trk.id;
+                    return (
+                      <div
+                        key={trk.id}
+                        className={`rounded-xl border p-3.5 transition-colors flex flex-col gap-2 ${
+                          isSelected
+                            ? 'border-cyan-400 bg-cyan-950/35'
+                            : 'border-white/15 bg-black/45 hover:border-white/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-display font-bold text-sm text-white">
+                                {trk.name}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 border border-cyan-400/40 text-[9px] font-mono-telemetry font-bold text-cyan-300">
+                                {trk.id === 'madrid_madring' ? 'NEW 2026' : '2026 SPEC'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {trk.country} · {trk.lengthKm} km · {trk.corners} corners · {trk.drsZones?.length ?? 2} X-Mode zones
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectTrack(trk);
+                              setF1WorldTab('showroom');
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold cursor-pointer whitespace-nowrap shrink-0 ${
+                              isSelected
+                                ? 'bg-cyan-400 text-slate-950'
+                                : 'bg-white/10 hover:bg-white/20 text-white'
+                            }`}
+                          >
+                            {isSelected ? 'Selected' : 'Select Track'}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-300">
+                          {getCircuitEnvironmentConfig(trk).displayLabel} · {trk.defaultLaps} GP laps · Track width {trk.trackWidth}m
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {onSelectDevFocus && (
+                <div className="rounded-xl border border-white/15 bg-black/45 p-3 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    <span>Quick 2026 Team R&amp;D Focus</span>
+                    <span className="text-cyan-300 font-mono-telemetry">{activeFocus.effectText}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {F1_2026_DEV_FOCUSES.map((f) => {
+                      const active = (career.developmentFocus ?? 'balanced') === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => onSelectDevFocus(f.id)}
+                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-left cursor-pointer border transition-colors ${
+                            active
+                              ? 'border-cyan-400 bg-cyan-500/20 text-white'
+                              : 'border-white/10 bg-white/5 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {f1WorldTab !== 'showroom' && f1WorldTab !== 'achievements' && f1WorldTab !== 'series' && (
         <div
           className="pointer-events-auto my-auto w-full max-w-[1360px] mx-auto rounded-2xl border border-red-500/35 overflow-hidden shadow-2xl grid grid-cols-1 lg:grid-cols-12 min-h-[420px]"
           style={{
@@ -1257,7 +1814,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                     <div>
                       <div className="text-xs font-semibold text-slate-300">F1® World</div>
                       <h2 className="font-display font-black text-2xl text-white tracking-wide uppercase">
-                        {f1WorldTab === 'series' ? 'CHOOSE SERIES' : selectedPin.eventTitle}
+                        {selectedPin.eventTitle}
                       </h2>
                     </div>
                     <button
@@ -1313,13 +1870,37 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                     </div>
                     <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
                   </div>
+                  {/* Online Matchmaking & Lobby Rules Summary */}
+                  <div className="rounded-xl border border-emerald-500/35 bg-black/45 p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-300">
+                        <Globe className="w-3.5 h-3.5" />
+                        <span>Online Lobby Rules &amp; Region</span>
+                      </div>
+                      {onOpenOnlineSettings && (
+                        <button
+                          type="button"
+                          onClick={onOpenOnlineSettings}
+                          className="px-2.5 py-1 rounded-lg border border-emerald-400/50 bg-emerald-500/15 hover:bg-emerald-500/25 text-[11px] font-semibold text-emerald-200 cursor-pointer whitespace-nowrap shrink-0"
+                        >
+                          Configure Online
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-200 font-medium tabular-nums">
+                      {onlineGameplay.crossPlayEnabled ? 'Cross-Play ON' : 'Same-Platform'} · {onlineProfile.regionLabel} (~{onlineProfile.estimatedPingMs}ms / {onlineGameplay.maxPingMs}ms cap) · Wait ~{onlineProfile.estimatedQueueSec}s
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      {onlineGameplay.carPerformance === 'equal' ? 'Equal Spec' : 'Realistic Cars'} · Cuts: {onlineGameplay.cornerCutting} · Ghosting: {onlineGameplay.collisionMode === 'lap1_ghost' ? 'Lap 1' : onlineGameplay.collisionMode === 'ghost_all' ? 'All Off' : 'Full Contact'} · Assists: {onlineGameplay.assistCapPreset.replace(/_/g, ' ')}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 pt-3 border-t border-white/10">
                   <button
                     type="button"
                     onClick={onStartRace}
-                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold text-sm tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-display font-bold text-sm tracking-wider uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg whitespace-nowrap shrink-0"
                   >
                     <Play className="w-4 h-4 fill-current" />
                     <span>Enter Event · {selectedPin.label}</span>
@@ -1455,20 +2036,40 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
 
           {/* Circuit Selector */}
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold tracking-wider text-slate-400">CIRCUIT ({CIRCUIT_TRACKS.length})</span>
-            <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg max-w-[540px]">
-              {CIRCUIT_TRACKS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => onSelectTrack(t)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    selectedTrack.id === t.id ? 'bg-white text-slate-950' : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  {t.shortCountry ?? t.country}
-                </button>
-              ))}
+            <span className="text-[10px] font-semibold tracking-wider text-slate-400">
+              CIRCUIT ({CIRCUIT_TRACKS.length}) · 2026 CALENDAR
+            </span>
+            <div className="flex flex-wrap items-center gap-1 bg-white/5 p-1 rounded-lg max-w-[560px]">
+              {CIRCUIT_TRACKS.map((t) => {
+                const is2026New = t.id === 'madrid_madring' || t.id === 'interlagos_gp' || t.id === 'shanghai_gp';
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onSelectTrack(t)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1 ${
+                      selectedTrack.id === t.id
+                        ? 'bg-white text-slate-950'
+                        : is2026New
+                          ? 'text-cyan-300 hover:text-white'
+                          : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <span>{t.shortCountry ?? t.country}</span>
+                    {is2026New && (
+                      <span
+                        className={`text-[8px] font-mono-telemetry font-bold px-1 rounded ${
+                          selectedTrack.id === t.id
+                            ? 'bg-cyan-600 text-white'
+                            : 'bg-cyan-500/20 text-cyan-300'
+                        }`}
+                      >
+                        26
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1556,7 +2157,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                     weather === 'blizzard' ? 'bg-blue-300 text-slate-950 shadow-[0_0_12px_rgba(147,197,253,0.5)]' : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <Snowflake className="w-3.5 h-3.5 animate-pulse" />
+                  <Snowflake className="w-3.5 h-3.5" />
                   <span>Blizzard</span>
                 </button>
                 <button
@@ -1650,7 +2251,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
             </button>
           </div>
           <p className="text-xs text-slate-300" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
-            WASD / Arrows Drive · Space Overtake ERS/DRS · 1-5 Scenes · H OSD
+            WASD / Arrows Drive · Space 350kW MOM Override &amp; X-Mode · 1-5 Scenes · H OSD
           </p>
         </div>
       </div>

@@ -20,12 +20,17 @@ import {
 } from '../data/racingData';
 import { GRAPHICS_COLOR_CODE_PROFILES } from '../data/graphicsCodePalette';
 import {
+  ActiveAeroMode,
+  AiStrategyArchetype,
   CameraMode,
   CarUpgrades,
   CircuitTrack,
+  DEFAULT_ONLINE_GAMEPLAY_SETTINGS,
   DriverProfile,
   DrsStateTelemetry,
   DrsZoneNotificationType,
+  DynamicWeatherTyreImpact,
+  ErsDeploymentMode,
   FormulaTeam,
   GameMode,
   GameScreen,
@@ -37,6 +42,7 @@ import {
   PodiumCameraShot,
   RacerStanding,
   SurfaceHazardType,
+  TeamManagementConfig,
   TimeOfDayMode,
   TrackFlagState,
   TrackHazardBlip,
@@ -65,16 +71,22 @@ import { buildPodiumStage, PodiumStageModel } from './podiumBuilder';
 import { createProceduralTextures, ProceduralTextureSet } from './textures';
 import { buildCircuitTrack, BuiltTrack } from './trackBuilder';
 import {
+  calculate2026ActiveAero,
+  calculate2026PowerUnitDeployment,
   calculateGForces,
   calculateCockpitGOffset,
   calculatePitStrategy,
   calculateTrackSurfaceEvolution,
   calculateTrackTemperatureC,
   calculateTyreContactPatchPhysics,
+  calculateWheelWearDeltas,
   CockpitHeadPhysicsState,
   createInitialCockpitHeadState,
+  evaluateAiPitStrategy,
+  evaluateDynamicWeatherTyreImpact,
   evaluateRacingLineSurfaceGrip,
   GForceVector,
+  resolveEffectiveSessionAssists,
   stepCockpitHeadPhysics,
   StrategyCalculationResult,
 } from '../physics/simulationCalculus';
@@ -155,6 +167,15 @@ interface RacerEntity {
   incidentCooldown: number;
   spinRate: number;
   brakeTempC: number;
+  // F1 2026 Physics & Strategy Properties
+  wheelWearPct: [number, number, number, number];
+  activeAeroMode: ActiveAeroMode;
+  manualOverrideActive: boolean;
+  mgukPowerKw: number;
+  aiStrategyArchetype: AiStrategyArchetype;
+  aiPitTimer: number;
+  pitStops: number;
+  aiQueuedCompound: TyreCompound | null;
 }
 
 interface SurfaceHazardZone {
@@ -498,6 +519,12 @@ export class RacingEngine {
     suspensionLevel: 1,
     aeroLevel: 1,
   };
+  private teamManagement: TeamManagementConfig = {
+    developmentFocus: 'balanced',
+    staffAllocation: { aero: 45, powertrain: 45, strategy: 45 },
+    puWear: { ice: 100, mguk: 100, battery: 100, gearbox: 100 },
+  };
+  private playerManualOverrideAvailable = false;
   private gameMode: GameMode = 'quick_race';
   private activeRivalId: string | null = null;
   private screen: GameScreen = 'title';
@@ -547,6 +574,7 @@ export class RacingEngine {
     lookToApex: true,
     graphicsColorCode: 'palette_lut',
     graphicsColorCodeIntensity: 0.42,
+    onlineGameplay: { ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS },
   };
 
   // Dynamic Weather, Time of Day & Pit Strategy State
@@ -564,6 +592,7 @@ export class RacingEngine {
   private queuedFuelTargetPct: number | null = null;
   private queuedPlannedStopId: string | null = null;
   private completedPlannedStopIds = new Set<string>();
+  private manualGearOverrideTimer = 0;
   private pitStopTimer = 0;
   private maxPitTimer = 2.4;
   private frontJackGroup!: THREE.Group;
@@ -610,6 +639,21 @@ export class RacingEngine {
   private playerOffTrack = false;
   private cockpitHeadState: CockpitHeadPhysicsState = createInitialCockpitHeadState();
   private trackTemperatureC = 34;
+  private prevTrackTemperatureC = 34;
+  private currentWeatherTyreImpact: DynamicWeatherTyreImpact = {
+    weather: 'day',
+    trackTemperatureC: 34,
+    trackTempTrend: 'stable',
+    trackWetnessPct: 0,
+    rainIntensity: 0,
+    gripMultiplier: 1.0,
+    wearMultiplier: 1.0,
+    thermalOffsetC: 0,
+    optimalCompound: 'medium',
+    crossoverUrgent: false,
+    regime: 'optimal',
+    strategyRecommendation: null,
+  };
   private currentContactPatch: TyreContactPatchTelemetry = {
     trackTemperatureC: 34,
     contactAreaRatio: 0.86,
@@ -712,6 +756,11 @@ export class RacingEngine {
     brake: false,
     drs: false,
   };
+  private touchAnalogSteer = 0;
+  private touchAnalogThrottle = 0;
+  private touchAnalogBrake = 0;
+  private mobileAeroMode: 'auto' | 'x_mode' | 'z_mode' = 'auto';
+  private mobileVibrateCooldown = 0;
 
   private frameId = 0;
   private lastTimestamp = 0;
@@ -721,6 +770,22 @@ export class RacingEngine {
   private countdownState: HudTelemetry['countdownState'] = 'lights_1';
   private bannerMessage: string | null = null;
   private bannerTimer = 0;
+  private trackLimitWarnings = 0;
+  private trackLimitCooldown = 0;
+  private timePenaltySec = 0;
+  private overtakesCount = 0;
+  private lastTrackedPosition = 0;
+  private playerLaunched = false;
+  private launchFeedback: string | null = null;
+  private launchFeedbackTimer = 0;
+  private ersMode: ErsDeploymentMode = 'balanced';
+  private brakeBiasPct = 57;
+  private dualsenseConnected = false;
+  private dualsenseName: string | null = null;
+  private prevGamepadButtons = new Map<number, boolean>();
+  private hapticCooldown = 0;
+  private playerThrottleInputPct = 0;
+  private playerBrakeInputPct = 0;
   private playerDrsZoneId: string | null = null;
   private playerDrsGapQualified = true;
   private drsNotification: DrsZoneNotificationType = null;
@@ -1294,6 +1359,9 @@ export class RacingEngine {
     this.touchState.throttle = false;
     this.touchState.brake = false;
     this.touchState.drs = false;
+    this.touchAnalogSteer = 0;
+    this.touchAnalogThrottle = 0;
+    this.touchAnalogBrake = 0;
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -1319,9 +1387,19 @@ export class RacingEngine {
       } else if (e.code === 'Digit4' && this.screen === 'playing') {
         this.requestTyreSwitch('wet');
       } else if (e.code === 'KeyB' && this.screen === 'playing') {
-        const recommended: TyreCompound =
-          this.trackWetness >= 0.35 ? 'wet' : this.currentCompound === 'wet' ? 'soft' : this.currentCompound;
-        this.requestTyreSwitch(recommended);
+        const smartCompound: TyreCompound =
+          this.trackWetness >= 0.36
+            ? 'wet'
+            : this.currentWeatherTyreImpact.optimalCompound !== this.currentCompound
+              ? this.currentWeatherTyreImpact.optimalCompound
+              : this.currentStrategy.recommendedCompound;
+        this.requestTyreSwitch(smartCompound);
+      } else if (e.code === 'KeyR' && this.screen === 'playing') {
+        this.cycleErsMode();
+      } else if (e.code === 'BracketLeft' && this.screen === 'playing') {
+        this.adjustBrakeBias(-1);
+      } else if (e.code === 'BracketRight' && this.screen === 'playing') {
+        this.adjustBrakeBias(1);
       }
     }
   };
@@ -1418,15 +1496,131 @@ export class RacingEngine {
     this.touchState[control] = pressed;
   }
 
+  public setTouchSteerAxis(axis: number) {
+    this.audio.unlock();
+    this.touchAnalogSteer = THREE.MathUtils.clamp(axis, -1, 1);
+  }
+
+  public setTouchPedalAxis(throttle: number, brake: number) {
+    this.audio.unlock();
+    this.touchAnalogThrottle = THREE.MathUtils.clamp(throttle, 0, 1);
+    this.touchAnalogBrake = THREE.MathUtils.clamp(brake, 0, 1);
+  }
+
+  public setMobileAeroMode(mode: 'auto' | 'x_mode' | 'z_mode') {
+    this.audio.unlock();
+    this.mobileAeroMode = mode;
+    if (mode === 'x_mode') {
+      this.triggerMobileHaptic('aero_x', 1);
+      this.bannerMessage = 'ACTIVE AERO: X-MODE LOW DRAG ARMED';
+      this.bannerTimer = 1.6;
+      this.audio.playEngineerTelemetryCue('aero_x');
+    } else if (mode === 'z_mode') {
+      this.triggerMobileHaptic('aero_z', 1);
+      this.bannerMessage = 'ACTIVE AERO: Z-MODE HIGH DOWNFORCE LOCKED';
+      this.bannerTimer = 1.6;
+      this.audio.playEngineerTelemetryCue('aero_z');
+    } else {
+      this.triggerMobileHaptic('aero_z', 0.6);
+      this.bannerMessage = 'ACTIVE AERO: AUTO FIA ZONE CONTROL';
+      this.bannerTimer = 1.4;
+      this.audio.playEngineerTelemetryCue('aero_z');
+    }
+  }
+
+  public triggerMobileHaptic(
+    event: 'shift_up' | 'shift_down' | 'aero_x' | 'aero_z' | 'collision' | 'kerb' | 'brake' | 'accel',
+    intensity = 1
+  ) {
+    const level = this.settings.hapticFeedback ?? 'full';
+    if (!this.settings.touchControls || level === 'off') return;
+    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+    const scale = level === 'subtle' ? 0.58 : 1.0;
+    const clamped = THREE.MathUtils.clamp(intensity, 0.2, 1.0) * scale;
+    try {
+      if (event === 'collision') {
+        if (intensity > 0.85) {
+          navigator.vibrate([
+            Math.round(52 * scale),
+            16,
+            Math.round(72 * scale),
+            18,
+            Math.round(44 * scale),
+            14,
+            Math.round(24 * scale),
+          ]);
+        } else if (intensity > 0.55) {
+          navigator.vibrate([Math.round(36 * scale), 16, Math.round(48 * scale), 15, Math.round(24 * scale)]);
+        } else if (intensity > 0.3) {
+          navigator.vibrate([Math.round(24 * scale), 14, Math.round(30 * scale)]);
+        } else {
+          navigator.vibrate([Math.max(10, Math.round(16 * clamped)), 12, Math.max(10, Math.round(18 * clamped))]);
+        }
+        this.mobileVibrateCooldown = 0.2;
+      } else if (event === 'aero_x') {
+        navigator.vibrate([Math.max(8, Math.round(12 * scale)), 15, Math.max(9, Math.round(14 * scale))]);
+        this.mobileVibrateCooldown = 0.14;
+      } else if (event === 'aero_z') {
+        navigator.vibrate(Math.max(11, Math.round(18 * scale)));
+        this.mobileVibrateCooldown = 0.14;
+      } else if (event === 'shift_up') {
+        navigator.vibrate([Math.max(7, Math.round(10 * scale)), 10, Math.max(6, Math.round(8 * scale))]);
+      } else if (event === 'shift_down') {
+        navigator.vibrate([Math.max(10, Math.round(14 * scale)), 12, Math.max(8, Math.round(10 * scale))]);
+      } else if (event === 'brake') {
+        if (intensity > 0.85) {
+          // Heavy ABS threshold lockup chatter
+          navigator.vibrate([
+            Math.max(7, Math.round(10 * scale)),
+            12,
+            Math.max(8, Math.round(12 * scale)),
+            12,
+            Math.max(7, Math.round(10 * scale)),
+          ]);
+        } else if (intensity > 0.55) {
+          // Progressive threshold braking pulse
+          navigator.vibrate([Math.max(7, Math.round(9 * scale)), 14, Math.max(8, Math.round(11 * scale))]);
+        } else {
+          navigator.vibrate(Math.max(7, Math.round(13 * clamped)));
+        }
+      } else if (event === 'accel') {
+        navigator.vibrate(Math.max(6, Math.round(11 * clamped)));
+      } else if (event === 'kerb') {
+        if (intensity > 0.88) {
+          // Rough off-track gravel / marbles chatter
+          navigator.vibrate([
+            Math.max(10, Math.round(17 * scale)),
+            12,
+            Math.max(12, Math.round(22 * scale)),
+            14,
+            Math.max(9, Math.round(14 * scale)),
+          ]);
+        } else {
+          // Striated kerb rib bump rhythm
+          navigator.vibrate([Math.max(7, Math.round(10 * clamped)), 16, Math.max(8, Math.round(12 * clamped))]);
+        }
+      } else {
+        navigator.vibrate(Math.max(8, Math.round(15 * clamped)));
+      }
+    } catch {
+      // ignore unsupported vibration errors
+    }
+  }
+
   public manualShift(dir: 1 | -1) {
-    if (this.settings.transmission !== 'manual') return;
     const player = this.racers.find((r) => r.isPlayer);
     if (!player) return;
-    const next = THREE.MathUtils.clamp(player.gear + dir, -1, 8);
+    const minGear = this.settings.transmission === 'manual' ? -1 : 1;
+    const next = THREE.MathUtils.clamp(player.gear + dir, minGear, 8);
+    if (this.settings.transmission === 'auto') {
+      // Allow smooth semi-auto sequential swipe/paddle override in Automatic mode
+      this.manualGearOverrideTimer = 2.6;
+    }
     if (next !== player.gear) {
       player.gear = next;
       player.shiftFlash = 1.0;
       this.audio.playGearShift(dir > 0);
+      this.triggerMobileHaptic(dir > 0 ? 'shift_up' : 'shift_down', 1);
     }
   }
 
@@ -1561,6 +1755,7 @@ export class RacingEngine {
     wheelFinish?: WheelFinish;
     compound?: TyreCompound;
     upgrades?: CarUpgrades;
+    teamManagement?: TeamManagementConfig;
     gameMode?: GameMode;
     activeRivalId?: string | null;
     settings?: Partial<GameSettings>;
@@ -1582,7 +1777,13 @@ export class RacingEngine {
       if (weatherChanged || todChanged || qualityChanged) {
         needsTrackRebuild = true;
       }
-      this.settings = { ...this.settings, ...params.settings };
+      this.settings = {
+        ...this.settings,
+        ...params.settings,
+        onlineGameplay: params.settings.onlineGameplay
+          ? { ...(this.settings.onlineGameplay ?? DEFAULT_ONLINE_GAMEPLAY_SETTINGS), ...params.settings.onlineGameplay }
+          : (this.settings.onlineGameplay ?? { ...DEFAULT_ONLINE_GAMEPLAY_SETTINGS }),
+      };
       if (params.settings.timeOfDay) {
         this.liveTimeOfDay = params.settings.timeOfDay;
       } else if (params.track) {
@@ -1602,12 +1803,19 @@ export class RacingEngine {
       }
       this.audio.setMuted(this.settings.muted);
       this.applyGraphicsSettings();
-      this.builtTrack?.setRacingLineMode(this.settings.racingLine ?? 'corners');
+      const effectiveAssists = resolveEffectiveSessionAssists(this.settings);
+      this.builtTrack?.setRacingLineMode(effectiveAssists.racingLine);
       const aiDiffMult = this.getAiDifficultyMultiplier();
+      const onlineEqualSpec = Boolean(
+        this.settings.onlineGameplay?.applyOnlineRulesToSession &&
+          this.settings.onlineGameplay.carPerformance === 'equal'
+      );
       for (let i = 0; i < this.racers.length; i++) {
         const r = this.racers[i];
         if (!r.isPlayer) {
-          r.aiBasePace = aiDiffMult * (0.93 + (i % 3) * 0.03);
+          r.aiBasePace = onlineEqualSpec
+            ? aiDiffMult * (0.955 + (i % 3) * 0.015)
+            : aiDiffMult * (0.93 + (i % 3) * 0.03);
         }
       }
       if ((dynamicChanged || params.settings.totalLaps !== undefined) && this.screen === 'title') {
@@ -1632,6 +1840,7 @@ export class RacingEngine {
     if (params.wheelFinish) this.currentWheelFinish = params.wheelFinish;
     if (params.compound) this.currentCompound = params.compound;
     if (params.upgrades) this.upgrades = { ...params.upgrades };
+    if (params.teamManagement) this.teamManagement = params.teamManagement;
     if (params.gameMode) this.gameMode = params.gameMode;
     if (params.activeRivalId !== undefined) this.activeRivalId = params.activeRivalId;
 
@@ -1716,6 +1925,18 @@ export class RacingEngine {
     this.pitBoard.root.visible = false;
     this.playerOnKerb = false;
     this.playerOffTrack = false;
+    this.trackLimitWarnings = 0;
+    this.trackLimitCooldown = 0;
+    this.timePenaltySec = 0;
+    this.overtakesCount = 0;
+    this.lastTrackedPosition = this.racers.findIndex((r) => r.isPlayer) + 1 || 1;
+    this.playerLaunched = false;
+    this.launchFeedback = null;
+    this.launchFeedbackTimer = 0;
+    this.ersMode = 'balanced';
+    this.brakeBiasPct = 57;
+    this.playerThrottleInputPct = 0;
+    this.playerBrakeInputPct = 0;
     this.cockpitHeadState = createInitialCockpitHeadState();
     this.trackTemperatureC = calculateTrackTemperatureC(
       this.liveWeather,
@@ -1851,11 +2072,16 @@ export class RacingEngine {
     const target = this.queuedCompound ?? this.currentCompound;
     const fuelMsg =
       this.queuedFuelTargetPct !== null ? ` · FUEL TO ${Math.round(this.queuedFuelTargetPct)}%` : '';
-    this.maxPitTimer = this.queuedFuelTargetPct !== null ? 2.6 : 2.2;
+    const strategyStaffSpeedup =
+      Math.min(0.45, Math.max(0, (this.teamManagement.staffAllocation.strategy - 45) * 0.008)) +
+      (this.teamManagement.developmentFocus === 'tyre_thermal' ? 0.25 : 0);
+    this.maxPitTimer = Math.max(1.65, (this.queuedFuelTargetPct !== null ? 2.6 : 2.2) - strategyStaffSpeedup);
     this.pitStopTimer = this.maxPitTimer;
     this.bannerMessage = `PIT STOP — FITTING ${target.toUpperCase()} TYRES${fuelMsg}...`;
     this.bannerTimer = 2.2;
     player.drsOpen = false;
+    player.activeAeroMode = 'z_mode';
+    player.manualOverrideActive = false;
 
     this.pitCrewGroup.position.copy(player.position);
     this.pitCrewGroup.rotation.y = player.yaw;
@@ -1867,6 +2093,8 @@ export class RacingEngine {
     this.currentCompound = nextCompound;
     player.tyreCompound = nextCompound;
     player.tyreWearPct = 100;
+    player.wheelWearPct = [100, 100, 100, 100];
+    player.pitStops += 1;
     if (this.queuedFuelTargetPct !== null) {
       player.fuelPct = Math.min(100, Math.max(player.fuelPct, this.queuedFuelTargetPct));
     } else {
@@ -1915,6 +2143,176 @@ export class RacingEngine {
     this.bannerMessage = `PIT EXIT — ${nextCompound.toUpperCase()} TYRES FITTED!`;
     this.bannerTimer = 2.6;
     this.emitHud();
+  }
+
+  public setErsMode(mode: ErsDeploymentMode) {
+    this.ersMode = mode;
+    this.audio.playUiConfirm();
+    this.bannerMessage = `ERS MODE: ${mode.toUpperCase()}`;
+    this.bannerTimer = 1.6;
+    this.emitHud();
+  }
+
+  public cycleErsMode() {
+    const order: ErsDeploymentMode[] = ['harvest', 'balanced', 'overtake'];
+    const next = order[(order.indexOf(this.ersMode) + 1) % order.length];
+    this.setErsMode(next);
+  }
+
+  public adjustBrakeBias(deltaPct: number) {
+    this.brakeBiasPct = Math.round(THREE.MathUtils.clamp(this.brakeBiasPct + deltaPct, 52, 62));
+    this.audio.playUiConfirm();
+    this.bannerMessage = `BRAKE BIAS: ${this.brakeBiasPct}% FRONT`;
+    this.bannerTimer = 1.5;
+    this.emitHud();
+  }
+
+  private pollDualSenseGamepad(): {
+    throttle: number;
+    brake: number;
+    steer: number;
+    drs: boolean;
+    clutch: boolean;
+  } {
+    const pads =
+      typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+        ? navigator.getGamepads()
+        : null;
+    let activePad: Gamepad | null = null;
+    if (pads) {
+      for (let i = 0; i < pads.length; i++) {
+        if (pads[i] && pads[i]!.connected) {
+          activePad = pads[i];
+          break;
+        }
+      }
+    }
+
+    if (!activePad) {
+      this.dualsenseConnected = false;
+      this.dualsenseName = null;
+      this.prevGamepadButtons.clear();
+      return { throttle: 0, brake: 0, steer: 0, drs: false, clutch: false };
+    }
+
+    this.dualsenseConnected = true;
+    this.dualsenseName = activePad.id || 'DualSense Wireless Controller';
+
+    const btnEdge = (idx: number): boolean => {
+      const pressed = Boolean(activePad!.buttons[idx]?.pressed);
+      const prev = this.prevGamepadButtons.get(idx) ?? false;
+      this.prevGamepadButtons.set(idx, pressed);
+      return pressed && !prev;
+    };
+
+    if (this.screen === 'playing') {
+      if (btnEdge(3)) this.cycleCameraMode(); // Triangle
+      if (btnEdge(2)) {
+        const smartCompound: TyreCompound =
+          this.trackWetness >= 0.36
+            ? 'wet'
+            : this.currentWeatherTyreImpact.optimalCompound !== this.currentCompound
+              ? this.currentWeatherTyreImpact.optimalCompound
+              : this.currentStrategy.recommendedCompound;
+        this.requestTyreSwitch(smartCompound); // Square -> Box this lap
+      }
+      if (btnEdge(5)) this.manualShift(1); // R1 -> Upshift
+      if (btnEdge(1)) this.manualShift(-1); // Circle -> Downshift
+      if (btnEdge(12)) this.adjustBrakeBias(1); // D-Pad Up -> Brake Bias Forward
+      if (btnEdge(13)) this.adjustBrakeBias(-1); // D-Pad Down -> Brake Bias Rearward
+      if (btnEdge(15)) this.cycleErsMode(); // D-Pad Right -> Next ERS Mode
+      if (btnEdge(14)) {
+        const order: ErsDeploymentMode[] = ['harvest', 'balanced', 'overtake'];
+        const prevMode = order[(order.indexOf(this.ersMode) + 2) % order.length];
+        this.setErsMode(prevMode); // D-Pad Left -> Prev ERS Mode
+      }
+      if (btnEdge(9)) this.callbacks.onPauseRequested(); // Options -> Pause
+    }
+
+    const rawSteer = activePad.axes[0] ?? 0;
+    const deadzone = 0.08;
+    const mag = Math.max(0, Math.abs(rawSteer) - deadzone) / (1 - deadzone);
+    const steer = -Math.sign(rawSteer) * Math.pow(mag, 1.15);
+
+    const throttle = activePad.buttons[7]?.value ?? 0; // R2 Adaptive Trigger
+    const brake = activePad.buttons[6]?.value ?? 0; // L2 Adaptive Trigger
+    const drs = Boolean(activePad.buttons[4]?.pressed || activePad.buttons[0]?.pressed); // L1 / Cross
+    return { throttle, brake, steer, drs, clutch: drs };
+  }
+
+  private applyDualSenseHaptics(params: {
+    dt: number;
+    onKerb: boolean;
+    offTrack: boolean;
+    brakeIn: number;
+    speedKmh: number;
+    slipRatio: number;
+    shiftFlash: number;
+    wetRatio: number;
+  }) {
+    if (!this.dualsenseConnected) return;
+    const hapticSetting = this.settings.hapticFeedback ?? 'full';
+    const triggerSetting = this.settings.adaptiveTriggers ?? 'strong';
+    if (hapticSetting === 'off' && triggerSetting === 'off') return;
+
+    this.hapticCooldown = Math.max(0, this.hapticCooldown - params.dt);
+    if (this.hapticCooldown > 0) return;
+
+    const pads =
+      typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+        ? navigator.getGamepads()
+        : null;
+    const pad = pads ? Array.from(pads).find((p) => p && p.connected) : null;
+    const actuator = (pad as (Gamepad & {
+      vibrationActuator?: {
+        playEffect?: (
+          type: string,
+          opts: { startDelay: number; duration: number; weakMagnitude: number; strongMagnitude: number }
+        ) => Promise<void>;
+      };
+    }) | null)?.vibrationActuator;
+    if (!actuator?.playEffect) return;
+
+    const hapScale = hapticSetting === 'full' ? 1.0 : hapticSetting === 'subtle' ? 0.45 : 0;
+    const trigScale = triggerSetting === 'strong' ? 1.0 : triggerSetting === 'medium' ? 0.55 : 0;
+
+    let weak = 0;
+    let strong = 0;
+    if (params.onKerb && params.speedKmh > 60) {
+      weak = Math.max(weak, 0.55 * hapScale);
+      strong = Math.max(strong, 0.3 * hapScale);
+    }
+    if (params.offTrack && params.speedKmh > 35) {
+      weak = Math.max(weak, 0.72 * hapScale);
+      strong = Math.max(strong, 0.52 * hapScale);
+    }
+    if (params.brakeIn > 0.45 && params.speedKmh > 95) {
+      // Simulate DualSense L2 trigger ABS pulsation & threshold braking bite
+      strong = Math.max(strong, (0.35 + params.brakeIn * 0.42) * trigScale);
+    }
+    if (params.slipRatio > 0.16 && params.speedKmh > 70) {
+      weak = Math.max(weak, Math.min(0.65, params.slipRatio * 1.4) * hapScale);
+    }
+    if (params.shiftFlash > 0.7) {
+      strong = Math.max(strong, 0.48 * hapScale);
+    }
+    if (params.speedKmh > 250) {
+      weak = Math.max(weak, (0.12 + params.wetRatio * 0.18) * hapScale);
+    }
+
+    if (weak > 0.04 || strong > 0.04) {
+      this.hapticCooldown = 0.075;
+      actuator
+        .playEffect('dual-rumble', {
+          startDelay: 0,
+          duration: 85,
+          weakMagnitude: Math.min(1, weak),
+          strongMagnitude: Math.min(1, strong),
+        })
+        .catch(() => {
+          // ignore unsupported browser vibration errors
+        });
+    }
   }
 
   private getHdrExposureBase(): number {
@@ -3427,7 +3825,8 @@ export class RacingEngine {
       this.settings.graphicsQuality,
       this.settings.timeOfDay
     );
-    this.builtTrack.setRacingLineMode(this.settings.racingLine ?? 'corners');
+    const effectiveGridAssists = resolveEffectiveSessionAssists(this.settings);
+    this.builtTrack.setRacingLineMode(effectiveGridAssists.racingLine);
     this.scene.add(this.builtTrack.group);
     this.buildWeatherSchedule();
     this.applyAtmosphere(this.liveWeather);
@@ -3436,22 +3835,41 @@ export class RacingEngine {
     const availableAiDrivers = FORMULA_DRIVERS.filter((d) => d.id !== this.currentDriver.id);
     const numAi = this.gameMode === 'time_trial' ? 0 : 21;
     const totalGrid = numAi + 1;
+    const onlineRules = this.settings.onlineGameplay;
+    const onlineRulesActive = Boolean(onlineRules?.applyOnlineRulesToSession);
+    const onlineEqualPerf = onlineRulesActive && onlineRules?.carPerformance === 'equal';
+
+    // Determine starting grid slot order (Qualifying Pace vs Reverse Grid vs Random Shuffle)
+    const slotOrder = Array.from({ length: totalGrid }, (_, idx) => idx);
+    if (this.screen !== 'title' && onlineRulesActive && totalGrid > 1) {
+      if (onlineRules?.gridOrder === 'reverse_grid') {
+        slotOrder.reverse();
+      } else if (onlineRules?.gridOrder === 'random') {
+        for (let k = slotOrder.length - 1; k > 0; k--) {
+          const j = Math.floor(Math.random() * (k + 1));
+          const tmp = slotOrder[k];
+          slotOrder[k] = slotOrder[j];
+          slotOrder[j] = tmp;
+        }
+      }
+    }
 
     for (let slot = 0; slot < totalGrid; slot++) {
-      const isPlayer = slot === totalGrid - 1;
+      const entityIdx = slotOrder[slot];
+      const isPlayer = entityIdx === totalGrid - 1;
       const aiDriver =
-        availableAiDrivers[slot % availableAiDrivers.length] ??
-        FORMULA_DRIVERS[slot % FORMULA_DRIVERS.length];
+        availableAiDrivers[entityIdx % availableAiDrivers.length] ??
+        FORMULA_DRIVERS[entityIdx % FORMULA_DRIVERS.length];
       const activeDriver = isPlayer ? this.currentDriver : aiDriver;
       const team = isPlayer
         ? this.currentTeam
-        : (FORMULA_TEAMS.find((t) => t.id === aiDriver.teamId) ?? FORMULA_TEAMS[slot % FORMULA_TEAMS.length]);
+        : (FORMULA_TEAMS.find((t) => t.id === aiDriver.teamId) ?? FORMULA_TEAMS[entityIdx % FORMULA_TEAMS.length]);
 
       const primary = isPlayer && this.customPrimaryHex ? this.customPrimaryHex : team.primaryColor;
-      const wheel = isPlayer ? this.currentWheelFinish : WHEEL_FINISHES[slot % WHEEL_FINISHES.length];
+      const wheel = isPlayer ? this.currentWheelFinish : WHEEL_FINISHES[entityIdx % WHEEL_FINISHES.length];
       const isRain = this.settings.weather === 'rain' || this.settings.weather === 'heavy_rain';
       const compound: TyreCompound =
-        isRain ? 'wet' : isPlayer ? this.currentCompound : (['soft', 'medium', 'hard'][slot % 3] as TyreCompound);
+        isRain ? 'wet' : isPlayer ? this.currentCompound : (['soft', 'medium', 'hard'][entityIdx % 3] as TyreCompound);
 
       const activeNumber = this.customNumber || this.currentDriver.number || this.currentTeam.number;
       const activeHelmet = activeDriver.helmetColor;
@@ -3509,7 +3927,7 @@ export class RacingEngine {
       const diffMult = this.getAiDifficultyMultiplier();
 
       this.racers.push({
-        id: isPlayer ? 'player' : `ai_${slot}`,
+        id: isPlayer ? 'player' : `ai_${entityIdx}`,
         driverId: activeDriver.id,
         name: activeDriver.name,
         team,
@@ -3540,12 +3958,24 @@ export class RacingEngine {
         finished: false,
         finishTimeMs: null,
         aiTargetLane: side * 0.85,
-        aiBasePace: diffMult * (0.93 + (slot % 3) * 0.03),
+        aiBasePace: onlineEqualPerf
+          ? diffMult * (0.955 + (entityIdx % 3) * 0.015)
+          : diffMult * (0.93 + (entityIdx % 3) * 0.03),
         aiLaneTimer: 1 + Math.random() * 2,
         incidentTimer: 0,
-        incidentCooldown: 10 + slot * 3.5,
+        incidentCooldown: 10 + entityIdx * 3.5,
         spinRate: 0,
         brakeTempC: 320,
+        wheelWearPct: [100, 100, 100, 100],
+        activeAeroMode: 'z_mode',
+        manualOverrideActive: false,
+        mgukPowerKw: 0,
+        aiStrategyArchetype: (['undercut_1stop', 'aggressive_2stop', 'overcut_long', 'wet_gamble'] as AiStrategyArchetype[])[
+          slot % 4
+        ],
+        aiPitTimer: 0,
+        pitStops: 0,
+        aiQueuedCompound: null,
       });
     }
 
@@ -4258,6 +4688,15 @@ export class RacingEngine {
     }
 
     const raceLive = this.countdownState === 'go' || this.countdownState === 'racing';
+    if (this.trackLimitCooldown > 0) {
+      this.trackLimitCooldown = Math.max(0, this.trackLimitCooldown - dt);
+    }
+    if (this.launchFeedbackTimer > 0) {
+      this.launchFeedbackTimer = Math.max(0, this.launchFeedbackTimer - dt);
+      if (this.launchFeedbackTimer <= 0) {
+        this.launchFeedback = null;
+      }
+    }
     if (!raceLive) {
       this.audio.updateGridTension(this.countdownTimer, true);
       this.audio.updateCrowdAmbience(0.065);
@@ -4355,7 +4794,8 @@ export class RacingEngine {
       const drsZones = this.builtTrack.drsZones;
       const activeDrsZone = findActiveDrsZoneAtT(drsZones, player.lastT);
       const drsDisabledByWeather = this.trackWetness > 0.48 || this.liveWeather === 'heavy_rain' || this.liveWeather === 'blizzard';
-      const drsGapQualified = this.gameMode === 'time_trial' || this.settings.drsAssist !== false || this.playerDrsGapQualified;
+      const effectiveHudAssists = resolveEffectiveSessionAssists(this.settings);
+      const drsGapQualified = this.gameMode === 'time_trial' || effectiveHudAssists.drsAssist || this.playerDrsGapQualified;
       const drsAvailable =
         Boolean(activeDrsZone) &&
         !drsDisabledByWeather &&
@@ -4374,22 +4814,49 @@ export class RacingEngine {
   }
 
   private stepPlayerPhysics(car: RacerEntity, dt: number, raceLive: boolean) {
-    const throttleIn =
+    const padIn = this.pollDualSenseGamepad();
+    const keyThrottle =
       this.heldKeys.has('KeyW') || this.heldKeys.has('ArrowUp') || this.touchState.throttle ? 1 : 0;
-    const brakeIn =
+    const keyBrake =
       this.heldKeys.has('KeyS') || this.heldKeys.has('ArrowDown') || this.touchState.brake ? 1 : 0;
+    const throttleIn = Math.max(keyThrottle, padIn.throttle, this.touchAnalogThrottle);
+    const brakeIn = Math.max(keyBrake, padIn.brake, this.touchAnalogBrake);
+    this.playerThrottleInputPct = Math.round(throttleIn * 100);
+    this.playerBrakeInputPct = Math.round(brakeIn * 100);
+
     const steerLeft =
       this.heldKeys.has('KeyA') || this.heldKeys.has('ArrowLeft') || this.touchState.left ? 1 : 0;
     const steerRight =
       this.heldKeys.has('KeyD') || this.heldKeys.has('ArrowRight') || this.touchState.right ? 1 : 0;
+    const keySteer = steerLeft - steerRight;
+    const effectiveTouchSteer =
+      Math.abs(this.touchAnalogSteer) > 0.01 ? this.touchAnalogSteer : (this.touchState.left ? 1 : 0) - (this.touchState.right ? 1 : 0);
+    const combinedSteer =
+      Math.abs(padIn.steer) >= Math.max(Math.abs(keySteer), Math.abs(effectiveTouchSteer))
+        ? padIn.steer
+        : Math.abs(effectiveTouchSteer) >= Math.abs(keySteer)
+          ? effectiveTouchSteer
+          : keySteer;
     const drsRequested =
-      this.heldKeys.has('Space') || this.heldKeys.has('ShiftLeft') || this.touchState.drs;
+      this.mobileAeroMode !== 'z_mode' &&
+      (this.mobileAeroMode === 'x_mode' ||
+        this.heldKeys.has('Space') ||
+        this.heldKeys.has('ShiftLeft') ||
+        this.touchState.drs ||
+        padIn.drs);
 
-    const steerTarget = (steerLeft - steerRight) * this.settings.steeringSensitivity;
+    const steerTarget = combinedSteer * this.settings.steeringSensitivity;
+
+    const clutchHeld =
+      this.heldKeys.has('Space') ||
+      this.heldKeys.has('ShiftLeft') ||
+      this.touchState.drs ||
+      padIn.clutch;
 
     if (!raceLive) {
-      const targetRpm = 3800 + throttleIn * 8200;
-      car.rpm = THREE.MathUtils.damp(car.rpm, targetRpm, 9, dt);
+      // Interactive F1 Grid Launch Clutch: hold W/R2 + Space/L1/Cross to lock into optimal 8,800–11,400 RPM window
+      const revTarget = throttleIn > 0 ? (clutchHeld ? 10450 : 12350) : 3800;
+      car.rpm = THREE.MathUtils.damp(car.rpm, revTarget, 8.5, dt);
       car.steerAngle = THREE.MathUtils.damp(car.steerAngle, steerTarget * 0.35, 10, dt);
       car.brakeTempC = THREE.MathUtils.damp(car.brakeTempC, brakeIn > 0 ? 520 : 300, 4, dt);
       car.model.updateVisuals(
@@ -4411,6 +4878,28 @@ export class RacingEngine {
       );
       this.audio.updateEngine(car.rpm, MAX_RPM, throttleIn, 0, true);
       return;
+    }
+
+    // Evaluate F1 Lights-Out Grid Launch on first throttle launch
+    if (!this.playerLaunched && (throttleIn > 0 || this.raceElapsedMs > 1800)) {
+      this.playerLaunched = true;
+      const reactionSec = Math.max(0.14, this.raceElapsedMs / 1000);
+      if (throttleIn > 0 && car.rpm >= 8200 && car.rpm <= 11550) {
+        car.speed = Math.max(car.speed, 13.5);
+        this.launchFeedback = `PERFECT LAUNCH · ${reactionSec.toFixed(2)}s`;
+        this.bannerMessage = `PERFECT LAUNCH! (${reactionSec.toFixed(2)}s REACTION)`;
+        this.bannerTimer = 2.4;
+      } else if (throttleIn > 0 && car.rpm > 11550) {
+        car.speed = Math.max(car.speed, 8.0);
+        car.lateralVel += (Math.random() > 0.5 ? 1 : -1) * 1.9;
+        this.launchFeedback = `WHEELSPIN START · ${reactionSec.toFixed(2)}s`;
+        this.bannerMessage = 'REAR WHEELSPIN — MODULATE LAUNCH RPM!';
+        this.bannerTimer = 2.2;
+      } else if (throttleIn > 0) {
+        car.speed = Math.max(car.speed, 9.5);
+        this.launchFeedback = `REACTION ${reactionSec.toFixed(2)}s`;
+      }
+      this.launchFeedbackTimer = 3.8;
     }
 
     const engineBonus = 1 + (this.upgrades.engineLevel - 1) * 0.055;
@@ -4471,11 +4960,25 @@ export class RacingEngine {
       return;
     }
 
+    const effectiveAssists = resolveEffectiveSessionAssists(this.settings);
+    const onlineRules = this.settings.onlineGameplay;
+    const onlineEqualSpec = Boolean(
+      onlineRules?.applyOnlineRulesToSession && onlineRules.carPerformance === 'equal'
+    );
+    const teamTopSpeedStat = onlineEqualSpec ? 88 : car.team.baseTopSpeed;
+    const teamAccelStat = onlineEqualSpec ? 88 : car.team.baseAcceleration;
+    const teamBrakeStat = onlineEqualSpec ? 88 : car.team.baseBraking;
+
     const damageScale =
       this.settings.carDamageMode === 'off' ? 0 : this.settings.carDamageMode === 'simulation' ? 1.65 : 1.0;
-    const maxSpeedMs = (82 + (car.team.baseTopSpeed - 85) * 0.85) * engineBonus * dmgFactor;
-    const accelForce = (34 + (car.team.baseAcceleration - 85) * 0.55) * engineBonus * (1 - (car.damagePct / 100) * 0.14);
-    const brakeForce = (54 + (car.team.baseBraking - 85) * 0.7) * brakeBonus * (this.settings.absAssist ? 1.0 : 0.92);
+    const maxSpeedMs = (82 + (teamTopSpeedStat - 85) * 0.85) * (onlineEqualSpec ? 1.04 : engineBonus) * dmgFactor;
+    const accelForce = (34 + (teamAccelStat - 85) * 0.55) * (onlineEqualSpec ? 1.04 : engineBonus) * (1 - (car.damagePct / 100) * 0.14);
+    const biasStabilityMult = 1.0 + (1.0 - Math.abs(this.brakeBiasPct - 57) * 0.012) * 0.04;
+    const brakeForce =
+      (54 + (teamBrakeStat - 85) * 0.7) *
+      (onlineEqualSpec ? 1.04 : brakeBonus) *
+      biasStabilityMult *
+      (effectiveAssists.absAssist ? 1.0 : 0.92);
 
     let offTrack = false;
     let onKerb = false;
@@ -4496,13 +4999,15 @@ export class RacingEngine {
       playerLatOffset = sample.lateralOffset;
       playerIdealLatOffset = sample.idealLateralOffset;
       const absLat = Math.abs(sample.lateralOffset);
-      onKerb = absLat > halfW - 0.35 && absLat <= halfW + 1.3;
-      offTrack = absLat > halfW + 1.3;
+      const cornerCutRule = onlineRules?.applyOnlineRulesToSession ? onlineRules.cornerCutting : 'regular';
+      const offTrackMargin = cornerCutRule === 'strict' ? 0.95 : cornerCutRule === 'relaxed' ? 1.85 : 1.3;
+      onKerb = absLat > halfW - 0.35 && absLat <= halfW + offTrackMargin;
+      offTrack = absLat > halfW + offTrackMargin;
       this.playerOnKerb = onKerb;
       this.playerOffTrack = offTrack;
 
-      // PS5 F1 Braking Assist (Low / Medium / High) entering high-curvature corners
-      const brakeAssistMode = this.settings.brakingAssist ?? 'low';
+      // PS5 F1 Braking Assist (Low / Medium / High) governed by online assist rules
+      const brakeAssistMode = effectiveAssists.brakingAssist;
       if (brakeAssistMode !== 'off' && car.speed > 26) {
         const samples = this.builtTrack.samples;
         const n = samples.length;
@@ -4519,8 +5024,8 @@ export class RacingEngine {
         }
       }
 
-      // PS5 F1 Steering Assist gently guides car toward the optimal circuit line
-      if (this.settings.steeringAssist) {
+      // PS5 F1 Steering Assist gently guides car toward the optimal circuit line (respecting online rules)
+      if (effectiveAssists.steeringAssist) {
         const samples = this.builtTrack.samples;
         const lookS = samples[(sample.index + 6) % samples.length];
         const desiredYaw = Math.atan2(-lookS.tangent.x, -lookS.tangent.z);
@@ -4542,18 +5047,41 @@ export class RacingEngine {
         if (Math.abs(car.speed) > 10) {
           this.audio.playCollision(Math.min(1, Math.abs(car.speed) / 45));
           this.shakeIntensity = Math.max(this.shakeIntensity, Math.min(0.65, Math.abs(car.speed) / 80));
+          this.triggerMobileHaptic('collision', Math.min(1, Math.abs(car.speed) / 42));
           car.damagePct = Math.min(100, car.damagePct + Math.min(18, Math.abs(car.speed) * 0.22) * damageScale);
           if (Math.abs(car.speed) > 38) this.hitstopTimer = 0.04;
         }
         car.speed *= 0.62;
         car.lateralVel = -sign * 4;
       }
+
+      // F1 FIA Race Control: Track Limits Warnings (scaled by Online Corner Cutting stringency)
+      if (
+        offTrack &&
+        this.pitStopTimer <= 0 &&
+        Math.abs(car.speed) > 22 &&
+        this.trackLimitCooldown <= 0 &&
+        this.gameMode !== 'time_trial'
+      ) {
+        const maxWarningsBeforePenalty = cornerCutRule === 'strict' ? 2 : cornerCutRule === 'relaxed' ? 5 : 3;
+        this.trackLimitCooldown = cornerCutRule === 'strict' ? 3.0 : cornerCutRule === 'relaxed' ? 5.5 : 4.2;
+        this.trackLimitWarnings += 1;
+        if (this.trackLimitWarnings < maxWarningsBeforePenalty) {
+          this.bannerMessage = `TRACK LIMITS WARNING (${this.trackLimitWarnings}/${maxWarningsBeforePenalty})`;
+          this.bannerTimer = 2.2;
+        } else if (this.trackLimitWarnings === maxWarningsBeforePenalty) {
+          this.bannerMessage = 'BLACK & WHITE FLAG — FINAL TRACK LIMITS WARNING!';
+          this.bannerTimer = 2.8;
+          this.audio.playStrategyAlert();
+        } else {
+          this.timePenaltySec += 5;
+          this.bannerMessage = `FIA PENALTY: +5s TIME PENALTY (${this.timePenaltySec}s TOTAL)`;
+          this.bannerTimer = 3.2;
+          this.audio.playStrategyAlert();
+        }
+      }
     }
 
-    const weatherGrip =
-      this.currentCompound === 'wet'
-        ? THREE.MathUtils.lerp(0.86, 0.91, wet)
-        : THREE.MathUtils.lerp(1.0, 0.54, wet);
     const compoundGrip =
       this.currentCompound === 'soft' ? 1.05 : this.currentCompound === 'medium' ? 0.98 : this.currentCompound === 'hard' ? 0.92 : 0.95;
     const wearGrip = 0.75 + (car.tyreWearPct / 100) * 0.25;
@@ -4582,6 +5110,7 @@ export class RacingEngine {
       lineGripEval.localSurfaceGripPct * (offTrack ? 0.65 : 1.0)
     );
 
+    const prevTempSnapshot = this.trackTemperatureC;
     this.trackTemperatureC = calculateTrackTemperatureC(
       this.liveWeather,
       this.getEffectiveLiveTimeOfDay(),
@@ -4589,7 +5118,21 @@ export class RacingEngine {
       this.trackRubberLevel,
       this.raceElapsedMs * 0.001
     );
-    const tcModeSetting = this.settings.tractionControlMode ?? (this.settings.tcAssist ? 'full' : 'off');
+    if (Math.abs(this.trackTemperatureC - prevTempSnapshot) >= 0.05) {
+      this.prevTrackTemperatureC = THREE.MathUtils.damp(this.prevTrackTemperatureC, prevTempSnapshot, 1.2, dt);
+    }
+    const playerRemainingLaps = Math.max(1, this.settings.totalLaps - car.lap);
+    this.currentWeatherTyreImpact = evaluateDynamicWeatherTyreImpact({
+      weather: this.liveWeather,
+      timeOfDay: this.getEffectiveLiveTimeOfDay(),
+      compound: this.currentCompound,
+      trackWetnessRatio: wet,
+      trackTemperatureC: this.trackTemperatureC,
+      prevTrackTemperatureC: this.prevTrackTemperatureC,
+      speedMs: car.speed,
+      remainingLaps: playerRemainingLaps,
+    });
+    const tcModeSetting = effectiveAssists.tractionControlMode;
     this.currentContactPatch = calculateTyreContactPatchPhysics({
       speedMs: car.speed,
       lateralVelMs: car.lateralVel,
@@ -4603,7 +5146,7 @@ export class RacingEngine {
       sectorGripPct: activeSectorGripPct,
       trackTemperatureC: this.trackTemperatureC,
       trackWetnessRatio: wet,
-      absAssist: this.settings.absAssist,
+      absAssist: effectiveAssists.absAssist,
       tcMode: tcModeSetting,
       prevGrainingSeverityPct: this.currentContactPatch.grainingSeverityPct,
       prevWheelSurfaceTempC: this.currentContactPatch.wheelSurfaceTempC,
@@ -4645,16 +5188,46 @@ export class RacingEngine {
     this.playerSlipstreamPct = THREE.MathUtils.damp(this.playerSlipstreamPct, targetSlipstream, 5.5, dt);
     this.playerDirtyAirPct = THREE.MathUtils.damp(this.playerDirtyAirPct, targetDirtyAir, 5.5, dt);
 
-    const dirtyAirGripPenalty = 1.0 - this.playerDirtyAirPct * 0.085;
+    // F1 2026 Team Management & PU Health Multipliers
+    const devFocus = this.teamManagement.developmentFocus;
+    const staff = this.teamManagement.staffAllocation;
+    const puWear = this.teamManagement.puWear;
+    const iceHealthMult = 0.90 + (Math.max(0, Math.min(100, puWear.ice)) / 100) * 0.10;
+    const aeroStaffMult = 1.0 + Math.max(-0.02, (staff.aero - 45) * 0.0008);
+    const ptStaffMult = 1.0 + Math.max(-0.02, (staff.powertrain - 45) * 0.0008);
+    const stratThermalMult = 1.0 - Math.min(0.10, Math.max(0, (staff.strategy - 45) * 0.002));
+    const aeroFocusBonus = (devFocus === 'active_aero' ? 1.045 : 1.0) * aeroStaffMult;
+    const hybridFocusBonus = (devFocus === 'mguk_hybrid' ? 1.18 : 1.0) * ptStaffMult;
+    const thermalFocusReduction = (devFocus === 'tyre_thermal' ? 0.86 : 1.0) * stratThermalMult;
+
+    // F1 2026 Reduced Turbulent Wake (-35% dirty air penalty vs 2025 ground-effect era)
+    const dirtyAirGripPenalty = 1.0 - this.playerDirtyAirPct * 0.055;
+    const activeDrsZone = findActiveDrsZoneAtT(drsZones, curPlayerT);
+    const drsDisabledByWeather = wet > 0.48 || this.liveWeather === 'heavy_rain' || this.liveWeather === 'blizzard';
+
+    // F1 2026 Active Aerodynamics (X-Mode low-drag usable on straights vs Z-Mode high-downforce corners)
+    const activeAero = calculate2026ActiveAero({
+      inAeroZone: Boolean(activeDrsZone),
+      disabledByWeather: drsDisabledByWeather,
+      speedKmh,
+      absSteerRad: Math.abs(effectiveSteerTarget),
+      aeroFocusBonus,
+      manualXModeRequested: drsRequested,
+      manualZModeLock: this.mobileAeroMode === 'z_mode',
+    });
+    car.activeAeroMode = activeAero.mode;
+    car.drsOpen = activeAero.mode === 'x_mode';
+
     const surfaceGrip =
       (offTrack ? 0.55 : 1.0) *
       hazardEval.gripMultiplier *
-      weatherGrip *
+      this.currentWeatherTyreImpact.gripMultiplier *
       compoundGrip *
       wearGrip *
       trackEvolutionGrip *
       this.currentContactPatch.gripPenaltyMultiplier *
       dirtyAirGripPenalty *
+      activeAero.downforceGripMultiplier *
       aeroBonus *
       tyreBonus *
       suspensionBonus *
@@ -4664,6 +5237,7 @@ export class RacingEngine {
         (offTrack ? 0.55 : 1.0) *
           hazardEval.gripMultiplier *
           lineGripEval.localSurfaceGripPct *
+          this.currentWeatherTyreImpact.gripMultiplier *
           wearGrip *
           dirtyAirGripPenalty *
           this.currentContactPatch.gripPenaltyMultiplier,
@@ -4671,42 +5245,51 @@ export class RacingEngine {
         100
       )
     );
-    const activeDrsZone = findActiveDrsZoneAtT(drsZones, curPlayerT);
-    const drsDisabledByWeather = wet > 0.48 || this.liveWeather === 'heavy_rain' || this.liveWeather === 'blizzard';
-    const drsZoneQualified =
-      this.gameMode === 'time_trial' || this.settings.drsAssist !== false || this.playerDrsGapQualified;
-    const drsEligible =
-      Boolean(activeDrsZone) &&
+
+    // F1 2026 350kW MGU-K & Manual Override Mode (MOM) when chasing <1.1s ahead or override assist enabled
+    const overrideAvailable =
       !drsDisabledByWeather &&
-      drsZoneQualified &&
-      speedKmh > 120 &&
-      Math.abs(effectiveSteerTarget) < 0.25 &&
+      (this.gameMode === 'time_trial' || effectiveAssists.drsAssist || this.playerDrsGapQualified) &&
       car.ersCharge > 4;
-    const autoDrsErs = Boolean(
-      (this.settings.drsAssist || this.settings.ersAssist) &&
+    this.playerManualOverrideAvailable = overrideAvailable;
+    const autoOverride = Boolean(
+      (effectiveAssists.drsAssist || effectiveAssists.ersAssist) &&
+        this.ersMode !== 'harvest' &&
         throttleIn > 0 &&
         effectiveBrakeIn <= 0.05 &&
-        car.ersCharge > 16
+        car.ersCharge > 18 &&
+        overrideAvailable
     );
-    car.drsOpen = (drsRequested || autoDrsErs) && drsEligible;
-    if (car.drsOpen) {
-      car.ersCharge = Math.max(0, car.ersCharge - dt * 18);
-    } else {
-      car.ersCharge = Math.min(100, car.ersCharge + (effectiveBrakeIn > 0 ? dt * 16 : dt * 3.5));
-    }
+    const overrideActive = (drsRequested || autoOverride) && overrideAvailable && throttleIn > 0;
+    car.manualOverrideActive = overrideActive;
+
+    const puDeployment = calculate2026PowerUnitDeployment({
+      speedKmh,
+      throttleIn,
+      brakeIn: effectiveBrakeIn,
+      ersCharge: car.ersCharge,
+      overrideRequested: drsRequested || autoOverride,
+      overrideAvailable,
+      ersMode: this.ersMode,
+      mgukHealthPct: puWear.mguk,
+      hybridFocusBonus,
+    });
+    car.mgukPowerKw = puDeployment.mgukPowerKw;
+    car.ersCharge = THREE.MathUtils.clamp(car.ersCharge - puDeployment.ersDrainPerSec * dt, 0, 100);
 
     const fuelWeightAccelMult = 1 - (car.fuelPct / 100) * 0.045;
     const slipstreamAccelBoost = 1.0 + this.playerSlipstreamPct * 0.075;
     const forwardAccel =
       throttleIn *
       accelForce *
+      iceHealthMult *
       fuelWeightAccelMult *
       slipstreamAccelBoost *
-      (car.drsOpen ? 1.24 : 1.0) *
+      puDeployment.driveBoostMultiplier *
       (car.fuelPct > 0 ? 1 : 0.45);
     let longForce = 0;
 
-    if (this.settings.transmission === 'auto') {
+    if (effectiveAssists.transmission === 'auto') {
       if (effectiveBrakeIn > 0 && car.speed <= 1.2 && brakeIn > 0) {
         car.gear = -1;
         longForce = -effectiveBrakeIn * 22;
@@ -4727,19 +5310,24 @@ export class RacingEngine {
     }
 
     const dragCoeff =
-      ((car.drsOpen ? 0.0029 : 0.0038) * (1.0 - this.playerSlipstreamPct * 0.19)) +
+      (0.0038 * activeAero.dragMultiplier * (1.0 - this.playerSlipstreamPct * 0.19)) +
       (offTrack ? 0.018 : 0.0012);
     const dragForce = car.speed * Math.abs(car.speed) * dragCoeff + car.speed * 0.14;
     car.speed += (longForce - dragForce) * dt;
     const slipstreamTopSpeedMult = 1.0 + this.playerSlipstreamPct * 0.042;
+    const aeroTopSpeedMult = car.drsOpen ? 1.065 : 1.0;
+    const momTopSpeedMult = car.manualOverrideActive ? 1.045 : 1.0;
     car.speed = THREE.MathUtils.clamp(
       car.speed,
       -22,
-      maxSpeedMs * (car.drsOpen ? 1.09 : 1.0) * slipstreamTopSpeedMult
+      maxSpeedMs * aeroTopSpeedMult * momTopSpeedMult * slipstreamTopSpeedMult
     );
 
     const absSpeed = Math.abs(car.speed);
-    if (this.settings.transmission === 'auto' && car.gear >= 1) {
+    if (this.manualGearOverrideTimer > 0) {
+      this.manualGearOverrideTimer = Math.max(0, this.manualGearOverrideTimer - dt);
+    }
+    if (effectiveAssists.transmission === 'auto' && car.gear >= 1 && this.manualGearOverrideTimer <= 0) {
       const targetGear = Math.min(8, Math.max(1, Math.floor((absSpeed / maxSpeedMs) * 7.8) + 1));
       if (targetGear !== car.gear) {
         this.audio.playGearShift(targetGear > car.gear);
@@ -4754,10 +5342,11 @@ export class RacingEngine {
     const targetRpm = THREE.MathUtils.clamp(3600 + wheelRpm + (car.gear === 0 ? throttleIn * 8500 : 0), 3500, MAX_RPM);
     car.rpm = THREE.MathUtils.damp(car.rpm, targetRpm, 12, dt);
 
-    const maxSteer = THREE.MathUtils.lerp(0.55, 0.22, Math.min(1, absSpeed / 75));
-    car.steerAngle = THREE.MathUtils.damp(car.steerAngle, effectiveSteerTarget * maxSteer, 11, dt);
+    const maxSteer = THREE.MathUtils.lerp(0.56, 0.23, Math.min(1, absSpeed / 75));
+    car.steerAngle = THREE.MathUtils.damp(car.steerAngle, effectiveSteerTarget * maxSteer, 11.5, dt);
 
-    const turnRate = (car.speed / 3.4) * Math.sin(car.steerAngle) * Math.min(1.15, surfaceGrip);
+    // F1 2026 lighter 768kg / shorter wheelbase chassis responsiveness
+    const turnRate = (car.speed / 3.28) * Math.sin(car.steerAngle) * Math.min(1.18, surfaceGrip);
     car.yaw += turnRate * dt;
 
     // Realism Upgrade: Calculate authentic instantaneous G-forces acting on driver & chassis
@@ -4770,7 +5359,7 @@ export class RacingEngine {
     const rightZ = -Math.sin(car.yaw);
 
     let slipKick = 0;
-    const tcMode = this.settings.tractionControlMode ?? (this.settings.tcAssist ? 'full' : 'off');
+    const tcMode = effectiveAssists.tractionControlMode;
     const slickOnWet = wet > 0.35 && this.currentCompound !== 'wet';
     if (tcMode !== 'full' && throttleIn > 0 && absSpeed < 55 && (isRain || Math.abs(car.steerAngle) > 0.16)) {
       const tcScale = tcMode === 'medium' ? 0.45 : 1.0;
@@ -4778,7 +5367,7 @@ export class RacingEngine {
     } else if (slickOnWet && throttleIn > 0 && Math.abs(car.steerAngle) > 0.12) {
       slipKick += -Math.sign(car.steerAngle) * (wet * 5.2);
     }
-    if (!this.settings.absAssist && effectiveBrakeIn > 0 && absSpeed > 26) {
+    if (!effectiveAssists.absAssist && effectiveBrakeIn > 0 && absSpeed > 26) {
       slipKick += Math.sin(this.raceElapsedMs * 0.03) * 3.8;
     }
 
@@ -4821,18 +5410,38 @@ export class RacingEngine {
     car.fuelPct = Math.max(0, car.fuelPct - perSecFuelScale * (0.45 + throttleIn * 0.85) * dt);
     const lockupWear = !this.settings.absAssist && brakeIn > 0 && absSpeed > 24 ? 0.35 : 0;
     const debrisAbrasion = hazardEval.hazardType === 'debris' ? 0.95 : 0;
-    const wetOnDryMult = this.currentCompound === 'wet' && wet < 0.18 ? 2.25 : 1.0;
-    const compoundWearFactor =
-      this.currentCompound === 'soft' ? 1.45 : this.currentCompound === 'hard' ? 0.65 : 1.0;
-    const cliffMultiplier = car.tyreWearPct < 30 ? 1.75 : car.tyreWearPct < 50 ? 1.25 : 1.0;
-    const wearRate =
-      (Math.abs(car.lateralVel) * 0.09 + (offTrack ? 0.45 : 0.04) + lockupWear + debrisAbrasion) *
-      wetOnDryMult *
-      compoundWearFactor *
-      cliffMultiplier *
-      this.currentContactPatch.wearRateMultiplier *
-      dt;
-    car.tyreWearPct = Math.max(5, car.tyreWearPct - wearRate);
+
+    // F1 2026 4-Wheel Differential Tyre Wear [FL, FR, RL, RR]
+    const wheelDeltas = calculateWheelWearDeltas({
+      lateralVelMs: car.lateralVel,
+      gLat: this.currentGForce.gLat,
+      gLong: this.currentGForce.gLong,
+      speedMs: car.speed,
+      offTrack,
+      lockupWear,
+      debrisAbrasion,
+      compound: this.currentCompound,
+      trackWetnessRatio: wet,
+      wheelWearPct: car.wheelWearPct,
+      wheelSurfaceTempC: this.currentContactPatch.wheelSurfaceTempC,
+      contactPatchWearMult:
+        this.currentContactPatch.wearRateMultiplier * this.currentWeatherTyreImpact.wearMultiplier,
+      tyreVerticalLoadFactor: activeAero.tyreVerticalLoadFactor,
+      thermalFocusReduction,
+      dt,
+    });
+    for (let w = 0; w < 4; w++) {
+      car.wheelWearPct[w] = Math.max(4, car.wheelWearPct[w] - wheelDeltas[w]);
+    }
+    const meanWheelWear =
+      (car.wheelWearPct[0] + car.wheelWearPct[1] + car.wheelWearPct[2] + car.wheelWearPct[3]) * 0.25;
+    const minWheelWear = Math.min(
+      car.wheelWearPct[0],
+      car.wheelWearPct[1],
+      car.wheelWearPct[2],
+      car.wheelWearPct[3]
+    );
+    car.tyreWearPct = Math.max(5, meanWheelWear * 0.65 + minWheelWear * 0.35);
 
     const roll = THREE.MathUtils.clamp(-car.lateralVel * 0.014, -0.06, 0.06);
     const pitch = THREE.MathUtils.clamp(brakeIn * 0.035 - throttleIn * 0.02, -0.04, 0.04) + trackSlopePitch;
@@ -4917,6 +5526,61 @@ export class RacingEngine {
       offTrack,
       active: true,
     });
+
+    this.applyDualSenseHaptics({
+      dt,
+      onKerb,
+      offTrack,
+      brakeIn: effectiveBrakeIn,
+      speedKmh,
+      slipRatio: this.currentContactPatch.microSlipRatio,
+      shiftFlash: car.shiftFlash,
+      wetRatio: wet,
+    });
+
+    if (
+      this.settings.touchControls &&
+      (this.settings.hapticFeedback ?? 'full') !== 'off' &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.vibrate === 'function'
+    ) {
+      this.mobileVibrateCooldown = Math.max(0, this.mobileVibrateCooldown - dt);
+      if (this.mobileVibrateCooldown <= 0) {
+        if (offTrack && speedKmh > 40) {
+          this.mobileVibrateCooldown = 0.13;
+          this.triggerMobileHaptic('kerb', 1.0);
+        } else if (effectiveBrakeIn > 0.25 && speedKmh > 45) {
+          // Braking & multi-stage threshold ABS haptic pulse
+          const lockupSlip = THREE.MathUtils.clamp((this.currentContactPatch.microSlipRatio - 0.06) * 5.2, 0, 1);
+          const brakeIntensity = THREE.MathUtils.clamp(effectiveBrakeIn * 0.62 + lockupSlip * 0.48, 0.28, 1);
+          this.mobileVibrateCooldown = lockupSlip > 0.45 ? 0.08 : lockupSlip > 0.25 ? 0.105 : 0.14;
+          this.triggerMobileHaptic('brake', brakeIntensity);
+        } else if (onKerb && speedKmh > 65) {
+          const kerbFreq = Math.max(0.075, 0.145 - (speedKmh / 340) * 0.065);
+          this.mobileVibrateCooldown = kerbFreq;
+          this.triggerMobileHaptic('kerb', THREE.MathUtils.clamp(0.48 + speedKmh / 420, 0.48, 0.85));
+        } else if (car.shiftFlash > 0.85) {
+          this.mobileVibrateCooldown = 0.14;
+          this.triggerMobileHaptic('shift_up', 0.85);
+        } else if (
+          throttleIn > 0.65 &&
+          speedKmh > 25 &&
+          (slipAmount > 0.34 || (wet > 0.4 && speedKmh > 140))
+        ) {
+          // Wheelspin / wet aquaplane surface loss tremor
+          this.mobileVibrateCooldown = 0.12;
+          this.triggerMobileHaptic('kerb', 0.52);
+        } else if (
+          throttleIn > 0.68 &&
+          speedKmh > 12 &&
+          (car.gear <= 3 || car.manualOverrideActive || slipAmount > 0.25)
+        ) {
+          // Acceleration launch torque / MGU-K surge haptic pulse
+          this.mobileVibrateCooldown = car.manualOverrideActive ? 0.13 : 0.19;
+          this.triggerMobileHaptic('accel', car.manualOverrideActive ? 0.88 : 0.55);
+        }
+      }
+    }
   }
 
   private stampSkidMarks(car: RacerEntity) {
@@ -5043,14 +5707,14 @@ export class RacingEngine {
 
     car.aiLaneTimer -= dt;
     if (car.aiLaneTimer <= 0) {
-      car.aiLaneTimer = 2.0 + Math.random() * 2.5;
-      car.aiTargetLane = (Math.random() - 0.5) * (this.builtTrack.trackWidth * 0.55);
+      car.aiLaneTimer = 1.6 + Math.random() * 1.8;
+      car.aiTargetLane = (Math.random() - 0.5) * (this.builtTrack.trackWidth * 0.52);
     }
 
     // AI Look-Ahead Surface Hazard Avoidance: shift racing line away from oil spills or debris ahead
     let avoidingHazardAhead = false;
+    const halfW = this.builtTrack.trackWidth * 0.5;
     if (this.surfaceHazards.length > 0) {
-      const halfW = this.builtTrack.trackWidth * 0.5;
       for (let h = 0; h < this.surfaceHazards.length; h++) {
         const hz = this.surfaceHazards[h];
         const sampleDelta = ((hz.sampleIdx - current.index) % n + n) % n;
@@ -5070,11 +5734,60 @@ export class RacingEngine {
     const farIdx = (current.index + 18) % n;
     const targetSample = samples[lookIdx];
     const farSample = samples[farIdx];
+    const wet = this.trackWetness;
+    const isRain = wet > 0.25 || this.liveWeather === 'rain' || this.liveWeather === 'heavy_rain';
+    const cornerSeverity = Math.max(targetSample.curvature, farSample.curvature);
 
-    // Blend AI target lane toward the apex-hugging ideal racing line unless actively avoiding a hazard
+    // Dynamic 2026 AI Tactical Racecraft: Attacking Overtakes & Inside Defense
+    let tacticalLaneOverride: number | null = null;
+    let aiSlipstreamBoost = 1.0;
+    let aiOverrideAttack = false;
+    let gapAheadAi: number | null = null;
+    if (this.screen === 'playing' && !car.isPlayer && !car.finished && !avoidingHazardAhead && car.aiPitTimer <= 0) {
+      const tLen = this.builtTrack.totalLength || 1000;
+      let closestAheadCar: RacerEntity | null = null;
+      let closestAheadDist = Infinity;
+      let closestBehindDist = Infinity;
+
+      for (let i = 0; i < this.racers.length; i++) {
+        const other = this.racers[i];
+        if (other.id === car.id || other.finished) continue;
+        const pDiff = (other.totalProgress - car.totalProgress) * tLen;
+        if (pDiff > 2 && pDiff < 140) {
+          const sec = pDiff / 62;
+          if (gapAheadAi === null || sec < gapAheadAi) gapAheadAi = sec;
+          if (pDiff < closestAheadDist) {
+            closestAheadDist = pDiff;
+            closestAheadCar = other;
+          }
+        } else if (pDiff < -2 && pDiff > -26) {
+          const distBehind = -pDiff;
+          if (distBehind < closestBehindDist) closestBehindDist = distBehind;
+        }
+      }
+
+      // Slipstream & Manual Override (MOM) Attacking Pass
+      if (closestAheadCar && closestAheadDist < 60 && cornerSeverity < 0.1) {
+        aiSlipstreamBoost = 1.048;
+        if (car.ersCharge > 22) aiOverrideAttack = true;
+        if (closestAheadDist < 34 && (car.speed > closestAheadCar.speed - 2 || closestAheadCar.tyreWearPct < 58)) {
+          const otherSample = this.builtTrack.findClosestSample(closestAheadCar.position, closestAheadCar.closestIdx);
+          const passSign = current.lateralOffset >= otherSample.lateralOffset ? 1 : -1;
+          tacticalLaneOverride = passSign * Math.min(halfW - 1.6, Math.max(2.6, halfW * 0.56));
+        }
+      } else if (closestBehindDist < 22 && cornerSeverity < 0.08 && car.ersCharge > 20) {
+        // Legal one-move inside defense when an attacker threatens within 0.4s
+        const insideSign = (targetSample.idealLateralOffset ?? 0) >= 0 ? -1 : 1;
+        tacticalLaneOverride = insideSign * Math.min(halfW - 1.8, halfW * 0.44);
+      }
+    }
+
+    // Blend AI target lane toward the apex-hugging ideal racing line unless avoiding hazard or battling
     const targetLaneOffset = avoidingHazardAhead
       ? car.aiTargetLane
-      : (targetSample.idealLateralOffset ?? 0) * 0.78 + car.aiTargetLane * 0.36;
+      : tacticalLaneOverride !== null
+        ? tacticalLaneOverride
+        : (targetSample.idealLateralOffset ?? 0) * 0.78 + car.aiTargetLane * 0.36;
     _vecA.copy(targetSample.point).addScaledVector(targetSample.right, targetLaneOffset);
     const dx = _vecA.x - car.position.x;
     const dz = _vecA.z - car.position.z;
@@ -5087,10 +5800,79 @@ export class RacingEngine {
     car.steerAngle = THREE.MathUtils.clamp(yawDiff * 1.4, -0.45, 0.45);
     car.yaw += THREE.MathUtils.clamp(yawDiff, -2.8 * dt, 2.8 * dt);
 
-    const wet = this.trackWetness;
-    const isRain = wet > 0.25 || this.liveWeather === 'rain' || this.liveWeather === 'heavy_rain';
-    // AI adapts tyre compound when passing pit straight during dynamic weather
-    if (this.isDynamicWeatherEnabled() && current.t < 0.05) {
+    // 2026 AI 4-Corner Tyre Degradation & Fuel Burn Simulation
+    if (this.screen === 'playing' && !car.finished) {
+      const aiCompoundWear =
+        car.tyreCompound === 'soft'
+          ? 1.48
+          : car.tyreCompound === 'hard'
+            ? 0.64
+            : car.tyreCompound === 'wet' && wet < 0.18
+              ? 2.25
+              : 1.0;
+      const baseAiWear = (0.045 + cornerSeverity * 0.95 + Math.abs(car.lateralVel) * 0.06) * aiCompoundWear * dt;
+      const rightLoad = car.steerAngle < -0.04 ? 1.25 : 0.88;
+      const leftLoad = car.steerAngle > 0.04 ? 1.25 : 0.88;
+      const rearTractionMult = cornerSeverity < 0.1 && car.speed > 42 ? 1.15 : 0.96;
+      car.wheelWearPct = [
+        Math.max(5, car.wheelWearPct[0] - baseAiWear * leftLoad * 1.05),
+        Math.max(5, car.wheelWearPct[1] - baseAiWear * rightLoad * 1.05),
+        Math.max(5, car.wheelWearPct[2] - baseAiWear * leftLoad * rearTractionMult),
+        Math.max(5, car.wheelWearPct[3] - baseAiWear * rightLoad * rearTractionMult),
+      ];
+      car.tyreWearPct =
+        (car.wheelWearPct[0] + car.wheelWearPct[1] + car.wheelWearPct[2] + car.wheelWearPct[3]) * 0.25;
+      const fuelBurnScale = car.fuelPct < 18 ? 0.13 : 0.18; // Lift & coast fuel saving below 18%
+      car.fuelPct = Math.max(4, car.fuelPct - fuelBurnScale * dt);
+    }
+
+    // 2026 AI Race Strategy & Dynamic Wet-Crossover / Timed Pit Stop Execution
+    if (this.screen === 'playing' && !car.isPlayer && !car.finished) {
+      if (car.aiPitTimer > 0) {
+        car.aiPitTimer = Math.max(0, car.aiPitTimer - dt);
+        car.speed = THREE.MathUtils.damp(car.speed, 11.5, 5.5, dt);
+        car.drsOpen = false;
+        car.activeAeroMode = 'z_mode';
+        if (car.aiPitTimer <= 0 && car.aiQueuedCompound) {
+          car.tyreCompound = car.aiQueuedCompound;
+          car.aiQueuedCompound = null;
+          car.tyreWearPct = 100;
+          car.wheelWearPct = [100, 100, 100, 100];
+          car.pitStops += 1;
+          car.model.applyLivery(
+            car.team.primaryColor,
+            car.team.secondaryColor,
+            car.team.accentColor,
+            car.team.helmetColor,
+            car.wheelFinish,
+            car.tyreCompound
+          );
+        }
+      } else {
+        const urgentWeatherMismatch =
+          (wet > 0.48 && car.tyreCompound !== 'wet') || (wet < 0.14 && car.tyreCompound === 'wet');
+        const inPitEntryWindow = urgentWeatherMismatch
+          ? current.t > 0.88 || current.t < 0.05
+          : current.t > 0.95 || current.t < 0.04;
+
+        if (inPitEntryWindow && car.totalProgress > 0.72) {
+          const decision = evaluateAiPitStrategy({
+            archetype: car.aiStrategyArchetype,
+            currentLap: car.lap,
+            totalLaps: this.settings.totalLaps,
+            tyreWearPct: car.tyreWearPct,
+            currentCompound: car.tyreCompound,
+            trackWetnessRatio: wet,
+            pitStopsCompleted: car.pitStops,
+            gapAheadSec: gapAheadAi,
+          });
+          if (decision.shouldPit && decision.nextCompound !== car.tyreCompound) {
+            car.aiQueuedCompound = decision.nextCompound;
+            car.aiPitTimer = 2.4;
+          }
+        }
+      }
+    } else if (this.isDynamicWeatherEnabled() && current.t < 0.05 && this.screen === 'title') {
       const desiredCompound: TyreCompound = wet > 0.45 ? 'wet' : car.tyreCompound === 'wet' && wet < 0.16 ? 'medium' : car.tyreCompound;
       if (desiredCompound !== car.tyreCompound) {
         car.tyreCompound = desiredCompound;
@@ -5102,7 +5884,6 @@ export class RacingEngine {
           car.wheelFinish,
           desiredCompound
         );
-        car.speed *= 0.72;
       }
     }
 
@@ -5115,32 +5896,34 @@ export class RacingEngine {
     const aiLineGrip = evaluateRacingLineSurfaceGrip(
       current.lateralOffset,
       current.idealLateralOffset,
-      this.builtTrack.trackWidth * 0.5,
+      halfW,
       this.sectorRubberLevels[aiSecIdx] ?? this.trackRubberLevel,
       this.sectorGripPctState[aiSecIdx] ?? 92,
       wet,
       car.tyreCompound
     );
-    const cornerSeverity = Math.max(targetSample.curvature, farSample.curvature);
-    // AI Slipstream Tow: AI cars within 55m behind another car on straights gain a +4% aerodynamic tow
-    let aiSlipstreamBoost = 1.0;
-    if (cornerSeverity < 0.09 && this.builtTrack) {
-      const tLen = this.builtTrack.totalLength || 1000;
-      for (let i = 0; i < this.racers.length; i++) {
-        const other = this.racers[i];
-        if (other.id === car.id || other.finished) continue;
-        const pDiff = (other.totalProgress - car.totalProgress) * tLen;
-        if (pDiff > 5 && pDiff < 55) {
-          aiSlipstreamBoost = 1.042;
-          break;
-        }
-      }
+    car.manualOverrideActive = aiOverrideAttack && car.aiPitTimer <= 0;
+    if (car.manualOverrideActive) {
+      car.ersCharge = Math.max(0, car.ersCharge - dt * 11);
+    } else {
+      car.ersCharge = Math.min(100, car.ersCharge + dt * 5.5);
     }
+
+    const aiCompoundGripPace =
+      car.tyreCompound === 'soft' ? 1.028 : car.tyreCompound === 'medium' ? 1.0 : car.tyreCompound === 'hard' ? 0.976 : 0.96;
+    const aiWearPace = car.tyreWearPct < 35 ? 0.81 + (car.tyreWearPct / 100) * 0.22 : 0.87 + (car.tyreWearPct / 100) * 0.13;
+    const aiFuelSavePace = car.fuelPct < 18 ? 0.965 : 1.0;
+    const aiAeroStraightBonus = car.activeAeroMode === 'x_mode' && cornerSeverity < 0.1 ? 1.032 : 1.0;
     const weatherPace =
-      (1 - wet * (car.tyreCompound === 'wet' ? 0.14 : 0.3)) *
+      (1 - wet * (car.tyreCompound === 'wet' ? 0.12 : 0.34)) *
       (avoidingHazardAhead ? 0.93 : 1.0) *
       (0.96 + (aiLineGrip.lineEvolutionGripMultiplier - 1.0) * 0.55) *
-      aiSlipstreamBoost;
+      aiCompoundGripPace *
+      aiWearPace *
+      aiFuelSavePace *
+      aiSlipstreamBoost *
+      aiAeroStraightBonus *
+      (car.manualOverrideActive ? 1.025 : 1.0);
     const maxAiSpeed = 84 * car.aiBasePace * weatherPace * (aiHazardEval.gripMultiplier < 1 ? 0.82 : 1.0);
     let cornerSpeed = Math.max(24, maxAiSpeed * (1 - Math.min(0.68, cornerSeverity * 1.85)));
     if (aiHazardEval.hazardType === 'oil') {
@@ -5151,6 +5934,7 @@ export class RacingEngine {
     if (
       this.screen === 'playing' &&
       !car.isPlayer &&
+      car.aiPitTimer <= 0 &&
       this.raceElapsedMs > 8500 &&
       car.incidentTimer <= 0 &&
       car.incidentCooldown <= 0 &&
@@ -5175,7 +5959,10 @@ export class RacingEngine {
     }
 
     let braking = car.speed > cornerSpeed + 3;
-    if (car.incidentTimer > 0) {
+    if (car.aiPitTimer > 0) {
+      cornerSpeed = 12.0;
+      braking = car.speed > 13.5;
+    } else if (car.incidentTimer > 0) {
       car.incidentTimer = Math.max(0, car.incidentTimer - dt);
       cornerSpeed = 11.5;
       braking = true;
@@ -5230,10 +6017,12 @@ export class RacingEngine {
     const aiInDrsZone = findActiveDrsZoneAtT(aiDrsZones, updatedSample.t) !== null;
     car.drsOpen =
       aiInDrsZone &&
+      car.aiPitTimer <= 0 &&
       car.incidentTimer <= 0 &&
       cornerSeverity < 0.14 &&
-      car.speed > 48 &&
+      car.speed > 38 &&
       wet <= 0.48;
+    car.activeAeroMode = car.drsOpen ? 'x_mode' : 'z_mode';
 
     const headlightsOn =
       this.liveWeather === 'sunset' ||
@@ -5290,11 +6079,32 @@ export class RacingEngine {
   }
 
   private resolveCarCollisions() {
+    const online = this.settings.onlineGameplay;
+    const rulesActive = Boolean(online?.applyOnlineRulesToSession);
+    if (rulesActive && online?.collisionMode === 'ghost_all') {
+      return;
+    }
+
     const minDist = 2.45;
     for (let i = 0; i < this.racers.length; i++) {
       for (let j = i + 1; j < this.racers.length; j++) {
         const a = this.racers[i];
         const b = this.racers[j];
+
+        if (rulesActive) {
+          if (
+            online?.collisionMode === 'lap1_ghost' &&
+            ((a.lap <= 1 && a.totalProgress < 0.25) || (b.lap <= 1 && b.totalProgress < 0.25))
+          ) {
+            continue;
+          }
+          if (
+            online?.ghostLappedCars &&
+            (a.incidentTimer > 0 || b.incidentTimer > 0 || Math.abs(a.lap - b.lap) >= 1)
+          ) {
+            continue;
+          }
+        }
         const dx = b.position.x - a.position.x;
         const dz = b.position.z - a.position.z;
         const distSq = dx * dx + dz * dz;
@@ -5340,6 +6150,7 @@ export class RacingEngine {
             if (relSpeed > 4) {
               this.audio.playCollision(Math.min(1, relSpeed / 25));
               this.shakeIntensity = Math.max(this.shakeIntensity, Math.min(0.45, relSpeed / 40));
+              this.triggerMobileHaptic('collision', Math.min(1, relSpeed / 24));
               const playerRacer = a.isPlayer ? a : b;
               playerRacer.damagePct = Math.min(100, playerRacer.damagePct + Math.min(12, relSpeed * 0.25));
               if (relSpeed > 24) this.hitstopTimer = 0.035;
@@ -5376,7 +6187,7 @@ export class RacingEngine {
         this.updateTrackRubberTexture(true);
         if (this.screen === 'playing' && car.lap >= this.settings.totalLaps && this.gameMode !== 'time_trial') {
           car.finished = true;
-          car.finishTimeMs = this.raceElapsedMs;
+          car.finishTimeMs = this.raceElapsedMs + (car.isPlayer ? this.timePenaltySec * 1000 : 0);
           if (car.isPlayer) {
             this.finishRace();
           }
@@ -5521,12 +6332,16 @@ export class RacingEngine {
         totalProgress: r.totalProgress,
         lastLapMs: r.lastLapMs,
         bestLapMs: r.bestLapMs,
-        raceTimeMs: this.raceElapsedMs + gapSeconds * 1000,
+        raceTimeMs: this.raceElapsedMs + gapSeconds * 1000 + (r.isPlayer ? this.timePenaltySec * 1000 : 0),
         pointsAwarded: CHAMPIONSHIP_POINTS[idx] ?? 0,
         gapSeconds,
         isPlayer: r.isPlayer,
         isRival: !r.isPlayer && r.driverId === this.activeRivalId,
         finished: r.finished,
+        tyreCompound: r.tyreCompound,
+        pitStops: r.pitStops,
+        isPitting: r.aiPitTimer > 0 || (r.isPlayer && this.pitStopTimer > 0),
+        timePenaltySec: r.isPlayer ? this.timePenaltySec : 0,
       };
     });
   }
@@ -6284,7 +7099,8 @@ export class RacingEngine {
       this.racers.length,
       player.fuelPct,
       this.settings.pitStrategyPlan,
-      this.completedPlannedStopIds
+      this.completedPlannedStopIds,
+      this.trackTemperatureC
     );
 
     if (
@@ -6330,17 +7146,32 @@ export class RacingEngine {
       active: activeDrsZone?.id === z.id,
     }));
 
+    const currentPos = playerStanding?.position ?? 1;
+    if (
+      this.screen === 'playing' &&
+      this.countdownState === 'racing' &&
+      this.raceElapsedMs > 4500 &&
+      this.pitStopTimer <= 0 &&
+      this.lastTrackedPosition > 0
+    ) {
+      if (currentPos < this.lastTrackedPosition) {
+        const gained = this.lastTrackedPosition - currentPos;
+        this.overtakesCount += gained;
+        this.bannerMessage = `OVERTAKE +${gained} · P${currentPos}!`;
+        this.bannerTimer = 2.0;
+        this.audio.playDrsBeep(true);
+      }
+      this.lastTrackedPosition = currentPos;
+    } else if (this.raceElapsedMs <= 4500) {
+      this.lastTrackedPosition = currentPos;
+    }
+
     this.callbacks.onTelemetry({
       speedKmh: Math.round(Math.abs(player.speed) * 3.6),
       rpm: Math.round(player.rpm),
       maxRpm: MAX_RPM,
       gear: player.gear,
-      drsAvailable:
-        Boolean(activeDrsZone) &&
-        !drsDisabledByWeather &&
-        drsGapQualified &&
-        Math.abs(player.speed) * 3.6 > 120 &&
-        player.ersCharge > 4,
+      drsAvailable: this.playerManualOverrideAvailable,
       drsActive: player.drsOpen,
       ersCharge: Math.round(player.ersCharge),
       fuelPct: Math.round(player.fuelPct),
@@ -6348,7 +7179,7 @@ export class RacingEngine {
       tyreCompound: this.currentCompound,
       lap: Math.min(player.lap, this.settings.totalLaps),
       totalLaps: this.settings.totalLaps,
-      position: playerStanding?.position ?? 1,
+      position: currentPos,
       totalRacers: this.racers.length,
       currentLapMs,
       lastLapMs: player.lastLapMs,
@@ -6389,8 +7220,29 @@ export class RacingEngine {
       gForceTotal: this.currentGForce.gTotal,
       pitStrategy: this.currentStrategy,
       tyreContactPatch: this.currentContactPatch,
+      weatherTyreImpact: this.currentWeatherTyreImpact,
       slipstreamPct: Math.round(this.playerSlipstreamPct * 100),
       dirtyAirPct: Math.round(this.playerDirtyAirPct * 100),
+      activeAeroMode: player.activeAeroMode,
+      manualOverrideAvailable: this.playerManualOverrideAvailable,
+      manualOverrideActive: player.manualOverrideActive,
+      mgukPowerKw: player.mgukPowerKw,
+      wheelWearPct: [
+        Math.round(player.wheelWearPct[0]),
+        Math.round(player.wheelWearPct[1]),
+        Math.round(player.wheelWearPct[2]),
+        Math.round(player.wheelWearPct[3]),
+      ],
+      trackLimitWarnings: this.trackLimitWarnings,
+      timePenaltySec: this.timePenaltySec,
+      overtakesCount: this.overtakesCount,
+      launchFeedback: this.launchFeedback,
+      ersMode: this.ersMode,
+      brakeBiasPct: this.brakeBiasPct,
+      dualsenseConnected: this.dualsenseConnected,
+      dualsenseName: this.dualsenseName,
+      throttleInputPct: this.playerThrottleInputPct,
+      brakeInputPct: this.playerBrakeInputPct,
     });
   }
 

@@ -1461,6 +1461,65 @@ export class RacingAudio {
     }
   }
 
+  public playEngineerTelemetryCue(
+    event:
+      | 'pit_window'
+      | 'crossover'
+      | 'track_limits'
+      | 'tyre_cliff'
+      | 'fuel_low'
+      | 'ers_full'
+      | 'aero_x'
+      | 'aero_z'
+  ) {
+    if (!this.initialized || !this.ctx || !this.compressor || this.muted) return;
+    const now = this.ctx.currentTime;
+
+    if (event === 'aero_x' || event === 'aero_z') {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      const f0 = event === 'aero_x' ? 540 : 780;
+      const f1 = event === 'aero_x' ? 980 : 420;
+      osc.frequency.setValueAtTime(f0, now);
+      osc.frequency.exponentialRampToValueAtTime(f1, now + 0.085);
+      gain.gain.setValueAtTime(0.095, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
+      osc.connect(gain);
+      gain.connect(this.compressor);
+      osc.start(now);
+      osc.stop(now + 0.1);
+      return;
+    }
+
+    const pattern: { freqs: number[]; step: number; dur: number; type: OscillatorType; gain: number } =
+      event === 'crossover'
+        ? { freqs: [1046.5, 1318.5, 1567.98], step: 0.075, dur: 0.068, type: 'sine', gain: 0.11 }
+        : event === 'pit_window'
+          ? { freqs: [880, 1174.66], step: 0.09, dur: 0.085, type: 'triangle', gain: 0.11 }
+          : event === 'track_limits'
+            ? { freqs: [622.25, 554.37], step: 0.085, dur: 0.075, type: 'sawtooth', gain: 0.07 }
+            : event === 'tyre_cliff'
+              ? { freqs: [440, 392, 440], step: 0.08, dur: 0.07, type: 'triangle', gain: 0.105 }
+              : event === 'fuel_low'
+                ? { freqs: [784, 587.33], step: 0.1, dur: 0.09, type: 'sine', gain: 0.1 }
+                : { freqs: [1318.5, 1760], step: 0.07, dur: 0.065, type: 'sine', gain: 0.095 };
+
+    pattern.freqs.forEach((freq, idx) => {
+      const startTime = now + idx * pattern.step;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = pattern.type;
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(pattern.gain, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + pattern.dur);
+      osc.connect(gain);
+      gain.connect(this.compressor!);
+      osc.start(startTime);
+      osc.stop(startTime + pattern.dur + 0.01);
+    });
+  }
+
   public dispose() {
     try {
       this.oscCrankSub?.stop();

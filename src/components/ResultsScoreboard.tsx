@@ -170,11 +170,18 @@ export const ResultsScoreboard: React.FC<ResultsScoreboardProps> = ({
                       {formatLapTime(r.bestLapMs)}
                     </td>
                     <td className="py-2.5 px-2.5 text-right font-mono-telemetry tabular-nums">
-                      {r.position === 1 ? (
-                        <span className="text-amber-400 font-semibold">{formatLapTime(r.raceTimeMs)}</span>
-                      ) : (
-                        <span className="text-slate-300">+{r.gapSeconds.toFixed(2)}s</span>
-                      )}
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        {Boolean(r.timePenaltySec && r.timePenaltySec > 0) && (
+                          <span className="px-1 py-0.5 rounded bg-red-600/80 text-[9px] font-bold text-white leading-none">
+                            +{r.timePenaltySec}s
+                          </span>
+                        )}
+                        {r.position === 1 ? (
+                          <span className="text-amber-400 font-semibold">{formatLapTime(r.raceTimeMs)}</span>
+                        ) : (
+                          <span className="text-slate-300">+{r.gapSeconds.toFixed(2)}s</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2.5 px-2.5 text-right font-mono-telemetry font-bold text-emerald-400 tabular-nums">
                       +{r.pointsAwarded}

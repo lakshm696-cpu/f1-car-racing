@@ -393,7 +393,7 @@ export const TrackLog: React.FC<TrackLogProps> = ({
 
   return (
     <div
-      className="pointer-events-auto rounded-xl border border-emerald-400/30 overflow-hidden transition-all duration-200 max-w-[296px] sm:max-w-[320px]"
+      className="hidden pointer-events-auto rounded-xl border border-emerald-400/30 overflow-hidden transition-all duration-200 max-w-[296px] sm:max-w-[320px]"
       style={{
         backgroundColor: 'rgba(9, 13, 21, 0.94)',
         boxShadow:
@@ -402,7 +402,7 @@ export const TrackLog: React.FC<TrackLogProps> = ({
     >
       {/* Header Row: Track Log Title + Live Grip / Weather Summary + Collapse Toggle */}
       <div
-        className="px-3 py-1.5 flex items-center justify-between gap-2 border-b border-emerald-400/25"
+        className="hidden px-3 py-1.5 items-center justify-between gap-2 border-b border-emerald-400/25"
         style={{
           background:
             'linear-gradient(90deg, rgba(16, 185, 129, 0.18) 0%, rgba(6, 182, 212, 0.08) 55%, rgba(6, 9, 15, 0.85) 100%)',
@@ -461,7 +461,7 @@ export const TrackLog: React.FC<TrackLogProps> = ({
 
       {!collapsed && (
         <div
-          className="p-2.5 flex flex-col gap-2"
+          className="hidden p-2.5 flex-col gap-2"
           style={{
             background:
               'radial-gradient(120% 85% at 50% 0%, rgba(16, 185, 129, 0.08) 0%, rgba(9, 13, 21, 0) 70%)',

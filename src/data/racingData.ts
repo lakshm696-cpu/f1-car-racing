@@ -985,18 +985,18 @@ export interface F1WorldMapPin {
 export const F1_WORLD_MAP_PINS: F1WorldMapPin[] = [
   {
     id: 'pin_spain',
-    label: 'SPAIN',
-    country: 'Spain · Barcelona-Catalunya',
+    label: 'MADRID 2026',
+    country: 'Spain · Madring Madrid Street Circuit',
     xPct: 48.5,
     yPct: 37.5,
-    eventTitle: 'Wet Weather Grand Prix',
-    eventSubtitle: 'Rain affects the grip and performance of the car in this Grand Prix.',
-    weather: 'rain',
-    laps: 66,
+    eventTitle: 'Madring Inaugural Street GP',
+    eventSubtitle: '2026 hybrid street-parkland layout around IFEMA with banked Valdebebas sweep.',
+    weather: 'day',
+    laps: 57,
     objectiveText: 'Finish in 10th or better',
-    recommendedTech: 915,
-    rewards: ['Tyre Wear Data', 'Setup Data', '+280 Resource Pts'],
-    trackId: 'alpine_ring',
+    recommendedTech: 918,
+    rewards: ['Active Aero X-Mode Data', 'Setup Data', '+290 Resource Pts'],
+    trackId: 'madrid_madring',
   },
   {
     id: 'pin_austria',
@@ -1075,7 +1075,7 @@ export const F1_WORLD_MAP_PINS: F1WorldMapPin[] = [
   },
   {
     id: 'pin_brazil',
-    label: 'BRAZIL',
+    label: 'INTERLAGOS',
     country: 'Brazil · Interlagos São Paulo',
     xPct: 35.5,
     yPct: 68.5,
@@ -1086,7 +1086,7 @@ export const F1_WORLD_MAP_PINS: F1WorldMapPin[] = [
     objectiveText: 'Survive Storm & Finish Top 10',
     recommendedTech: 940,
     rewards: ['Wet Grip Data', 'Weight Reduction', '+450 Resource Pts'],
-    trackId: 'spa_ardennes',
+    trackId: 'interlagos_gp',
   },
   {
     id: 'pin_jeddah',
@@ -1177,6 +1177,21 @@ export const F1_WORLD_MAP_PINS: F1WorldMapPin[] = [
     recommendedTech: 938,
     rewards: ['Low-Drag Wing Data', 'Night Telemetry', '+440 Resource Pts'],
     trackId: 'las_vegas_strip',
+  },
+  {
+    id: 'pin_china',
+    label: 'SHANGHAI',
+    country: 'China · Shanghai International Circuit',
+    xPct: 81.0,
+    yPct: 41.2,
+    eventTitle: 'Shanghai Twin-Spiral Sprint',
+    eventSubtitle: 'Technical snail Turn 1-3 complex feeding a 1.17 km X-Mode back straight.',
+    weather: 'partly_cloudy',
+    laps: 56,
+    objectiveText: 'Execute 1-Stop Undercut & Finish Top 5',
+    recommendedTech: 932,
+    rewards: ['MGU-K Harvest Data', 'Tyre Thermal Map', '+375 Resource Pts'],
+    trackId: 'shanghai_gp',
   },
 ];
 
@@ -1823,6 +1838,233 @@ export const CIRCUIT_TRACKS: CircuitTrack[] = [
       [62, 0.3, 226],
       [20, 0.1, 195],
     ],
+  },
+  {
+    id: 'madrid_madring',
+    name: 'Madring Madrid 2026 Circuit',
+    country: 'Spain · IFEMA & Valdebebas',
+    shortCountry: 'Madrid',
+    biome: 'madrid',
+    lengthKm: 5.47,
+    corners: 20,
+    defaultLaps: 4,
+    trackWidth: 15.8,
+    kerbColorA: '#EF4444',
+    kerbColorB: '#FACC15',
+    drsZones: [
+      {
+        id: 'madrid_xmode_1',
+        zoneNumber: 1,
+        name: 'IFEMA Straight (X-Mode)',
+        realLengthMeters: 830,
+        detectionT: 0.91,
+        startT: 0.01,
+        endT: 0.15,
+      },
+      {
+        id: 'madrid_xmode_2',
+        zoneNumber: 2,
+        name: 'Valdebebas Back Straight (X-Mode)',
+        realLengthMeters: 940,
+        detectionT: 0.48,
+        startT: 0.52,
+        endT: 0.67,
+      },
+      {
+        id: 'madrid_xmode_3',
+        zoneNumber: 3,
+        name: 'Paddock Approach (X-Mode)',
+        realLengthMeters: 520,
+        detectionT: 0.77,
+        startT: 0.8,
+        endT: 0.9,
+      },
+    ],
+    controlPoints: [
+      [0, 0, 152],
+      [0, 0, -40],
+      [-28, 1.5, -162],
+      [48, 4.2, -242],
+      [158, 6.4, -225],
+      [232, 4.8, -145],
+      [196, 2.2, -45],
+      [252, 2.8, 52],
+      [238, 1.6, 165],
+      [148, 0.9, 232],
+      [58, 0.4, 212],
+      [22, 0.1, 190],
+    ],
+  },
+  {
+    id: 'shanghai_gp',
+    name: 'Shanghai International Circuit',
+    country: 'China · Jiading District',
+    shortCountry: 'Shanghai',
+    biome: 'shanghai',
+    lengthKm: 5.45,
+    corners: 16,
+    defaultLaps: 4,
+    trackWidth: 16.5,
+    kerbColorA: '#EF4444',
+    kerbColorB: '#FFFFFF',
+    drsZones: [
+      {
+        id: 'shanghai_xmode_1',
+        zoneNumber: 1,
+        name: 'Main Grandstand Straight (X-Mode)',
+        realLengthMeters: 780,
+        detectionT: 0.9,
+        startT: 0.01,
+        endT: 0.14,
+      },
+      {
+        id: 'shanghai_xmode_2',
+        zoneNumber: 2,
+        name: 'T13–T14 1.17km Straight (X-Mode)',
+        realLengthMeters: 1170,
+        detectionT: 0.6,
+        startT: 0.64,
+        endT: 0.81,
+      },
+    ],
+    controlPoints: [
+      [0, 0, 148],
+      [0, 0, -32],
+      [24, 1.0, -142],
+      [78, 1.8, -175],
+      [112, 1.6, -120],
+      [74, 1.2, -88],
+      [145, 2.4, -225],
+      [252, 2.0, -198],
+      [246, 1.2, -55],
+      [215, 0.8, 82],
+      [242, 0.6, 188],
+      [115, 0.4, 232],
+      [28, 0.2, 202],
+    ],
+  },
+  {
+    id: 'interlagos_gp',
+    name: 'Autódromo José Carlos Pace',
+    country: 'Brazil · Interlagos São Paulo',
+    shortCountry: 'Interlagos',
+    biome: 'interlagos',
+    lengthKm: 4.31,
+    corners: 15,
+    defaultLaps: 4,
+    trackWidth: 15.5,
+    kerbColorA: '#16A34A',
+    kerbColorB: '#FACC15',
+    drsZones: [
+      {
+        id: 'interlagos_xmode_1',
+        zoneNumber: 1,
+        name: 'Arquibancadas Uphill Straight (X-Mode)',
+        realLengthMeters: 740,
+        detectionT: 0.89,
+        startT: 0.01,
+        endT: 0.14,
+      },
+      {
+        id: 'interlagos_xmode_2',
+        zoneNumber: 2,
+        name: 'Reta Oposta Back Straight (X-Mode)',
+        realLengthMeters: 620,
+        detectionT: 0.24,
+        startT: 0.28,
+        endT: 0.41,
+      },
+    ],
+    controlPoints: [
+      [0, 3.2, 145],
+      [0, 4.4, -35],
+      [-28, 1.2, -135],
+      [18, -1.8, -210],
+      [135, -2.5, -225],
+      [232, -1.2, -155],
+      [218, 0.8, -42],
+      [148, 2.0, 28],
+      [225, 2.6, 118],
+      [182, 3.4, 215],
+      [78, 4.2, 224],
+      [20, 3.6, 195],
+    ],
+  },
+];
+
+export interface F12026SponsorOption {
+  id: string;
+  name: string;
+  tagline: string;
+  raceBaseBonusCr: number;
+  objectiveLabel: string;
+  objectiveBonusCr: number;
+  minFinishPos: number;
+  rpBonusPerRace: number;
+}
+
+export const F1_2026_SPONSORS: F12026SponsorOption[] = [
+  {
+    id: 'apex_cloud',
+    name: 'Veloce Cloud Telemetry',
+    tagline: '+320 CR/race · Strategy & MGU-K RP Boost',
+    raceBaseBonusCr: 320,
+    objectiveLabel: 'Finish P8 or higher',
+    objectiveBonusCr: 650,
+    minFinishPos: 8,
+    rpBonusPerRace: 45,
+  },
+  {
+    id: 'kinetix_ev',
+    name: 'Kinetix 350kW Powertrain',
+    tagline: '+450 CR/race · Top-5 Hybrid Incentive',
+    raceBaseBonusCr: 450,
+    objectiveLabel: 'Finish P5 or higher',
+    objectiveBonusCr: 1100,
+    minFinishPos: 5,
+    rpBonusPerRace: 60,
+  },
+  {
+    id: 'kronos_chrono',
+    name: 'Kronos Precision Motorsport',
+    tagline: '+600 CR/race · Podium Works Contract',
+    raceBaseBonusCr: 600,
+    objectiveLabel: 'Finish on the Podium (P3+)',
+    objectiveBonusCr: 1850,
+    minFinishPos: 3,
+    rpBonusPerRace: 80,
+  },
+];
+
+export const F1_2026_DEV_FOCUSES: {
+  id: 'balanced' | 'mguk_hybrid' | 'active_aero' | 'tyre_thermal';
+  label: string;
+  summary: string;
+  effectText: string;
+}[] = [
+  {
+    id: 'balanced',
+    label: 'Balanced Spec',
+    summary: 'Even resource split across chassis, MGU-K & tyre thermal ops.',
+    effectText: 'Baseline 2026 spec · Balanced PU wear',
+  },
+  {
+    id: 'mguk_hybrid',
+    label: '350kW MGU-K Hybrid',
+    summary: 'Prioritizes electrical energy recovery & MOM Override efficiency.',
+    effectText: '+18% ERS Harvest · +4% MGU-K Override punch',
+  },
+  {
+    id: 'active_aero',
+    label: 'Active Aero X/Z-Mode',
+    summary: 'Optimizes actuator speed, low-drag X-Mode trim & Z-Mode bite.',
+    effectText: '+4.5% Cornering Downforce · -8% Straight Drag',
+  },
+  {
+    id: 'tyre_thermal',
+    label: 'Narrow-Tyre Thermal',
+    summary: 'Controls 2026 narrower tread shear heat & extends stint life.',
+    effectText: '-14% Tyre Degradation · -0.25s Pit Crew Turnaround',
   },
 ];
 
